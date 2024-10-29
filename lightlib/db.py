@@ -1,0 +1,169 @@
+import logging
+import psycopg2
+from psycopg2 import sql
+from lightlib.config import ConfigLoader
+import time
+from typing import Optional, Tuple, List
+
+class DB:
+    """
+    DB is a class responsible for managing PostgreSQL database connections,
+    handling queries, and setting up database tables and indexes.
+    
+    Attributes:
+        _db_host (str): Database host address.
+        _db_port (int): Port number for database connection.
+        _db_database (str): Database name.
+        _db_user (str): Username for database authentication.
+        _db_password (str): Password for database authentication.
+        _db_retry (int): Number of retry attempts for database connection.
+        _db_retry_delay (int): Delay between retry attempts.
+        _conn (psycopg2.connect): The PostgreSQL database connection object.
+    """
+    
+    def __init__(self, config_section: str = "ACTIVITY_DB"):
+        """
+        Initialize the DB instance with database configuration.
+        
+        Args:
+            config_section (str): The configuration section name for database 
+            settings.
+        """
+        config_loader = ConfigLoader()
+        self._db_host = config_loader.get_config_value(
+            config_section, "host")
+        self._db_port = int(config_loader.get_config_value(
+            config_section, "port"))
+        self._db_database = config_loader.get_config_value(
+            config_section, "database")
+        self._db_user = config_loader.get_config_value(
+            config_section, "user")
+        self._db_password = config_loader.get_config_value(
+            config_section, "password")
+        self._db_retry = int(config_loader.get_config_value(
+            config_section, "connect_retry"))
+        self._db_retry_delay = int(config_loader.get_config_value(
+            config_section, "connect_retry_delay"))
+        self._conn = self._connect_to_db()
+        self._setup_database()
+    
+    @property
+    def conn(self) -> psycopg2.extensions.connection:
+        """
+        Connection property to access the active database connection.
+        
+        Returns:
+            psycopg2.extensions.connection: The PostgreSQL connection object.
+        """
+        return self._conn
+
+    def _connect_to_db(self) -> psycopg2.extensions.connection:
+        """
+        Establish a connection to the PostgreSQL database with retry logic.
+        
+        Returns:
+            psycopg2.extensions.connection: Database connection object.
+        
+        Raises:
+            psycopg2.DatabaseError: If connection fails after all retry 
+                attempts.
+        """
+        for attempt in range(self._db_retry):
+            try:
+                connection = psycopg2.connect(
+                    host=self._db_host,
+                    port=self._db_port,
+                    database=self._db_database,
+                    user=self._db_user,
+                    password=self._db_password
+                )
+                logging.info("Connected to PostgreSQL database successfully.")
+                return connection
+            except psycopg2.DatabaseError as e:
+                logging.error("Failed to connect to PostgreSQL database: %s", e)
+                if attempt < self._db_retry - 1:
+                    time.sleep(self._db_retry_delay)
+                    logging.info(
+                        "Retrying connection attempt %d...", attempt + 1)
+                else:
+                    raise
+
+    def _setup_database(self) -> None:
+        """
+        Initialize the PostgreSQL database table and indexes for activity 
+        logging.
+        
+        Executes SQL commands to create the `activity_log` table and an index on
+        the `timestamp` field, if they do not already exist.
+        """
+        create_table_query = """
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMPTZ NOT NULL,
+                day_of_week VARCHAR(10) NOT NULL,
+                month INTEGER NOT NULL,
+                year INTEGER NOT NULL,
+                duration INTEGER NOT NULL,
+                activity_pin INTEGER NOT NULL
+            );
+        """
+        create_index_query = """
+            CREATE INDEX IF NOT EXISTS idx_activity_timestamp
+            ON activity_log (timestamp);
+        """
+        # Execute setup queries within a cursor context
+        with self._conn.cursor() as cursor:
+            cursor.execute(create_table_query)
+            cursor.execute(create_index_query)
+            self._conn.commit()
+        logging.info("Activity database and indexes initialized successfully.")
+
+    def close_connection(self) -> None:
+        """
+        Close the database connection gracefully.
+        
+        Ensures the connection is closed to release resources.
+        """
+        if self._conn:
+            self._conn.close()
+            logging.info("Database connection closed.")
+
+    def query(self, query: str, params: Optional[Tuple] = None, 
+              fetch: bool = False) -> Optional[List[Tuple]]:
+        """
+        Execute a SQL query with optional parameters, optionally fetching 
+        results.
+        
+        Args:
+            query (str): The SQL query to execute.
+            params (tuple, optional): Parameters to safely pass into the query.
+            fetch (bool, optional): Whether to fetch and return query results.
+        
+        Returns:
+            list: Query results if fetch is True; otherwise, None.
+        
+        Raises:
+            psycopg2.DatabaseError: If there is an error executing the query.
+        """
+        try:
+            with self._conn.cursor() as cursor:
+                # Execute the query with provided parameters
+                cursor.execute(query, params)
+                # Fetch results if specified
+                result = cursor.fetchall() if fetch else None
+                # Commit the transaction if successful
+                self._conn.commit()
+                logging.info("Query executed successfully.")
+                return result
+        except psycopg2.DatabaseError as e:
+            # Rollback on error to maintain database consistency
+            self._conn.rollback()
+            logging.error("Query execution failed: %s", e)
+            raise
+
+    def __del__(self):
+        """
+        Destructor to ensure connection is closed upon deletion of the DB 
+        instance.
+        """
+        self.close_connection()
