@@ -59,7 +59,7 @@ class GPS:
         {'MSG': 'RMC', 'UTC': 1, 'DATE': 9},
         {'MSG': 'ZDA', 'UTC': 1, 'DATE': 2}
     ]
-    
+
     def __new__(cls, *args, **kwargs):
         """Ensure only one instance of GPS is created.
 
@@ -160,7 +160,7 @@ class GPS:
         except RuntimeError as e:
             logging.warning("GPS: Failed to clean up GPIO resources: %s", e)
 
-        
+
     @property
     def latitude(self) -> float:
         """Return the most recent latitude from the GPS fix, in decimal 
@@ -182,7 +182,7 @@ class GPS:
     def datetime(self) -> dt.datetime:
         """Return the current UTC date and time from the GPS fix."""
         return self._dt
-    
+
     @staticmethod
     def gpsCoord2Dec(gps_coord: Union[str, float], direction: GPSDir) -> float:
         """Convert GPS coordinates from DMS format to decimal format.
@@ -196,22 +196,18 @@ class GPS:
 
         Raises:
             GPSOutOfBoundsError: If the result is out of latitude or longitude 
-                                 bounds or the input coordinate is negative.
+                                bounds or the input coordinate is negative.
         """
         try:
-            # Ensure gps_coord is a string
-            if isinstance(gps_coord, float):
-                gps_coord = str(gps_coord)
-            
-            # Check the given coordinate is positive
-            if gps_coord.startswith("-"):
-                logging.error("GPS: Negative coordinate provided [%s]", 
-                              gps_coord)
-                raise GPSOutOfBoundsError(
-                    f"GPS: Coordinate [{gps_coord}]'can not be negative")
+            # Format gps_coord to ensure it is in the correct format
+            gps_coord = GPS._check_GPS_Coord(gps_coord=gps_coord, 
+                                             direction=direction)
+
+            # Determine degree length (3 for longitude, 2 for latitude)
+            d_len = 3 if direction in [GPSDir.East, GPSDir.West] else 2
 
             # Split the string into degrees and minutes
-            degrees, minutes = int(gps_coord[:2]), float(gps_coord[2:])
+            degrees, minutes = int(gps_coord[:d_len]), float(gps_coord[d_len:])
             result = degrees + (minutes / 60.0)
 
             # Apply negative sign for South or West directions
@@ -219,21 +215,54 @@ class GPS:
                 result = -result
 
             # Validate latitude and longitude bounds
-            if direction in [GPSDir.North, GPSDir.South] \
-                and not (-90.0 <= result <= 90.0):
+            if direction in [GPSDir.North, GPSDir.South] and \
+                    not (-90.0 <= result <= 90.0):
                 raise GPSOutOfBoundsError(f"Latitude out of bounds: {result}")
-            if direction in [GPSDir.East, GPSDir.West] \
-                and not (-180.0 <= result <= 180.0):
+            if direction in [GPSDir.East, GPSDir.West] and \
+                    not (-180.0 <= result <= 180.0):
                 raise GPSOutOfBoundsError(f"Longitude out of bounds: {result}")
-            
-            return result
 
+            return result
         except (ValueError, IndexError) as e:
             logging.error(
                 "GPS: Invalid coordinate format for '%s'. Error: %s", 
                 gps_coord, e)
             raise GPSOutOfBoundsError(
                 f"Invalid GPS coordinate format: {gps_coord}") from e
+
+    @staticmethod
+    def _check_GPS_Coord(gps_coord: Union[str, float], direction: GPSDir) -> str:
+        """Format and validate gps_coord as a string with correct length.
+
+        Args:
+            gps_coord (Union[str, float]): Coordinate from the GPS module.
+            direction (GPSDir): Directional indicator [N,S,E,W].
+
+        Returns:
+            str: The formatted gps_coord with leading zeros if necessary.
+        """
+        # Ensure gps_coord is a string
+        if isinstance(gps_coord, float):
+            gps_coord = str(gps_coord)
+
+        # Check the given coordinate is positive
+        if gps_coord.startswith("-"):
+            gps_coord = gps_coord[1:]
+            logging.warning(
+                "GPS: Negative coordinate provided [%s] treating as positive", 
+                gps_coord)
+
+        # Determine required length based on direction
+        required_len = 8 if direction in [GPSDir.East, GPSDir.West] else 7
+
+        # Add leading zeros if the coordinate length is insufficient
+        if len(gps_coord) < required_len:
+            gps_coord = gps_coord.zfill(required_len) # add 0's
+            logging.warning(
+                "GPS: Coordinate too short; added leading 0's to [%s]", 
+                gps_coord)
+
+        return gps_coord
 
 # Attribution: NMEA checksum calculation adapted from Josh Sherman's guide
 # https://doschman.blogspot.com/2013/01/calculating-nmea-sentence-checksums.html
@@ -252,26 +281,26 @@ class GPS:
             # `cksum` holds the expected checksum in hex format, located at 
             # the end of the sentence.
             cksum = msg_str[-2:]
-            
+
             # Isolate the main message content to compute checksum
             # Locate the part between '$' and '*', excluding both symbols.
             # `chksumdata` now contains the raw message that we will use to 
             # calculate the checksum.
             chksumdata = re.sub(r"(\n|\r\n)", "", 
                         msg_str[msg_str.find("$") + 1: msg_str.find("*")])
-            
+
             # Calculate the checksum using XOR on each character
             # Initialize `csum` to zero; this will accumulate the XOR of each 
             # character.
             csum = 0
             for c in chksumdata:
                 csum ^= ord(c)  # XOR each character's ASCII value into `csum`.
-            
+
             # Compare computed checksum with expected checksum
             # Convert `csum` to hex and compare with the extracted `cksum` 
             # (converted to int).
             is_valid = hex(csum) == hex(int(cksum, 16))
-            
+
             # Log and return result of checksum comparison
             # Log the result: pass or fail, based on if the checksum matched.
             if is_valid:
@@ -279,14 +308,14 @@ class GPS:
             else:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
                                 "expected %s", hex(csum), cksum)
-            
+
             return is_valid
 
         except (TypeError, ValueError) as e:
             logging.debug(
                 "GPS: Format issue during checksum calculation: %s", e)
             return False
-    
+
     def pwr_on(self) -> None:
         """Power up the GPS module by enabling its power pin."""
         set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.ON, 
@@ -295,7 +324,7 @@ class GPS:
     def pwr_off(self) -> None:
         """Disable the GPS module by setting its power control pin to LOW."""
         set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.OFF)
-           
+
     def get_fix(self, pwr_up_wait: float = None, 
                 max_fix_time: float = None) -> None:
         """Attempt to obtain a GPS fix, retrieving coordinates and timestamp.
@@ -312,15 +341,15 @@ class GPS:
         """
         if pwr_up_wait is None:
             pwr_up_wait =self._pwr_up_time
-            
+
         if max_fix_time is None:
             max_fix_time = self._max_fix_time
-        
+
         logging.info("GPS: Starting fix attempt with power-up wait %s "
                            "and max duration of %s", pwr_up_wait, max_fix_time)
-        
+
         self.pwr_on(pwr_up_wait)
-        
+
         try:
             self._get_coordinates(max_fix_time)
             self._get_datetime(max_fix_time)
@@ -329,7 +358,7 @@ class GPS:
             raise
         finally:
             self.pwr_off()
-        
+
     def _get_msg(self, msg: str = "RMC", max_time: float = None) -> None:
         """Read and validate GPS messages, storing if correct.
 
@@ -378,7 +407,7 @@ class GPS:
         # $GPGGA,1234.56,N*CS).
         MIN_MSG_LEN: int = 14
         return len(ser_line) > MIN_MSG_LEN and self.nema_checksum(ser_line)
-    
+
     def _decode_message(self, ser_line: bytes) -> None:
         """Decode and parse GPS message, removing checksum for validation.
 
@@ -396,16 +425,16 @@ class GPS:
             # Decode the raw line and split into components by commas
             self._last_msg = ser_line.decode(errors="ignore").split(",")
             logging.debug("GPS: Decoded message: %s", self._last_msg)
-            
+
             # Parse and store checksum, then remove it from the main message
             csum = hex(int(self._last_msg[-1][-2:], 16))
             self._last_msg[-1] = self._last_msg[-1][:-2]  # Remove checksum
             self._last_msg.append(csum)
-            
+
             # Retain only the last three characters of the message type for 
             # consistency
             self._last_msg[0] = self._last_msg[0][-3:]
-        
+
         except ValueError as ve:
             logging.error("GPS: Error decoding message: %s", ve)
 
