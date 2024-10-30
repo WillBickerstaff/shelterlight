@@ -184,43 +184,57 @@ class GPS:
         return self._dt
     
     @staticmethod
-    def gpsCoord2Dec(gps_coord: Union[str, float], 
-                     direction: GPSDir) -> float:
+    def gpsCoord2Dec(gps_coord: Union[str, float], direction: GPSDir) -> float:
         """Convert GPS coordinates from DMS format to decimal format.
 
         Args:
             gps_coord (Union[str, float]): Coordinate from the GPS module.
-            direction (GPSDir): Directional indicator.
+            direction (GPSDir): Directional indicator [N,S,E,W].
 
         Returns:
             float: The coordinate in signed decimal format.
 
         Raises:
             GPSOutOfBoundsError: If the result is out of latitude or longitude 
-                                 bounds.
+                                 bounds or the input coordinate is negative.
         """
         try:
+            # Ensure gps_coord is a string
             if isinstance(gps_coord, float):
                 gps_coord = str(gps_coord)
-            if len(gps_coord) < 4:
-                raise GPSOutOfBoundsError("Coordinate format too short.")
+            
+            # Check the given coordinate is positive
+            if gps_coord.startswith("-"):
+                logging.error("GPS: Negative coordinate provided [%s]", 
+                              gps_coord)
+                raise GPSOutOfBoundsError(
+                    f"GPS: Coordinate [{gps_coord}]'can not be negative")
+
+            # Split the string into degrees and minutes
             degrees, minutes = int(gps_coord[:2]), float(gps_coord[2:])
             result = degrees + (minutes / 60.0)
+
+            # Apply negative sign for South or West directions
             if direction in [GPSDir.South, GPSDir.West]:
                 result = -result
+
+            # Validate latitude and longitude bounds
             if direction in [GPSDir.North, GPSDir.South] \
-                         and not (-90.0 <= result <= 90.0):
+                and not (-90.0 <= result <= 90.0):
                 raise GPSOutOfBoundsError(f"Latitude out of bounds: {result}")
-            if direction in [GPSDir.East, GPSDir.West]  \
-                         and not (-180.0 <= result <= 180.0):
+            if direction in [GPSDir.East, GPSDir.West] \
+                and not (-180.0 <= result <= 180.0):
                 raise GPSOutOfBoundsError(f"Longitude out of bounds: {result}")
+            
             return result
+
         except (ValueError, IndexError) as e:
             logging.error(
                 "GPS: Invalid coordinate format for '%s'. Error: %s", 
                 gps_coord, e)
             raise GPSOutOfBoundsError(
                 f"Invalid GPS coordinate format: {gps_coord}") from e
+
 # Attribution: NMEA checksum calculation adapted from Josh Sherman's guide
 # https://doschman.blogspot.com/2013/01/calculating-nmea-sentence-checksums.html
     @staticmethod
