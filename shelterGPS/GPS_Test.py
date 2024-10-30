@@ -14,8 +14,8 @@ from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir  # Import afte
 class TestGPS(unittest.TestCase):
 
     def setUp(self):
-        """Setup for each test, ensuring singleton reset for GPS."""
-        GPS._instance = None  # Reset singleton instance
+        """Setup for each test, ensuring singleton reset for Position.GPS."""
+        Position.GPS._instance = None  # Reset singleton instance
 
     def test_singleton_behavior(self):
         """Test that only one instance of GPS can exist."""
@@ -40,62 +40,62 @@ class TestGPS(unittest.TestCase):
         MockSerial.assert_called_with(port='/dev/serial0',
                                       baudrate=9600, timeout=0.5)
 
-    @patch('GPS.pwr_on')
-    @patch('GPS.pwr_off')
+    @patch('Position.GPS.pwr_on')
+    @patch('Position.GPS.pwr_off')
     def test_power_control(self, mock_pwr_off, mock_pwr_on):
         """Test that GPS correctly handles power on and off."""
         gps = GPS()
-        gps.pwr_on()
+        Position.GPS.pwr_on()
         mock_pwr_on.assert_called_once()
 
-        gps.pwr_off()
+        Position.GPS.pwr_off()
         mock_pwr_off.assert_called_once()
 
     def test_gpsCoord2Dec_valid(self):
         """Test conversion of GPS DMS coordinates to decimal format."""
-        lat = GPS.gpsCoord2Dec("3745.1234", GPSDir.North)
-        lon = GPS.gpsCoord2Dec("12231.8765", GPSDir.West)
+        lat = Position.GPS.gpsCoord2Dec("3745.1234", GPSDir.North)
+        lon = Position.GPS.gpsCoord2Dec("12231.8765", GPSDir.West)
         self.assertAlmostEqual(lat, 37.752057, places=6)
         self.assertAlmostEqual(lon, -122.531275, places=6)
 
     def test_gpsCoord2Dec_out_of_bounds(self):
         """Test GPS coordinate conversion raises an error when out of bounds."""
         with self.assertRaises(GPSOutOfBoundsError):
-            GPS.gpsCoord2Dec("9145.1234", GPSDir.North)  # Latitude > 90
+            Position.GPS.gpsCoord2Dec("9145.1234", GPSDir.North)  # Latitude > 90
 
     @patch('re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
     def test_nema_checksum_valid(self, mock_sub):
         """Test that NMEA checksum validation passes for valid data."""
         valid_message = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A"
-        self.assertTrue(GPS.nema_checksum(valid_message))
+        self.assertTrue(Position.GPS.nema_checksum(valid_message))
 
     @patch('re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
     def test_nema_checksum_invalid(self, mock_sub):
         """Test that NMEA checksum validation fails for invalid data."""
         invalid_message = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*00"
-        self.assertFalse(GPS.nema_checksum(invalid_message))
+        self.assertFalse(Position.GPS.nema_checksum(invalid_message))
 
-    @patch('GPS._get_msg')
-    @patch('GPS._get_coordinates')
-    @patch('GPS._get_datetime')
+    @patch('Position.GPS._get_msg')
+    @patch('Position.GPS._get_coordinates')
+    @patch('Position.GPS._get_datetime')
     def test_get_fix_success(self, mock_get_datetime, mock_get_coordinates, mock_get_msg):
         """Test that `get_fix` calls all required methods for a successful fix."""
         gps = GPS()
-        gps.get_fix()
+        Position.GPS.get_fix()
         mock_get_coordinates.assert_called_once()
         mock_get_datetime.assert_called_once()
 
-    @patch('GPS._get_msg', side_effect=GPSInvalid)
+    @patch('Position.GPS._get_msg', side_effect=GPSInvalid)
     def test_get_fix_failure(self, mock_get_msg):
         """Test that `get_fix` raises GPSInvalid when no valid fix is obtained."""
         gps = GPS()
         with self.assertRaises(GPSInvalid):
-            gps.get_fix()
+            Position.GPS.get_fix()
 
     def test_process_datetime_valid(self):
         """Test that GPS correctly processes and converts valid UTC time and date."""
         gps = GPS()
-        dt = gps._process_datetime("123519", "230394")
+        dt = Position.GPS._process_datetime("123519", "230394")
         expected = datetime(1994, 3, 23, 12, 35, 19, tzinfo=datetime.timezone.utc)
         self.assertEqual(dt, expected)
 
@@ -103,20 +103,20 @@ class TestGPS(unittest.TestCase):
         """Test that GPS raises ValueError for improperly formatted datetime strings."""
         gps = GPS()
         with self.assertRaises(ValueError):
-            gps._process_datetime("invalid", "230394")  # Invalid UTC time
+            Position.GPS._process_datetime("invalid", "230394")  # Invalid UTC time
 
-    @patch('GPS._decode_message')
+    @patch('Position.GPS._decode_message')
     def test_decode_message_valid(self, mock_decode_message):
         """Test decoding of a valid GPS message, ensuring proper storage in `self._last_msg`."""
         gps = GPS()
         test_message = b'$GPRMC,123519,A,4807.038,N,01131.000,E*6A'
-        gps._decode_message(test_message)
+        Position.GPS._decode_message(test_message)
         mock_decode_message.assert_called_once_with(test_message)
 
-    @patch('GPS._validate_message_content')
+    @patch('Position.GPS._validate_message_content')
     def test_validate_message_content_valid(self, mock_validate_message_content):
         """Test validation of message content based on predefined criteria."""
         gps = GPS()
-        gps._last_msg = ["RMC", "A", "4807.038", "N", "01131.000", "E"]
-        gps.msg_validate = [{'MSG': 'RMC', 'ValidIdx': 2, 'ValidVals': 'A'}]
-        self.assertTrue(gps._validate_message_content("RMC"))
+        Position.GPS._last_msg = ["RMC", "A", "4807.038", "N", "01131.000", "E"]
+        Position.GPS.msg_validate = [{'MSG': 'RMC', 'ValidIdx': 2, 'ValidVals': 'A'}]
+        self.assertTrue(Position.GPS._validate_message_content("RMC"))
