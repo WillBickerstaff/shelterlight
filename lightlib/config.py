@@ -393,7 +393,7 @@ class ConfigLoader:
 
         # Determine if the option accepts a list by checking the fallback
         # structure
-        accepts_list = self._fallback_values().get(
+        accepts_list = self._FALLBACK_VALUES.get(
             section, {}).get(option, {}).get("accepts_list", False)
 
         try:
