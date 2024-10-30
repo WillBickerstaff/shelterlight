@@ -2,7 +2,7 @@ import json
 import datetime as dt
 from typing import Union, Optional, List
 import logging
-from lib.config import ConfigLoader
+from lightlib.config import ConfigLoader
 
 
 class DataStoreError(Exception):

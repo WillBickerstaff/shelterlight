@@ -4,7 +4,7 @@ import sys
 from enum import Enum
 from typing import Optional
 from RPi import GPIO # type: ignore
-from lib.config import ConfigLoader
+from lightlib.config import ConfigLoader
 
 class GPIO_PIN_STATE(Enum):
         ON = True

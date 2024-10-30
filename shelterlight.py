@@ -3,9 +3,9 @@ import logging
 import time
 import RPi.GPIO as GPIO  # type: ignore
 from shelterGPS.Helio import SunTimes
-from lib import USBManager
-from lib.smartlight import init_log
-from lib.config import ConfigLoader
+from lightlib import USBManager
+from lightlib.smartlight import init_log
+from lightlib.config import ConfigLoader
 
 class ConfigReloaded(Exception):
     pass

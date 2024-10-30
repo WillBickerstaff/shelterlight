@@ -6,8 +6,8 @@ from threading import Lock
 from enum import Enum
 from typing import Union, Optional
 import RPi as GPIO # type: ignore
-from lib.config import ConfigLoader
-from lib.smartlight import set_power_pin, GPIO_PIN_STATE
+from lightlib.config import ConfigLoader
+from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE
 
 
 class GPSInvalid(Exception):
