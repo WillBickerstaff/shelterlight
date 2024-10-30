@@ -8,7 +8,7 @@ from lightlib.config import ConfigLoader
 from smartlight import CANCEL_CONFIRM, warn_and_wait
 
 class USBFileManager:
-    """Singleton for managing USB file operations, including backing up and 
+    """Singleton for managing USB file operations, including backing up and
     potentially overwriting onboard configuration with a validated USB config."""
 
     _instance = None  # Singleton instance
@@ -23,7 +23,7 @@ class USBFileManager:
         """Initialize USBFileManager with a mount point for USB drives.
 
         Args:
-            mount_point (Optional[str]): Path to the USB drive's mount point. 
+            mount_point (Optional[str]): Path to the USB drive's mount point.
                                          Defaults to config value if not provided.
         """
         if not hasattr(self, "_initialized"):
@@ -61,19 +61,21 @@ class USBFileManager:
         """
         if self._backed_up:
             return  # Skip if already backed up
-        
+
         if not self.is_usb_inserted():
-            raise FileNotFoundError("USB drive not inserted or mount point inaccessible.")
-        
+            raise FileNotFoundError(
+                "USB drive not inserted or mount point inaccessible.")
+
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         usb_backup_dir = os.path.join(self.mount_point, "smartlight", "configs")
         usb_log_dir = os.path.join(self.mount_point, "smartlight", "logs")
         os.makedirs(usb_backup_dir, exist_ok=True)
         os.makedirs(usb_log_dir, exist_ok=True)
-        
+
         # Backup config and log files
         config_source = "config.ini"
-        config_backup = os.path.join(usb_backup_dir, f"config_backup_{timestamp}.ini")
+        config_backup = os.path.join(
+            usb_backup_dir, f"config_backup_{timestamp}.ini")
         shutil.copy2(config_source, config_backup)
         logging.info("Config file backed up to USB: %s", config_backup)
 
@@ -81,44 +83,50 @@ class USBFileManager:
         log_backup = os.path.join(usb_log_dir, f"log_backup_{timestamp}.log")
         shutil.copy2(log_file, log_backup)
         logging.info("Log file backed up to USB: %s", log_backup)
-        
+
         self._backed_up = True  # Mark as backed up
 
-    def replace_config_with_usb(self, usb_config_filename: str = "usb_config.ini") -> bool:
-        """Replace the onboard config with a validated USB config if not canceled.
+    def replace_config_with_usb(
+        self, usb_config_filename: str = "usb_config.ini") -> bool:
+        """Replace the onboard config with a validated USB config if not
+           canceled.
 
         Args:
-            usb_config_filename (str): Name of the config file on USB to validate 
-                                       and use.
+            usb_config_filename (str): Name of the config file on USB to
+                                       validate and use.
 
         Returns:
             bool: True if USB config is successfully copied; False if canceled.
         """
         if self._config_copied:
             return True  # Skip if already copied
-        
+
         usb_config_path = os.path.join(self.mount_point, usb_config_filename)
-        
+
         # Check if USB drive and config file are present
         if not self.is_usb_inserted() or not os.path.isfile(usb_config_path):
-            logging.warning("USB drive or config file not found at %s.", usb_config_path)
+            logging.warning(
+                "USB drive or config file not found at %s.", usb_config_path)
             return False
-        
+
         # Validate the USB configuration file
         if not ConfigLoader().validate_config_file(usb_config_path):
             logging.error("USB config file validation failed.")
             return False
-        
+
         # Warn user and wait for cancellation or confirmation
         if warn_and_wait(
-                message="About to overwrite onboard config. Press cancel to abort.",
+                message="About to overwrite onboard config. "
+                        "Press cancel to abort.",
                 wait_time=10,
-                default_action=CANCEL_CONFIRM.CONFIRM) == CANCEL_CONFIRM.CONFIRM:
-            
+                default_action = CANCEL_CONFIRM.CONFIRM) == \
+                                 CANCEL_CONFIRM.CONFIRM:
+
             # Copy the validated USB config to replace onboard config
             shutil.copy2(usb_config_path, "config.ini")
-            logging.info("Onboard config replaced with USB config from %s.", usb_config_path)
+            logging.info("Onboard config replaced with USB config from %s.",
+                         usb_config_path)
             self._config_copied = True  # Mark as copied
             return True
-        
+
         return False  # Return False if canceled

@@ -11,7 +11,7 @@ class ConfigLoader:
 
     This class loads configurations from a specified file, validates structure
     and unique GPIO pin usage, and falls back to default values if a
-    configuration file is invalid or unavailable. 
+    configuration file is invalid or unavailable.
     """
 
     _instance = None
@@ -65,8 +65,8 @@ class ConfigLoader:
     def __new__(cls, *args, **kwargs):
         """Ensure only one instance of ConfigLoader is created.
 
-        This method implements the Singleton pattern for the `ConfigLoader` 
-        class, ensuring that only one instance of the class can exist at any 
+        This method implements the Singleton pattern for the `ConfigLoader`
+        class, ensuring that only one instance of the class can exist at any
         time.
 
         Returns:
@@ -83,8 +83,8 @@ class ConfigLoader:
         """Initialize ConfigLoader with configuration file path.
 
         This constructor sets up the `ConfigLoader` by assigning the provided
-        configuration file path and preparing the `config` parser. 
-        Initialization is controlled by the `__initialized` flag to avoid 
+        configuration file path and preparing the `config` parser.
+        Initialization is controlled by the `__initialized` flag to avoid
         redundant setup.
 
         Args:
@@ -102,28 +102,28 @@ class ConfigLoader:
             self.load_config()
             # Mark initialization as complete to prevent re-running setup
             self.__initialized = True
-            
+
     @property
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
 
-    @property 
+    @property
     def max_activity_time(self) -> int:
-        """Max time any activity detection can remain high before a fault 
+        """Max time any activity detection can remain high before a fault
         should be generated"""
         return self.get_config_value(self.config, "IO","max_activity_time")
-        
-    @property 
+
+    @property
     def health_check_interval(self) -> int:
         """How often inputs are checked to see if they are stuck"""
         return self.get_config_value(self.config, "IO","health_check_interval")
-        
+
     @property
     def cancel_input(self) -> int:
         """Pin used for responding to system messages."""
         return self.get_config_value(self.config, "GENERAL", "cancel_input")
-    
+
     @property
     def confirm_input(self) -> int:
         """Pin used for responding to system messages."""
@@ -201,7 +201,7 @@ class ConfigLoader:
 
     @property
     def gps_failed_fix_days(self) -> int:
-        """int: Number of days after which a GPS fix failure triggers an 
+        """int: Number of days after which a GPS fix failure triggers an
            alarm."""
         return self.get_config_value(
             self.config, "GPS", "failed_fix_days")
@@ -257,13 +257,13 @@ class ConfigLoader:
     def load_config(self) -> None:
         """Load and validate configuration values or fall back to defaults.
 
-        This method attempts to load the configuration file specified by 
-        `config_path`. If validation fails, it reverts to predefined fallback 
-        values. If loading fails due to file or parsing errors, it raises a 
+        This method attempts to load the configuration file specified by
+        `config_path`. If validation fails, it reverts to predefined fallback
+        values. If loading fails due to file or parsing errors, it raises a
         `ConfigNotLoaded` exception.
 
         Raises:
-            ConfigNotLoaded: If the configuration file cannot be loaded or 
+            ConfigNotLoaded: If the configuration file cannot be loaded or
                              parsed.
         """
         try:
@@ -273,38 +273,38 @@ class ConfigLoader:
                 # Load fallback configuration if validation fails
                 self.config.read_dict(self._FALLBACK_VALUES)
             else:
-                # Mark the configuration as valid upon successful loading and 
+                # Mark the configuration as valid upon successful loading and
                 # validation
                 self._valid_config = True
         except (FileNotFoundError, configparser.Error) as e:
         # Log the error and raise an exception if loading fails
                 logging.error("Failed to load configuration file: %s", e)
                 raise ConfigNotLoaded("Configuration could not be loaded.")
-    
+
     def validate_config_file(self, file_path: str) -> bool:
-        """Validate a given config file at the specified path without modifying 
+        """Validate a given config file at the specified path without modifying
            the singleton's main configuration.
 
-        This method loads the configuration file located at `file_path` into a 
+        This method loads the configuration file located at `file_path` into a
         temporary `ConfigParser` instance to verify its structure and contents.
-        It does not alter the main configuration held by the singleton instance, 
-        making it suitable for testing external configurations (e.g., USB-based 
+        It does not alter the main configuration held by the singleton instance,
+        making it suitable for testing external configurations (e.g., USB-based
         configs) before committing to their use in the application.
 
         Args:
-            file_path (str): Path to the configuration file to validate. The 
-                            file should contain expected sections and options 
+            file_path (str): Path to the configuration file to validate. The
+                            file should contain expected sections and options
                             for successful validation.
 
         Returns:
-            bool: 
-                - True if the configuration file has a valid structure and 
+            bool:
+                - True if the configuration file has a valid structure and
                        unique GPIO pin definitions.
                 - False if any structural or parsing issues are detected.
-        
+
         Example:
             To check if an external configuration file is valid before using it:
-            
+
             ```python
             config_loader = ConfigLoader()
             if config_loader.validate_config_file("/usb/smartlightconfig.ini"):
@@ -317,73 +317,73 @@ class ConfigLoader:
             # Attempt to read and load the configuration file into temp_config
             temp_config.read(file_path)
 
-            # Validate configuration structure and GPIO uniqueness using private 
+            # Validate configuration structure and GPIO uniqueness using private
             # methods to avoid altering the main configuration state
             if self.__validate_config_structure(temp_config) and \
             self.__validate_unique_pins(temp_config):
                 logging.info("Temporary config file at %s is valid.", file_path)
                 return True  # File is valid if it meets structural expectations
             else:
-                logging.warning("Temporary config file at %s is invalid.", 
+                logging.warning("Temporary config file at %s is invalid.",
                                 file_path)
-                return False  # File is invalid if structure or pins 
+                return False  # File is invalid if structure or pins
                               # assignments do not meet expectations
 
         except configparser.Error as e:
-            # Log any errors encountered during parsing and return False to 
+            # Log any errors encountered during parsing and return False to
             # indicate invalid config
             logging.error(
                 "Error parsing temporary config file %s: %s", file_path, e)
             return False
-    
+
     def _get_fallback_value(self, section: str, option: str):
         """Retrieve the fallback value for a specific section and option.
 
-        This method extracts the default value for a specified section and 
-        option from `_FALLBACK_VALUES`. It is primarily used to supply default 
+        This method extracts the default value for a specified section and
+        option from `_FALLBACK_VALUES`. It is primarily used to supply default
         values for configuration options that are either missing or invalid.
 
         Args:
-            section (str): The section name in `_FALLBACK_VALUES`, such as 
-            "GPS" or "GENERAL". option (str): The specific option name within 
+            section (str): The section name in `_FALLBACK_VALUES`, such as
+            "GPS" or "GENERAL". option (str): The specific option name within
             the section, such as "log_file".
 
         Returns:
-            The fallback value for the specified section and option, if defined; 
+            The fallback value for the specified section and option, if defined;
             otherwise, None.
         """
-        # Access fallback values dictionary, ensuring both section and option 
+        # Access fallback values dictionary, ensuring both section and option
         # keys exist, and return the "value" entry for the option.
         return self._FALLBACK_VALUES.get(
             section, {}).get(option, {}).get("value")
 
-    def get_config_value(self, config, section, option, 
+    def get_config_value(self, config, section, option,
                         value_type: Optional[type] = None):
-        """Retrieve a configuration value, using fallback values and type 
+        """Retrieve a configuration value, using fallback values and type
            inference.
 
-        This method retrieves a configuration value from a given section and 
-        option, defaulting to fallback values if necessary. The method 
-        determines the appropriate type based on either a specified 
-        `value_type` or inferred from the fallback value. If the option is 
-        marked as accepting a list, the method parses the configuration value 
+        This method retrieves a configuration value from a given section and
+        option, defaulting to fallback values if necessary. The method
+        determines the appropriate type based on either a specified
+        `value_type` or inferred from the fallback value. If the option is
+        marked as accepting a list, the method parses the configuration value
         accordingly.
 
         Args:
-            config (ConfigParser): The configuration parser instance containing 
+            config (ConfigParser): The configuration parser instance containing
                                    the loaded configuration.
-            section (str): The configuration section, such as "GPS" or 
+            section (str): The configuration section, such as "GPS" or
                            "GENERAL".
-            option (str): The option name within the section, such as 
+            option (str): The option name within the section, such as
                           "baudrate".
-            value_type (Optional[type]): Specifies the desired type for the 
-                                        retrieved value, such as `int` or 
-                                        `float`. If `None`, the type is inferred 
+            value_type (Optional[type]): Specifies the desired type for the
+                                        retrieved value, such as `int` or
+                                        `float`. If `None`, the type is inferred
                                         from the fallback value.
 
         Returns:
-            The configuration value, cast to the appropriate type (or parsed as 
-            a list if marked `accepts_list`). If the option is missing or 
+            The configuration value, cast to the appropriate type (or parsed as
+            a list if marked `accepts_list`). If the option is missing or
             invalid, the fallback value is returned.
 
         """
@@ -391,13 +391,13 @@ class ConfigLoader:
         default_value = self._get_fallback_value(section, option)
         inferred_type = value_type if value_type else type(default_value)
 
-        # Determine if the option accepts a list by checking the fallback 
+        # Determine if the option accepts a list by checking the fallback
         # structure
         accepts_list = self._fallback_values().get(
             section, {}).get(option, {}).get("accepts_list", False)
 
         try:
-            # Retrieve and cast the value based on its expected type or 
+            # Retrieve and cast the value based on its expected type or
             # structure
             if inferred_type == int:
                 return config.getint(section, option, fallback=default_value)
@@ -407,16 +407,16 @@ class ConfigLoader:
                 # Handle list parsing if the option is marked as `accepts_list`
                 item_type = float if any(isinstance(d, float) \
                                   for d in [default_value]) else int
-                return [item_type(pin.strip()) 
-                        for pin in config.get(section, option, 
-                                fallback=str(default_value)).split(",") 
+                return [item_type(pin.strip())
+                        for pin in config.get(section, option,
+                                fallback=str(default_value)).split(",")
                         if pin.strip()]
-            # Default to returning the value as a string if no other type is 
+            # Default to returning the value as a string if no other type is
             # specified
             return config.get(section, option, fallback=default_value)
-        
-        except (configparser.NoSectionError, 
-                configparser.NoOptionError, 
+
+        except (configparser.NoSectionError,
+                configparser.NoOptionError,
                 ValueError) as e:
             # Log and return the fallback if retrieval or parsing fails
             logging.warning("Defaulting for missing or invalid config "
@@ -426,16 +426,16 @@ class ConfigLoader:
     def __validate_and_load(self, file_path: str) -> bool:
         """Load and validate the configuration file.
 
-        This method attempts to read the configuration from the specified file 
-        path. It verifies that the configuration structure includes all 
-        required sections and that GPIO pins are uniquely assigned across 
+        This method attempts to read the configuration from the specified file
+        path. It verifies that the configuration structure includes all
+        required sections and that GPIO pins are uniquely assigned across
         configuration items.
 
         Args:
             file_path (str): Path to the configuration file to be loaded.
 
         Returns:
-            bool: True if the configuration is successfully loaded and passes 
+            bool: True if the configuration is successfully loaded and passes
                   all validation checks, False otherwise.
 
         Raises:
@@ -447,13 +447,13 @@ class ConfigLoader:
             # Attempt to read the configuration file
             config.read(file_path)
             logging.info("Loaded configuration from %s", file_path)
-            
+
             # Validate configuration structure and GPIO pin assignments
             if not self.__validate_config_structure(config):
                 return False
             if not self.__validate_unique_pins(config):
                 return False
-            
+
             # If all checks pass, assign the validated config to the instance
             self.config = config
             return True
@@ -462,21 +462,21 @@ class ConfigLoader:
                 "Configuration parsing error for %s: %s", file_path, e)
             return False
 
-    def __validate_config_structure(self, 
+    def __validate_config_structure(self,
                                     config: configparser.ConfigParser) -> bool:
         """Ensure all required sections are present and log any empty sections.
 
         This method checks that the configuration contains all required sections
-        as defined in `_FALLBACK_VALUES`. If a required section is missing, 
-        it logs an error and returns False. If a section is present but contains 
+        as defined in `_FALLBACK_VALUES`. If a required section is missing,
+        it logs an error and returns False. If a section is present but contains
         no values, it logs a warning but still considers the structure valid.
 
         Args:
-            config (configparser.ConfigParser): The configuration parser 
+            config (configparser.ConfigParser): The configuration parser
                                 instance containing the loaded configuration.
 
         Returns:
-            bool: True if all required sections are present, False if any 
+            bool: True if all required sections are present, False if any
                   required sections are missing.
         """
         # Retrieve required sections from fallback values
@@ -494,17 +494,17 @@ class ConfigLoader:
     def __validate_unique_pins(self, config: configparser.ConfigParser) -> bool:
         """Ensure each GPIO pin is defined only once across the configuration.
 
-        This method iterates through all configuration items marked with the 
-        'is_pin' flag in `_FALLBACK_VALUES`, retrieving the pin values and 
-        checking for duplicates across the configuration. If any pin is defined 
+        This method iterates through all configuration items marked with the
+        'is_pin' flag in `_FALLBACK_VALUES`, retrieving the pin values and
+        checking for duplicates across the configuration. If any pin is defined
         multiple times, it logs an error and returns False.
 
         Args:
-            config (configparser.ConfigParser): The configuration parser 
+            config (configparser.ConfigParser): The configuration parser
                                 instance containing the loaded configuration.
 
         Returns:
-            bool: True if all pins are uniquely defined, False if any pin is 
+            bool: True if all pins are uniquely defined, False if any pin is
                   assigned more than once.
         """
         pins_used = set()

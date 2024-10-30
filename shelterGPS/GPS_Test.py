@@ -12,7 +12,7 @@ if 'RPi' not in sys.modules:
 from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir  # Import after mocks
 
 class TestGPS(unittest.TestCase):
-    
+
     def setUp(self):
         """Setup for each test, ensuring singleton reset for GPS."""
         GPS._instance = None  # Reset singleton instance
@@ -23,8 +23,8 @@ class TestGPS(unittest.TestCase):
         gps2 = GPS()
         self.assertIs(gps1, gps2, "GPS class is not respecting singleton pattern.")
 
-    @patch('your_module.serial.Serial')
-    @patch('your_module.ConfigLoader')
+    @patch('serial.Serial')
+    @patch('lightlib.ConfigLoader')
     def test_init_serial_connection(self, MockConfigLoader, MockSerial):
         """Test that GPS initializes serial connection using configurations."""
         # Mock configuration loader values
@@ -35,13 +35,13 @@ class TestGPS(unittest.TestCase):
         config.gps_pwr_pin = 4
 
         gps = GPS()
-        
+
         # Assert serial port is set up with correct parameters
-        MockSerial.assert_called_with(port='/dev/serial0', 
+        MockSerial.assert_called_with(port='/dev/serial0',
                                       baudrate=9600, timeout=0.5)
 
-    @patch('your_module.GPS.pwr_on')
-    @patch('your_module.GPS.pwr_off')
+    @patch('GPS.pwr_on')
+    @patch('GPS.pwr_off')
     def test_power_control(self, mock_pwr_off, mock_pwr_on):
         """Test that GPS correctly handles power on and off."""
         gps = GPS()
@@ -63,21 +63,21 @@ class TestGPS(unittest.TestCase):
         with self.assertRaises(GPSOutOfBoundsError):
             GPS.gpsCoord2Dec("9145.1234", GPSDir.North)  # Latitude > 90
 
-    @patch('your_module.re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
+    @patch('re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
     def test_nema_checksum_valid(self, mock_sub):
         """Test that NMEA checksum validation passes for valid data."""
         valid_message = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*6A"
         self.assertTrue(GPS.nema_checksum(valid_message))
 
-    @patch('your_module.re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
+    @patch('re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
     def test_nema_checksum_invalid(self, mock_sub):
         """Test that NMEA checksum validation fails for invalid data."""
         invalid_message = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*00"
         self.assertFalse(GPS.nema_checksum(invalid_message))
 
-    @patch('your_module.GPS._get_msg')
-    @patch('your_module.GPS._get_coordinates')
-    @patch('your_module.GPS._get_datetime')
+    @patch('GPS._get_msg')
+    @patch('GPS._get_coordinates')
+    @patch('GPS._get_datetime')
     def test_get_fix_success(self, mock_get_datetime, mock_get_coordinates, mock_get_msg):
         """Test that `get_fix` calls all required methods for a successful fix."""
         gps = GPS()
@@ -85,7 +85,7 @@ class TestGPS(unittest.TestCase):
         mock_get_coordinates.assert_called_once()
         mock_get_datetime.assert_called_once()
 
-    @patch('your_module.GPS._get_msg', side_effect=GPSInvalid)
+    @patch('GPS._get_msg', side_effect=GPSInvalid)
     def test_get_fix_failure(self, mock_get_msg):
         """Test that `get_fix` raises GPSInvalid when no valid fix is obtained."""
         gps = GPS()
@@ -105,7 +105,7 @@ class TestGPS(unittest.TestCase):
         with self.assertRaises(ValueError):
             gps._process_datetime("invalid", "230394")  # Invalid UTC time
 
-    @patch('your_module.GPS._decode_message')
+    @patch('GPS._decode_message')
     def test_decode_message_valid(self, mock_decode_message):
         """Test decoding of a valid GPS message, ensuring proper storage in `self._last_msg`."""
         gps = GPS()
@@ -113,7 +113,7 @@ class TestGPS(unittest.TestCase):
         gps._decode_message(test_message)
         mock_decode_message.assert_called_once_with(test_message)
 
-    @patch('your_module.GPS._validate_message_content')
+    @patch('GPS._validate_message_content')
     def test_validate_message_content_valid(self, mock_validate_message_content):
         """Test validation of message content based on predefined criteria."""
         gps = GPS()

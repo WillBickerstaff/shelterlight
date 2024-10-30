@@ -37,7 +37,7 @@ class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.
 
     Initializes the GPS module, controls its power state, retrieves,
-    and validates GPS fixes. Handles coordinate, datetime information, 
+    and validates GPS fixes. Handles coordinate, datetime information,
     and any potential errors encountered during fix attempts.
     """
     _instance = None
@@ -63,8 +63,8 @@ class GPS:
     def __new__(cls, *args, **kwargs):
         """Ensure only one instance of GPS is created.
 
-        This method implements the Singleton pattern for the `GPS` 
-        class, ensuring that only one instance of the class can exist at any 
+        This method implements the Singleton pattern for the `GPS`
+        class, ensuring that only one instance of the class can exist at any
         time.
 
         Returns:
@@ -80,34 +80,34 @@ class GPS:
     def __init__(self):
         """Initialize the GPS module and establish a serial connection.
 
-        This initializer configures the GPS module by establishing a serial 
-        connection and setting up power control and other module parameters. 
-        The `ConfigLoader` singleton provides configuration values like serial 
-        port, baud rate, timeout, power-up time, maximum fix time, and GPIO 
+        This initializer configures the GPS module by establishing a serial
+        connection and setting up power control and other module parameters.
+        The `ConfigLoader` singleton provides configuration values like serial
+        port, baud rate, timeout, power-up time, maximum fix time, and GPIO
         pin configurations to initialize the GPS module's attributes.
 
         Attributes:
-            _pwr_up_time (float): The time to wait after powering on the GPS 
+            _pwr_up_time (float): The time to wait after powering on the GPS
                 module before attempting a fix.
-            _max_fix_time (float): The maximum allowable time for attempting 
+            _max_fix_time (float): The maximum allowable time for attempting
                 to obtain a GPS fix.
             __pwr_pin (int): GPIO pin used to power on/off the GPS module.
-            __serial_port (str): Serial port address to connect to the GPS 
+            __serial_port (str): Serial port address to connect to the GPS
                 module.
-            __gps_ser (serial.Serial): Serial connection object for 
+            __gps_ser (serial.Serial): Serial connection object for
                 communicating with the GPS module.
-            _lat (float): Last recorded latitude from the GPS fix in decimal 
+            _lat (float): Last recorded latitude from the GPS fix in decimal
                 degrees.
-            _lon (float): Last recorded longitude from the GPS fix in decimal 
+            _lon (float): Last recorded longitude from the GPS fix in decimal
                 degrees.
             _alt (float): Last recorded altitude from the GPS fix in meters.
-            _dt (datetime.datetime): Last recorded datetime from the GPS fix 
+            _dt (datetime.datetime): Last recorded datetime from the GPS fix
                 in UTC.
-            _last_msg (list): The most recent parsed message from the GPS, 
+            _last_msg (list): The most recent parsed message from the GPS,
                 used for validation and troubleshooting.
 
         Raises:
-            serial.SerialException: If the serial connection to the GPS module 
+            serial.SerialException: If the serial connection to the GPS module
                 cannot be established, logs the error and raises the exception.
         """
         if self.__initialized:
@@ -138,11 +138,11 @@ class GPS:
 
         # Mark as initialized
         self.__initialized = True
-        
+
     def __del__(self):
         """Clean up resources when the GPS instance is deleted.
 
-        This method ensures that the serial connection and GPIO resources 
+        This method ensures that the serial connection and GPIO resources
         are properly released when the instance is no longer in use.
         """
         # Close the serial connection if it is open
@@ -163,13 +163,13 @@ class GPS:
 
     @property
     def latitude(self) -> float:
-        """Return the most recent latitude from the GPS fix, in decimal 
+        """Return the most recent latitude from the GPS fix, in decimal
            degrees."""
         return self._lat
 
     @property
     def longitude(self) -> float:
-        """Return the most recent longitude from the GPS fix, in decimal 
+        """Return the most recent longitude from the GPS fix, in decimal
            degrees."""
         return self._lon
 
@@ -195,12 +195,12 @@ class GPS:
             float: The coordinate in signed decimal format.
 
         Raises:
-            GPSOutOfBoundsError: If the result is out of latitude or longitude 
+            GPSOutOfBoundsError: If the result is out of latitude or longitude
                                 bounds or the input coordinate is negative.
         """
         try:
             # Format gps_coord to ensure it is in the correct format
-            gps_coord = GPS._check_GPS_Coord(gps_coord=gps_coord, 
+            gps_coord = GPS._check_GPS_Coord(gps_coord=gps_coord,
                                              direction=direction)
 
             # Determine degree length (3 for longitude, 2 for latitude)
@@ -225,7 +225,7 @@ class GPS:
             return result
         except (ValueError, IndexError) as e:
             logging.error(
-                "GPS: Invalid coordinate format for '%s'. Error: %s", 
+                "GPS: Invalid coordinate format for '%s'. Error: %s",
                 gps_coord, e)
             raise GPSOutOfBoundsError(
                 f"Invalid GPS coordinate format: {gps_coord}") from e
@@ -249,7 +249,7 @@ class GPS:
         if gps_coord.startswith("-"):
             gps_coord = gps_coord[1:]
             logging.warning(
-                "GPS: Negative coordinate provided [%s] treating as positive", 
+                "GPS: Negative coordinate provided [%s] treating as positive",
                 gps_coord)
 
         # Determine required length based on direction
@@ -259,7 +259,7 @@ class GPS:
         if len(gps_coord) < required_len:
             gps_coord = gps_coord.zfill(required_len) # add 0's
             logging.warning(
-                "GPS: Coordinate too short; added leading 0's to [%s]", 
+                "GPS: Coordinate too short; added leading 0's to [%s]",
                 gps_coord)
 
         return gps_coord
@@ -278,26 +278,26 @@ class GPS:
         """
         try:
             # Extract the checksum from the last two characters after  the '*'
-            # `cksum` holds the expected checksum in hex format, located at 
+            # `cksum` holds the expected checksum in hex format, located at
             # the end of the sentence.
             cksum = msg_str[-2:]
 
             # Isolate the main message content to compute checksum
             # Locate the part between '$' and '*', excluding both symbols.
-            # `chksumdata` now contains the raw message that we will use to 
+            # `chksumdata` now contains the raw message that we will use to
             # calculate the checksum.
-            chksumdata = re.sub(r"(\n|\r\n)", "", 
+            chksumdata = re.sub(r"(\n|\r\n)", "",
                         msg_str[msg_str.find("$") + 1: msg_str.find("*")])
 
             # Calculate the checksum using XOR on each character
-            # Initialize `csum` to zero; this will accumulate the XOR of each 
+            # Initialize `csum` to zero; this will accumulate the XOR of each
             # character.
             csum = 0
             for c in chksumdata:
                 csum ^= ord(c)  # XOR each character's ASCII value into `csum`.
 
             # Compare computed checksum with expected checksum
-            # Convert `csum` to hex and compare with the extracted `cksum` 
+            # Convert `csum` to hex and compare with the extracted `cksum`
             # (converted to int).
             is_valid = hex(csum) == hex(int(cksum, 16))
 
@@ -318,19 +318,19 @@ class GPS:
 
     def pwr_on(self) -> None:
         """Power up the GPS module by enabling its power pin."""
-        set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.ON, 
+        set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.ON,
                                        self._pwr_up_time)
 
     def pwr_off(self) -> None:
         """Disable the GPS module by setting its power control pin to LOW."""
         set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.OFF)
 
-    def get_fix(self, pwr_up_wait: float = None, 
+    def get_fix(self, pwr_up_wait: float = None,
                 max_fix_time: float = None) -> None:
         """Attempt to obtain a GPS fix, retrieving coordinates and timestamp.
 
         Args:
-            pwr_up_wait (float): Time to wait in seconds after powering on the 
+            pwr_up_wait (float): Time to wait in seconds after powering on the
                                  module. Defaulting to that in config file
             max_fix_time (float): Max time to attempt to acquire GPS fix data in
                                   seconds. Defaulting to that in config file
@@ -362,12 +362,12 @@ class GPS:
     def _get_msg(self, msg: str = "RMC", max_time: float = None) -> None:
         """Read and validate GPS messages, storing if correct.
 
-        Continuously attempts to read from the GPS module until a valid message 
+        Continuously attempts to read from the GPS module until a valid message
         of the specified type is received or the maximum time is reached.
 
         Args:
             msg (str): NMEA message type, e.g., "RMC" or "GGA".
-            max_time (float): Maximum time to wait for a valid message, in 
+            max_time (float): Maximum time to wait for a valid message, in
                               seconds. if None given uses that from config file
 
         Raises:
@@ -375,14 +375,14 @@ class GPS:
         """
         if max_time is None:
             max_time = self._max_fix_time
-        logging.info("GPS: Attempting to read %s message for %s seconds", 
+        logging.info("GPS: Attempting to read %s message for %s seconds",
                            msg, max_time)
         start_time:dt.datetime = dt.datetime.now()
 
         while dt.datetime.now() - start_time < dt.timedelta(seconds = max_time):
             ser_line:str = self._gps_ser.readline()
 
-            # Check if message is valid and proceed with decoding and 
+            # Check if message is valid and proceed with decoding and
             # content verification if true
             if self._is_valid_message(ser_line):
                 self._decode_message(ser_line)
@@ -399,11 +399,11 @@ class GPS:
             ser_line (bytes): Raw byte line read from the GPS serial input.
 
         Returns:
-            bool: True if the message has content and passes checksum 
+            bool: True if the message has content and passes checksum
                   validation; False otherwise.
         """
-        # Serial line must be at least 15 characters to contain the message 
-        # identifier, some basic data fields, and a valid checksum (e.g., 
+        # Serial line must be at least 15 characters to contain the message
+        # identifier, some basic data fields, and a valid checksum (e.g.,
         # $GPGGA,1234.56,N*CS).
         MIN_MSG_LEN: int = 14
         return len(ser_line) > MIN_MSG_LEN and self.nema_checksum(ser_line)
@@ -418,7 +418,7 @@ class GPS:
             ser_line (bytes): Raw byte line read from the GPS serial input.
 
         Raises:
-            ValueError: Logs a decoding error if the message cannot be 
+            ValueError: Logs a decoding error if the message cannot be
                         processed.
         """
         try:
@@ -431,7 +431,7 @@ class GPS:
             self._last_msg[-1] = self._last_msg[-1][:-2]  # Remove checksum
             self._last_msg.append(csum)
 
-            # Retain only the last three characters of the message type for 
+            # Retain only the last three characters of the message type for
             # consistency
             self._last_msg[0] = self._last_msg[0][-3:]
 
@@ -441,19 +441,19 @@ class GPS:
     def _validate_message_content(self, msg: str) -> bool:
         """Check if the message content matches expected validation criteria.
 
-        Uses the validated message type and specific indices for validation, 
+        Uses the validated message type and specific indices for validation,
         cross-referencing with `self.msg_validate`.
 
         Args:
             msg (str): Expected NMEA message type for validation.
 
         Returns:
-            bool: True if the message content meets validation criteria; 
+            bool: True if the message content meets validation criteria;
                 False otherwise.
         """
         for entry in self.msg_validate:
             if self._last_msg[0] == entry['MSG']:
-                # Verify that the message status\validation field contains 
+                # Verify that the message status\validation field contains
                 # a value indicating validated data
                 if self._last_msg[entry['ValidIdx']] in entry['ValidVals']:
                     logging.info("GPS: Validated %s message.", msg)
@@ -482,7 +482,7 @@ class GPS:
                     if entry['ALT'] != -1:
                         self._alt = float(self._last_msg[entry['ALT']])
                     logging.info("GPS: Coordinates fix obtained - Lat: %s, "
-                                       "Lon: %s, Alt: %s", 
+                                       "Lon: %s, Alt: %s",
                                        self._lat, self._lon, self._alt)
                 except GPSOutOfBoundsError as obe:
                     logging.warning("GPS: Out-of-bounds coordinate: %s", obe)
@@ -504,7 +504,7 @@ class GPS:
             if self._last_msg[0] == entry['MSG']:
                 try:
                     utc_time = self._last_msg[entry['UTC']]
-                    date_str = (self._last_msg[entry['DATE']] 
+                    date_str = (self._last_msg[entry['DATE']]
                                 if entry['DATE'] != -1 else None)
                     self._dt = self._process_datetime(utc_time, date_str)
                     logging.info(
@@ -513,9 +513,9 @@ class GPS:
                     logging.error("GPS: Error processing datetime: %s", e)
                     raise GPSInvalid("Failed to retrieve datetime.")
 
-    def _process_datetime(self, utc_time: str, 
+    def _process_datetime(self, utc_time: str,
                           date_str: Optional[str] = None) -> dt.datetime:
-        """Convert UTC time and optional date string into timezone-aware 
+        """Convert UTC time and optional date string into timezone-aware
            datetime.
 
         Args:
@@ -530,24 +530,24 @@ class GPS:
         """
         try:
             time_parts = [utc_time[:2], utc_time[2:4], utc_time[4:6]]
-            utc_time_obj = dt.time(int(time_parts[0]), 
-                                   int(time_parts[1]), 
+            utc_time_obj = dt.time(int(time_parts[0]),
+                                   int(time_parts[1]),
                                    int(time_parts[2]))
         except (ValueError, IndexError) as e:
-            logging.error("GPS: Invalid UTC time format '%s'. Error: %s", 
+            logging.error("GPS: Invalid UTC time format '%s'. Error: %s",
                                 utc_time, e)
             raise ValueError(f"Invalid UTC time format: {utc_time}") from e
 
         try:
             if date_str:
                 date_parts = [date_str[:2], date_str[2:4], date_str[4:]]
-                date_obj = dt.date(int("20" + date_parts[0]), 
-                                          int(date_parts[1]), 
+                date_obj = dt.date(int("20" + date_parts[0]),
+                                          int(date_parts[1]),
                                           int(date_parts[2]))
             else:
                 date_obj = dt.date.today()
             return dt.datetime.combine(date_obj, utc_time_obj, dt.timezone.utc)
         except (ValueError, IndexError) as e:
-            logging.error("GPS: Invalid date format '%s'. Error: %s", 
+            logging.error("GPS: Invalid date format '%s'. Error: %s",
                                 date_str, e)
             raise ValueError(f"Invalid date format: {date_str}") from e

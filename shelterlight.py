@@ -17,7 +17,6 @@ def cleanup_resources(gps: SunTimes) -> None:
     GPIO.cleanup()  # Reset all GPIO pins
     logging.info("Resources cleaned up successfully.")
 
-
 def main_loop():
     while True:
         try:
@@ -32,11 +31,10 @@ def main_loop():
             GPIO.cleanup()
             logging.info("Cleanup complete. Exiting.")
 
-
 def main():
     # Argument parser setup
     parser = argparse.ArgumentParser(description="Lighting Control System")
-    parser.add_argument('--log_level', type=str, 
+    parser.add_argument('--log_level', type=str,
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
 
@@ -54,7 +52,7 @@ def main():
             # Check for USB config and trigger reload if detected
             if usb_manager.usb_check():
                 logging.info("USB config copied. Preparing to restart main.")
-                cleanup_resources(gps)                
+                cleanup_resources(gps)
                 raise ConfigReloaded  # Raise custom exception for loop restart
 
             # Start GPS fix if within the fixing window

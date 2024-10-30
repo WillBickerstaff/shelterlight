@@ -21,11 +21,11 @@ class DataRetrievalError(DataStoreError):
 
 
 class GPSDataStore:
-    """Class for storing GPS and time data in JSON format to persist across 
+    """Class for storing GPS and time data in JSON format to persist across
        power cycles.
 
-    Manages the storage and retrieval of GPS data, including latitude, 
-    longitude, maximum time to obtain a fix, and sunrise and sunset times for 
+    Manages the storage and retrieval of GPS data, including latitude,
+    longitude, maximum time to obtain a fix, and sunrise and sunset times for
     today and the next seven days.
     """
 
@@ -41,7 +41,7 @@ class GPSDataStore:
         self._initialize_file()
 
     def _initialize_file(self) -> None:
-        """Initialize the JSON file if it doesn't exist, creating an empty 
+        """Initialize the JSON file if it doesn't exist, creating an empty
            data structure."""
         try:
             # Create a basic structure if the JSON file does not exist
@@ -57,25 +57,25 @@ class GPSDataStore:
                         "last_updated": None
                     }
                     json.dump(empty_data, file)
-                    logging.info("GPSDataStore JSON file initialized at %s", 
+                    logging.info("GPSDataStore JSON file initialized at %s",
                                  ConfigLoader().JSON_persistent_data)
         except IOError as e:
             logging.error("Failed to initialize GPSDataStore JSON file: %s", e)
             raise DataStorageError("Failed to initialize JSON file.") from e
 
     def store_data(self, max_fix_time: int, latitude: float, longitude: float,
-                   sunrise_times: List[dt.datetime], 
+                   sunrise_times: List[dt.datetime],
                    sunset_times: List[dt.datetime]) -> None:
-        """Store the latest GPS data in the JSON file, overwriting existing 
+        """Store the latest GPS data in the JSON file, overwriting existing
            data.
 
         Args:
             max_fix_time (int): Maximum time in seconds to obtain a GPS fix.
             latitude (float): Current latitude.
             longitude (float): Current longitude.
-            sunrise_times (List[dt.datetime]): List of sunrise times for the 
+            sunrise_times (List[dt.datetime]): List of sunrise times for the
                 next 7 days.
-            sunset_times (List[dt.datetime]): List of sunset times for the 
+            sunset_times (List[dt.datetime]): List of sunset times for the
                 next 7 days.
 
         Raises:
@@ -133,7 +133,7 @@ class GPSDataStore:
             Optional[Union[int, float]]: Value of the key, or None if not found.
 
         Raises:
-            DataRetrievalError: If reading the JSON file or retrieving data 
+            DataRetrievalError: If reading the JSON file or retrieving data
                                 fails.
         """
         try:
@@ -149,15 +149,15 @@ class GPSDataStore:
         """Fetch a list of datetime values from the JSON file.
 
         Args:
-            key (str): Key name containing a list of ISO-format datetime 
+            key (str): Key name containing a list of ISO-format datetime
                        strings.
 
         Returns:
-            Optional[List[dt.datetime]]: List of datetime objects, or None if 
+            Optional[List[dt.datetime]]: List of datetime objects, or None if
             parsing fails.
 
         Raises:
-            DataRetrievalError: If reading the JSON file or parsing datetime 
+            DataRetrievalError: If reading the JSON file or parsing datetime
             values fails.
         """
         try:

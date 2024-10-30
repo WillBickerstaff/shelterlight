@@ -9,7 +9,7 @@ class DB:
     """
     DB is a class responsible for managing PostgreSQL database connections,
     handling queries, and setting up database tables and indexes.
-    
+
     Attributes:
         _db_host (str): Database host address.
         _db_port (int): Port number for database connection.
@@ -20,13 +20,13 @@ class DB:
         _db_retry_delay (int): Delay between retry attempts.
         _conn (psycopg2.connect): The PostgreSQL database connection object.
     """
-    
+
     def __init__(self, config_section: str = "ACTIVITY_DB"):
         """
         Initialize the DB instance with database configuration.
-        
+
         Args:
-            config_section (str): The configuration section name for database 
+            config_section (str): The configuration section name for database
             settings.
         """
         config_loader = ConfigLoader()
@@ -46,12 +46,12 @@ class DB:
             config_section, "connect_retry_delay"))
         self._conn = self._connect_to_db()
         self._setup_database()
-    
+
     @property
     def conn(self) -> psycopg2.extensions.connection:
         """
         Connection property to access the active database connection.
-        
+
         Returns:
             psycopg2.extensions.connection: The PostgreSQL connection object.
         """
@@ -60,12 +60,12 @@ class DB:
     def _connect_to_db(self) -> psycopg2.extensions.connection:
         """
         Establish a connection to the PostgreSQL database with retry logic.
-        
+
         Returns:
             psycopg2.extensions.connection: Database connection object.
-        
+
         Raises:
-            psycopg2.DatabaseError: If connection fails after all retry 
+            psycopg2.DatabaseError: If connection fails after all retry
                 attempts.
         """
         for attempt in range(self._db_retry):
@@ -90,9 +90,9 @@ class DB:
 
     def _setup_database(self) -> None:
         """
-        Initialize the PostgreSQL database table and indexes for activity 
+        Initialize the PostgreSQL database table and indexes for activity
         logging.
-        
+
         Executes SQL commands to create the `activity_log` table and an index on
         the `timestamp` field, if they do not already exist.
         """
@@ -121,27 +121,27 @@ class DB:
     def close_connection(self) -> None:
         """
         Close the database connection gracefully.
-        
+
         Ensures the connection is closed to release resources.
         """
         if self._conn:
             self._conn.close()
             logging.info("Database connection closed.")
 
-    def query(self, query: str, params: Optional[Tuple] = None, 
+    def query(self, query: str, params: Optional[Tuple] = None,
               fetch: bool = False) -> Optional[List[Tuple]]:
         """
-        Execute a SQL query with optional parameters, optionally fetching 
+        Execute a SQL query with optional parameters, optionally fetching
         results.
-        
+
         Args:
             query (str): The SQL query to execute.
             params (tuple, optional): Parameters to safely pass into the query.
             fetch (bool, optional): Whether to fetch and return query results.
-        
+
         Returns:
             list: Query results if fetch is True; otherwise, None.
-        
+
         Raises:
             psycopg2.DatabaseError: If there is an error executing the query.
         """
@@ -163,7 +163,7 @@ class DB:
 
     def __del__(self):
         """
-        Destructor to ensure connection is closed upon deletion of the DB 
+        Destructor to ensure connection is closed upon deletion of the DB
         instance.
         """
         self.close_connection()

@@ -30,8 +30,8 @@ class PinFaultHigh(Exception):
 
 class Activity:
     """
-    Class to monitor GPIO activity inputs, log events to a PostgreSQL database, 
-    and detect excessive high duration for each input, updating pin statuses as 
+    Class to monitor GPIO activity inputs, log events to a PostgreSQL database,
+    and detect excessive high duration for each input, updating pin statuses as
     OK or FAULT and current state as HIGH or LOW.
 
     Attributes:
@@ -39,20 +39,20 @@ class Activity:
         _activity_inputs (List[int]): List of GPIO pins to monitor for activity.
         _start_times (Dict[int, dt.datetime]): Dictionary to store start times
                                                for each monitored GPIO pin.
-        _pin_status (Dict[int, Dict[str, Union[PinStatus, str]]]): Dictionary to 
-            store both the status ('OK' or 'FAULT') and the state ('HIGH' or 
+        _pin_status (Dict[int, Dict[str, Union[PinStatus, str]]]): Dictionary to
+            store both the status ('OK' or 'FAULT') and the state ('HIGH' or
             'LOW') for each pin.
-        _fault_threshold (float): Threshold in seconds for a high state duration 
+        _fault_threshold (float): Threshold in seconds for a high state duration
                                   considered faulty.
-        _health_check_interval (float): Interval in seconds between each fault 
+        _health_check_interval (float): Interval in seconds between each fault
                                         check cycle.
     """
 
     def __init__(self):
         """
-        Initialize the Activity class, setting up the database connection, GPIO 
+        Initialize the Activity class, setting up the database connection, GPIO
         inputs, and the fault detection timer.
-        
+
         Raises:
             Exception: If GPIO setup or database connection fails.
         """
@@ -60,7 +60,7 @@ class Activity:
         self._db = DB("ACTIVITY_DB")
         self._activity_inputs: List[int] = \
             ConfigLoader().activity_digital_inputs
-        self._start_times: Dict[int, dt.datetime] = {}  
+        self._start_times: Dict[int, dt.datetime] = {}
         self._pin_status: Dict[int, Dict[str, Union[PinStatus, str]]] = {
             pin: {"status": PinStatus.OK, "state": PinStatus.LOW}
             for pin in self._activity_inputs
@@ -69,13 +69,13 @@ class Activity:
         self._start_fault_detection()  # Start periodic fault checking
         self._fault_threshold = ConfigLoader().max_activity_time
         self._health_check_interval = ConfigLoader().health_check_interval
-        
+
     def _setup_activity_inputs(self) -> None:
-        """ 
+        """
         Set up GPIO for monitoring activity on specified pins.
-         
-        Configures each GPIO pin to trigger `_start_activity_event` on a 
-        low-to-high transition (RISING edge) and `_end_activity_event` on a 
+
+        Configures each GPIO pin to trigger `_start_activity_event` on a
+        low-to-high transition (RISING edge) and `_end_activity_event` on a
         high-to-low transition (FALLING edge).
         """
         GPIO.setmode(GPIO.BOARD)
@@ -96,20 +96,20 @@ class Activity:
                 bouncetime=300
             )
         logging.info(
-            "Activity monitoring initialized on GPIO pins: %s", 
+            "Activity monitoring initialized on GPIO pins: %s",
             self._activity_inputs
         )
 
     def _start_activity_event(self, pin: int) -> None:
         """
-        Record the start time and set pin state to HIGH when the specified GPIO 
+        Record the start time and set pin state to HIGH when the specified GPIO
         pin goes high.
-        
+
         Args:
             pin (int): The GPIO pin that triggered the rising edge event.
         """
         # Record start time
-        self._start_times[pin] = dt.datetime.now(dt.timezone.utc)  
+        self._start_times[pin] = dt.datetime.now(dt.timezone.utc)
         self._pin_status[pin]["status"] = PinStatus.OK  # Set status to OK
         self._pin_status[pin]["state"] = PinStatus.HIGH  # Set state to HIGH
         logging.info(
@@ -118,7 +118,7 @@ class Activity:
 
     def _end_activity_event(self, pin: int) -> None:
         """
-        Log an activity event to the database with date, time, and duration 
+        Log an activity event to the database with date, time, and duration
         information when the specified GPIO pin goes low. Resets the pin status
         to OK if it was in a FAULT state, and sets the pin state to LOW.
 
@@ -126,7 +126,7 @@ class Activity:
             pin (int): The GPIO pin that triggered the falling edge event.
 
         Raises:
-            psycopg2.DatabaseError: If there is an error executing the database 
+            psycopg2.DatabaseError: If there is an error executing the database
                                     query.
         """
         end_time = dt.datetime.now(dt.timezone.utc)  # Current timestamp
@@ -164,7 +164,7 @@ class Activity:
 
     def _start_fault_detection(self) -> None:
         """
-        Start a periodic check to detect if any monitored input has remained 
+        Start a periodic check to detect if any monitored input has remained
         high beyond the fault threshold.
         """
         def fault_check():
@@ -174,7 +174,7 @@ class Activity:
                 ).total_seconds()
                 if duration > self._fault_threshold:
                     # Set FAULT
-                    self._pin_status[pin]["status"] = PinStatus.FAULT  
+                    self._pin_status[pin]["status"] = PinStatus.FAULT
                     logging.warning(
                         f"Pin {pin} is in FAULT status, high for {duration} "
                         "seconds."
@@ -184,13 +184,13 @@ class Activity:
             threading.Timer(
                 self._health_check_interval, fault_check
             ).start()  # Re-run check
-        
+
         fault_check()
 
     def get_pin_status(self, pin: int) -> Dict[str, PinStatus]:
         """
         Retrieve the current status and state of a specific GPIO pin.
-        
+
         Args:
             pin (int): The GPIO pin number to check.
 
@@ -204,10 +204,10 @@ class Activity:
     def get_all_pin_statuses(self) -> Dict[int, Dict[str, PinStatus]]:
         """
         Retrieve the current status and state of all monitored GPIO pins.
-        
+
         Returns:
-            Dict[int, Dict[str, PinStatus]]: Dictionary with pin numbers as keys 
-            and dictionaries containing 'status' and 'state' keys with 
+            Dict[int, Dict[str, PinStatus]]: Dictionary with pin numbers as keys
+            and dictionaries containing 'status' and 'state' keys with
             PinStatus values.
         """
         return self._pin_status
