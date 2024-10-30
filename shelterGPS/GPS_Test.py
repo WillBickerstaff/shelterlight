@@ -40,8 +40,8 @@ class TestGPS(unittest.TestCase):
         MockSerial.assert_called_with(port='/dev/serial0',
                                       baudrate=9600, timeout=0.5)
 
-    @patch('GPS.pwr_on')
-    @patch('GPS.pwr_off')
+    @patch('Position.GPS.pwr_on')
+    @patch('Position.GPS.pwr_off')
     def test_power_control(self, mock_pwr_off, mock_pwr_on):
         """Test that GPS correctly handles power on and off."""
         gps = GPS()
@@ -75,9 +75,9 @@ class TestGPS(unittest.TestCase):
         invalid_message = "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W*00"
         self.assertFalse(GPS.nema_checksum(invalid_message))
 
-    @patch('GPS._get_msg')
-    @patch('GPS._get_coordinates')
-    @patch('GPS._get_datetime')
+    @patch('Position.GPS._get_msg')
+    @patch('Position.GPS._get_coordinates')
+    @patch('Position.GPS._get_datetime')
     def test_get_fix_success(self, mock_get_datetime, mock_get_coordinates, mock_get_msg):
         """Test that `get_fix` calls all required methods for a successful fix."""
         gps = GPS()
@@ -85,7 +85,7 @@ class TestGPS(unittest.TestCase):
         mock_get_coordinates.assert_called_once()
         mock_get_datetime.assert_called_once()
 
-    @patch('GPS._get_msg', side_effect=GPSInvalid)
+    @patch('Position.GPS._get_msg', side_effect=GPSInvalid)
     def test_get_fix_failure(self, mock_get_msg):
         """Test that `get_fix` raises GPSInvalid when no valid fix is obtained."""
         gps = GPS()
@@ -105,7 +105,7 @@ class TestGPS(unittest.TestCase):
         with self.assertRaises(ValueError):
             gps._process_datetime("invalid", "230394")  # Invalid UTC time
 
-    @patch('GPS._decode_message')
+    @patch('Position.GPS._decode_message')
     def test_decode_message_valid(self, mock_decode_message):
         """Test decoding of a valid GPS message, ensuring proper storage in `self._last_msg`."""
         gps = GPS()
@@ -113,7 +113,7 @@ class TestGPS(unittest.TestCase):
         gps._decode_message(test_message)
         mock_decode_message.assert_called_once_with(test_message)
 
-    @patch('GPS._validate_message_content')
+    @patch('Position.GPS._validate_message_content')
     def test_validate_message_content_valid(self, mock_validate_message_content):
         """Test validation of message content based on predefined criteria."""
         gps = GPS()
