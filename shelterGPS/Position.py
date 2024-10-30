@@ -133,7 +133,7 @@ class GPS:
         self._lat = 0.0
         self._lon = 0.0
         self._alt = 0.0
-        self._dt = dt.datetime(0, 0, 0, 0, 0, 0, 0)
+        self._dt = dt.datetime(1970, 1, 1, 0, 0, 0, 0)
         self._last_msg = []
 
         # Mark as initialized
