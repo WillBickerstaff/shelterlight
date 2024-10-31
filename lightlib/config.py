@@ -16,49 +16,171 @@ class ConfigLoader:
 
     _instance = None
     _FALLBACK_VALUES = {
+        #------------------------------------------------------------#
         "GENERAL": {
-            "log_level": {"value": "INFO", "is_pin": False},
-            "log_file": {"value": "shelterlight.log", "is_pin": False},
-            "cycle_time": {"value": 300, "is_pin": False},
-            "cancel_input": {"value": 5, "is_pin": True },
-            "confirm_input": {"value": 6, "is_pin": True }
+        #------------------------------------------------------------#
+            "log_level":                {"value": "INFO",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "log_file":                 {"value": "shelterlight.log",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "cycle_time":               {"value": 300,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "cancel_input":             {"value": 5,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": False},
+
+            "confirm_input":            {"value": 6,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": False}
         },
+        #------------------------------------------------------------#
         "GPS": {
-            "serial_port": {"value": "/dev/serial0", "is_pin": False},
-            "baudrate": {"value": 9600, "is_pin": False},
-            "timeout": {"value": 0.5, "is_pin": False},
-            "pwr_pin": {"value": 4, "is_pin": True},
-            "pwr_up_time": {"value": 2.0, "is_pin": False},
-            "fix_retry_interval": {"value": 600.0, "is_pin": False},
-            "max_fix_time": {"value": 120.0, "is_pin": False},
-            "failed_fix_days": {"value": 14, "is_pin": False},
+        #------------------------------------------------------------#
+            "serial_port":              {"value": "/dev/serial0",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "baudrate":                 {"value": 9600,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "timeout":                  {"value": 0.5,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "pwr_pin":                  {"value": 4,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": False},
+
+            "pwr_up_time":              {"value": 2.0,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "fix_retry_interval":       {"value": 600.0,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "max_fix_time":             {"value": 120.0,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "failed_fix_days":          {"value": 14,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
         },
+        #------------------------------------------------------------#
         "IO": {
-            "activity_digital_inputs": {"value": "17", "is_pin": True,
-                               "accepts_list": True},
-            "max_activity_time": {"value": 1800, "is_pin": False},
-            "health_check_interval": {"value": 300, "is_pin": False},
-            "lights_output": {"value": 16, "is_pin": True,
-                               "accepts_list": True},
-            "fault_output": {"value": 15, "is_pin": True},
-            "crit_fault_out": {"value": 14, "is_pin": True},
+        #------------------------------------------------------------#
+            "activity_digital_inputs":  {"value": 17,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": True},
+
+            "max_activity_time":        {"value": 1800,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "health_check_interval":    {"value": 300,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "lights_output":            {"value": 16,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": True},
+
+            "fault_output":             {"value": 15,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": False},
+
+            "crit_fault_out":           {"value": 14,
+                                         "type": int,
+                                         "is_pin": True,
+                                         "accepts_list": False},
         },
+        #------------------------------------------------------------#
         "FIX_WINDOW": {
-            "sunrise_offset": {"value": 3600, "is_pin": False},
-            "sunset_offset": {"value": -1800, "is_pin": False},
+        #------------------------------------------------------------#
+            "sunrise_offset":           {"value": 3600,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "sunset_offset":            {"value": -1800,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
         },
         "DATA_STORE": {
-            "media_mount_point": {"value": "/media", "is_pin": False},
-            "persistent_data_JSON": {"value": "persist.json", "is_pin": False},
+            "media_mount_point":        {"value": "/media",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "persistent_data_JSON":     {"value": "persist.json",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
         },
+        #------------------------------------------------------------#
         "ACTIVITY_DB": {
-        "host": {"value": "localhost", "is_pin": False},
-        "port": {"value": 5432, "is_pin": False},
-        "database": {"value": "activity_db", "is_pin": False},
-        "user": {"value": "db_user", "is_pin": False},
-        "password": {"value": "019smartlight283", "is_pin": False},
-        "connect_retry": {"value": 5, "is_pin": False },
-        "connect_retry_delay": {"value": 2, "is_pin": False}
+        #------------------------------------------------------------#
+        "host":                         {"value": "localhost",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+        "port":                         {"value": 5432,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+        "database":                     {"value": "activity_db",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+        "user":                         {"value": "pi",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+        "password":                     {"value": "pi",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+        "connect_retry":                {"value": 5,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+        "connect_retry_delay":          {"value": 2,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False}
         }
     }
 
@@ -112,7 +234,8 @@ class ConfigLoader:
     def max_activity_time(self) -> int:
         """Max time any activity detection can remain high before a fault
         should be generated"""
-        return self.get_config_value(self.config, "IO","max_activity_time")
+        return self.get_config_value(
+            self.config, "IO","max_activity_time")
 
     @property
     def health_check_interval(self) -> int:
@@ -133,11 +256,6 @@ class ConfigLoader:
     def log_file(self) -> str:
         """str: Path to the log file."""
         return self.get_config_value(self.config, "GENERAL", "log_file")
-
-    @property
-    def valid_config(self) -> bool:
-        """bool: Indicates if the current configuration is valid."""
-        return self._valid_config
 
     @property
     def log_file(self) -> str:
@@ -336,92 +454,104 @@ class ConfigLoader:
                 "Error parsing temporary config file %s: %s", file_path, e)
             return False
 
-    def _get_fallback_value(self, section: str, option: str):
-        """Retrieve the fallback value for a specific section and option.
+    @staticmethod
+    def _convert_to_type(raw_value, specified_type, accepts_list):
+        """Convert a raw value to the specified type, handling lists if needed.
 
-        This method extracts the default value for a specified section and
-        option from `_FALLBACK_VALUES`. It is primarily used to supply default
-        values for configuration options that are either missing or invalid.
+        Args:
+            raw_value (str): The raw value from the configuration file.
+            specified_type (type): The expected type of the value (int, float, str).
+            accepts_list (bool): Whether the value should be parsed as a list.
+
+        Returns:
+            The converted value, either as a single value or a list.
+        """
+        # If the value is expected to be a list and accepts_list is True
+        if accepts_list and specified_type == int:
+            return [int(item.strip()) for item in str(raw_value).split(",") if item.strip()]
+
+        # Apply type conversion based on specified type
+        if specified_type == int:
+            return int(raw_value)
+        elif specified_type == float:
+            return float(raw_value)
+        elif specified_type == str:
+            return str(raw_value)
+
+        return raw_value
+
+    def _get_default_value(self, section: str, option: str):
+        """Retrieve the fallback value for a specific section and option.
 
         Args:
             section (str): The section name in `_FALLBACK_VALUES`, such as
-            "GPS" or "GENERAL". option (str): The specific option name within
-            the section, such as "log_file".
+                        "GPS" or "GENERAL".
+            option (str): The specific option name within the section, such as
+                        "log_file".
 
         Returns:
-            The fallback value for the specified section and option, if defined;
-            otherwise, None.
+            The raw fallback value as defined in `_FALLBACK_VALUES`.
         """
-        # Access fallback values dictionary, ensuring both section and option
-        # keys exist, and return the "value" entry for the option.
-        return self._FALLBACK_VALUES.get(
-            section, {}).get(option, {}).get("value")
+        def_val = self._FALLBACK_VALUES.get(section, {}).\
+            get(option, {}).get("value")
+        logging.debug("Default value for %s.%s is [%s]",
+                      section, option, def_val)
+        return def_val
 
-    def get_config_value(self, config, section, option,
-                        value_type: Optional[type] = None):
-        """Retrieve a configuration value, using fallback values and type
-           inference.
+    def get_config_value(self, config, section, option):
+        """
+        Retrieve a configuration value from the specified section and option,
+        applying the explicitly defined type and falling back to default values
+        if necessary.
 
         This method retrieves a configuration value from a given section and
-        option, defaulting to fallback values if necessary. The method
-        determines the appropriate type based on either a specified
-        `value_type` or inferred from the fallback value. If the option is
-        marked as accepting a list, the method parses the configuration value
-        accordingly.
+        option in the config file, defaulting to a specified value if necessary.
+        The type of the value is explicitly defined in `_FALLBACK_VALUES`.
+        If an option is marked as accepting a list, it is parsed as a
+        comma-separated string and returned as a list, even if it contains a
+        single value.
 
         Args:
             config (ConfigParser): The configuration parser instance containing
-                                   the loaded configuration.
-            section (str): The configuration section, such as "GPS" or
-                           "GENERAL".
-            option (str): The option name within the section, such as
-                          "baudrate".
-            value_type (Optional[type]): Specifies the desired type for the
-                                        retrieved value, such as `int` or
-                                        `float`. If `None`, the type is inferred
-                                        from the fallback value.
+                                the loaded configuration.
+            section (str): The configuration section, such as "GPS" or "GENERAL".
+            option (str): The option name within the section, such as "baudrate".
 
         Returns:
             The configuration value, cast to the appropriate type (or parsed as
             a list if marked `accepts_list`). If the option is missing or
             invalid, the fallback value is returned.
 
+        Raises:
+            ValueError: If the retrieved value cannot be converted to the
+                        specified type.
         """
-        # Retrieve fallback value and determine the inferred type for the option
-        default_value = self._get_fallback_value(section, option)
-        inferred_type = value_type if value_type else type(default_value)
-
-        # Determine if the option accepts a list by checking the fallback
-        # structure
-        accepts_list = self._FALLBACK_VALUES.get(
-            section, {}).get(option, {}).get("accepts_list", False)
+        # Retrieve the fallback dictionary entry for type and value
+        logging.info("Getting config value for %s.%s",section,option)
+        default_value = self._get_default_value(section, option)
+        fallback_entry = self._FALLBACK_VALUES.get(section, {}).get(option, {})
+        specified_type = fallback_entry.get("type", str)
+        accepts_list = fallback_entry.get("accepts_list", False)
+        logging.debug("[%s].%s default = %s",section,option,default_value)
+        logging.debug("[%s].%s type = %s",section,option,specified_type)
+        logging.debug("[%s].%s accepts lists = %s",section,option,accepts_list)
 
         try:
-            # Retrieve and cast the value based on its expected type or
-            # structure
-            if inferred_type == int:
-                return config.getint(section, option, fallback=default_value)
-            elif inferred_type == float:
-                return config.getfloat(section, option, fallback=default_value)
-            elif accepts_list:
-                # Handle list parsing if the option is marked as `accepts_list`
-                item_type = float if any(isinstance(d, float) \
-                                  for d in [default_value]) else int
-                return [item_type(pin.strip())
-                        for pin in config.get(section, option,
-                                fallback=str(default_value)).split(",")
-                        if pin.strip()]
-            # Default to returning the value as a string if no other type is
-            # specified
-            return config.get(section, option, fallback=default_value)
+            # Retrieve the raw value from the config, or use the fallback
+            raw_value = config.get(section, option, fallback=default_value)
+            # Convert the raw value to the correct type
+            return ConfigLoader._convert_to_type(raw_value,
+                                                 specified_type, accepts_list)
 
         except (configparser.NoSectionError,
-                configparser.NoOptionError,
-                ValueError) as e:
-            # Log and return the fallback if retrieval or parsing fails
-            logging.warning("Defaulting for missing or invalid config "
-                            "%s.%s: %s", section, option, e)
-            return default_value
+                configparser.NoOptionError, ValueError) as e:
+            logging.warning(
+                "Defaulting for missing or invalid config %s.%s: %s",
+                section, option, e)
+            # Use the fallback value and convert it to the correct type
+            return self._convert_to_type(default_value,
+                                        specified_type, accepts_list)
+
 
     def __validate_and_load(self, file_path: str) -> bool:
         """Load and validate the configuration file.
@@ -505,7 +635,7 @@ class ConfigLoader:
 
         Returns:
             bool: True if all pins are uniquely defined, False if any pin is
-                  assigned more than once.
+                assigned more than once.
         """
         pins_used = set()
         for section, options in self._FALLBACK_VALUES.items():
@@ -514,14 +644,19 @@ class ConfigLoader:
                 for key, details in options.items():
                     # Process items marked as GPIO pins
                     if details.get("is_pin"):
-                        # Retrieve the pin(s) from the config as a list
-                        pins = self.get_config_value(
-                            config, section, key, list)
+                        # Retrieve the pin(s) from the config
+                        pins = self.get_config_value(config, section, key)
+
+                        # If pins is a single int, wrap it in a list
+                        if isinstance(pins, int):
+                            pins = [pins]
+
+                        logging.info("%s.%s is pin assignment (%s)", section, key, pins)
+
                         for pin in pins:
                             # Check for duplicate pin assignments
                             if pin in pins_used:
-                                logging.error(
-                                    "Pin %d is defined multiple times.", pin)
+                                logging.error("Pin %s is defined multiple times. [%s]", pin, pins_used)
                                 return False
                             pins_used.add(pin)
         return True

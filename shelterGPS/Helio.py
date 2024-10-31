@@ -344,7 +344,8 @@ class SunTimes:
         This method ensures only one GPS fix thread is active at a time by
         checking the `gps_fix_is_running` property. If not running, it starts
         `gps_fix_process` in a daemon thread, which will terminate if the main
-        program exits.
+        program exits. Threading will allow the rest of the program to
+        continue while the GPS fix is obtained
         """
         if not self.gps_fix_is_running:
             # Start the GPS fix process in a new daemon thread
@@ -405,18 +406,20 @@ class SunTimes:
             subprocess.CalledProcessError: If the system time cannot be set,
                 an error is logged, detailing the failure.
         """
+        gps_datetim = dt.datetime(1970,1,1,0,0,0,0,tzinfo)
         try:
             # Ensure this code only runs on Linux/Unix-like systems
             if os.name != 'posix':
                 logging.warning(
                     "System time setting skipped on non-Linux systems.")
                 return
-
             # Access the datetime property from the GPS instance
             gps_datetime = self._gps.datetime
 
             # Validate that gps_datetime is a datetime instance and is set
-            if not isinstance(gps_datetime, dt.datetime):
+            if not isinstance(gps_datetime, dt.datetime) or \
+                gps_datetime == dt.datetime(
+                    1970, 1, 1, 0, 0, 0, 0, tzinfo=dt.timezone.utc):
                 logging.error("GPS datetime is not set or invalid. "
                               "Exiting system time update.")
                 return

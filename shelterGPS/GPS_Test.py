@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+import datetime as dt
 import sys, os
+import logging
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 if 'RPi' not in sys.modules:
@@ -16,6 +17,7 @@ class TestGPS(unittest.TestCase):
     def setUp(self):
         """Setup for each test, ensuring singleton reset for GPS."""
         GPS._instance = None  # Reset singleton instance
+        logging.basicConfig(level=logging.INFO)
 
     def test_singleton_behavior(self):
         """Test that only one instance of GPS can exist."""
@@ -24,21 +26,22 @@ class TestGPS(unittest.TestCase):
         self.assertIs(gps1, gps2, "GPS class is not respecting singleton pattern.")
 
     @patch('serial.Serial')
-    @patch('lightlib.ConfigLoader')
+    @patch('lightlib.config.ConfigLoader')
     def test_init_serial_connection(self, MockConfigLoader, MockSerial):
         """Test that GPS initializes serial connection using configurations."""
-        # Mock configuration loader values
-        config = MockConfigLoader.return_value
-        config.gps_serial_port = '/dev/serial0'
-        config.gps_baudrate = 9600
-        config.gps_timeout = 0.5
-        config.gps_pwr_pin = 4
 
+        # Configure the mock to return specific values
+        MockConfigLoader.return_value.gps_serial_port = '/dev/serial0'
+        MockConfigLoader.return_value.gps_baudrate = 9600
+        MockConfigLoader.return_value.gps_timeout = 0.5
+
+        # Initialize GPS instance, which should use the mock config
         gps = GPS()
 
-        # Assert serial port is set up with correct parameters
+        # Assert the serial.Serial call uses the correct values
         MockSerial.assert_called_with(port='/dev/serial0',
-                                      baudrate=9600, timeout=0.5)
+                                    baudrate=9600,
+                                    timeout=0.5)
 
     @patch('Position.GPS.pwr_on')
     @patch('Position.GPS.pwr_off')
@@ -52,16 +55,45 @@ class TestGPS(unittest.TestCase):
         mock_pwr_off.assert_called_once()
 
     def test_gpsCoord2Dec_valid(self):
+        logging.getLogger().setLevel(logging.DEBUG)
         """Test conversion of GPS DMS coordinates to decimal format."""
         lat = GPS.gpsCoord2Dec("3745.1234", GPSDir.North)
         lon = GPS.gpsCoord2Dec("12231.8765", GPSDir.West)
         self.assertAlmostEqual(lat, 37.752057, places=6)
         self.assertAlmostEqual(lon, -122.531275, places=6)
+        lat = GPS.gpsCoord2Dec("0745.1234", GPSDir.South)
+        lon = GPS.gpsCoord2Dec("02231.8765", GPSDir.East)
+        self.assertAlmostEqual(lat, -7.7520566, places=6)
+        self.assertAlmostEqual(lon, 22.531275, places=6)
+        # check missing leading 0
+        lat = GPS.gpsCoord2Dec("745.1234", GPSDir.South)
+        lon = GPS.gpsCoord2Dec("2231.8765", GPSDir.East)
+        self.assertAlmostEqual(lat, -7.7520566, places=6)
+        self.assertAlmostEqual(lon, 22.531275, places=6)
+        logging.getLogger().setLevel(logging.INFO)
+        # check the boundaries
+        lat = GPS.gpsCoord2Dec("0000.0000", GPSDir.North)
+        self.assertAlmostEqual(lat, 0.0, places=6)
+        lat = GPS.gpsCoord2Dec("0000.0000", GPSDir.South)
+        self.assertAlmostEqual(lat, -0.0, places=6)
+        lat = GPS.gpsCoord2Dec("9000.0000", GPSDir.North)
+        self.assertAlmostEqual(lat, 90.0, places=6)
+        lat = GPS.gpsCoord2Dec("9000.0000", GPSDir.South)
+        self.assertAlmostEqual(lat, -90.0, places=6)
+        lon = GPS.gpsCoord2Dec("00000.0000", GPSDir.East)
+        self.assertAlmostEqual(lon, 0.0, places=6)
+        lon = GPS.gpsCoord2Dec("00000.0000", GPSDir.West)
+        self.assertAlmostEqual(lon, -0.0, places=6)
+        lon = GPS.gpsCoord2Dec("18000.0000", GPSDir.East)
+        self.assertAlmostEqual(lon, 180.0, places=6)
+        lon = GPS.gpsCoord2Dec("18000.0000", GPSDir.West)
+        self.assertAlmostEqual(lon, -180.0, places=6)
 
     def test_gpsCoord2Dec_out_of_bounds(self):
         """Test GPS coordinate conversion raises an error when out of bounds."""
         with self.assertRaises(GPSOutOfBoundsError):
             GPS.gpsCoord2Dec("9145.1234", GPSDir.North)  # Latitude > 90
+            GPS.gpsCoord2Dec("18145.1234", GPSDir.North)  # Longitude > 180
 
     @patch('re.sub', return_value="GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,003.1,W")
     def test_nema_checksum_valid(self, mock_sub):
@@ -95,9 +127,9 @@ class TestGPS(unittest.TestCase):
     def test_process_datetime_valid(self):
         """Test that GPS correctly processes and converts valid UTC time and date."""
         gps = GPS()
-        dt = gps._process_datetime("123519", "230394")
-        expected = datetime(1994, 3, 23, 12, 35, 19, tzinfo=datetime.timezone.utc)
-        self.assertEqual(dt, expected)
+        dt_obj = gps._process_datetime(utc_time="123519", date_str="230323")
+        expected = dt.datetime(2023, 3, 23, 12, 35, 19, tzinfo=dt.timezone.utc)
+        self.assertEqual(dt_obj, expected)
 
     def test_process_datetime_invalid(self):
         """Test that GPS raises ValueError for improperly formatted datetime strings."""

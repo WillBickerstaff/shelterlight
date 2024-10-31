@@ -5,7 +5,7 @@ import serial
 from threading import Lock
 from enum import Enum
 from typing import Union, Optional
-import RPi as GPIO # type: ignore
+import RPi.GPIO as GPIO # type: ignore
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE
 
@@ -27,10 +27,10 @@ class GPSOutOfBoundsError(Exception):
 
 class GPSDir(Enum):
     """Enumeration for cardinal directions in GPS coordinates."""
-    North = 0
-    South = 1
-    East = 0
-    West = 1
+    North = 'N'
+    South = 'S'
+    East = 'E'
+    West = 'W'
 
 
 class GPS:
@@ -133,7 +133,7 @@ class GPS:
         self._lat = 0.0
         self._lon = 0.0
         self._alt = 0.0
-        self._dt = dt.datetime(1970, 1, 1, 0, 0, 0, 0)
+        self._dt = dt.datetime(1970, 1, 1, 0, 0, 0, 0, tzinfo=dt.timezone.utc)
         self._last_msg = []
 
         # Mark as initialized
@@ -199,34 +199,54 @@ class GPS:
                                 bounds or the input coordinate is negative.
         """
         try:
-            # Format gps_coord to ensure it is in the correct format
-            gps_coord = GPS._check_GPS_Coord(gps_coord=gps_coord,
-                                             direction=direction)
-
             # Determine degree length (3 for longitude, 2 for latitude)
             d_len = 3 if direction in [GPSDir.East, GPSDir.West] else 2
 
+            # Ensure gps_coord is a string
+            if d_len == 3:
+                gps_coord = str(gps_coord).zfill(10)
+            else:
+                gps_coord = str(gps_coord).zfill(9)
+
+            lat_lng_str = "Latitude" if direction in \
+                [GPSDir.North, GPSDir.South] else "Longitude"
+            logging.info(
+                "%s, NEMA GPS coordinate string is %s with direction %s",
+                lat_lng_str, gps_coord, direction.value)
             # Split the string into degrees and minutes
-            degrees, minutes = int(gps_coord[:d_len]), float(gps_coord[d_len:])
-            result = degrees + (minutes / 60.0)
+            degrees = int(gps_coord[:d_len])
+            minutes = float(gps_coord[d_len:])
+            seconds = abs((minutes - int(minutes)) * 60)
+            logging.info(
+                "%s\t%s%s\t(%s degrees, %s minutes, %s seconds %s)",
+                lat_lng_str, gps_coord, direction.value, degrees, int(minutes),
+                round(seconds, 1), direction.value)
+
+            # Convert to decimal format
+            decimal_coord = degrees + (minutes / 60.0)
 
             # Apply negative sign for South or West directions
             if direction in [GPSDir.South, GPSDir.West]:
-                result = -result
+                decimal_coord = -decimal_coord
+            logging.info("%s,\t\t\t%s decimal degrees", lat_lng_str,
+                         round(decimal_coord, 6))
+            # Validate latitude bounds
+            if direction in [GPSDir.North, GPSDir.South] \
+                         and not (-90.0 <= decimal_coord <= 90.0):
+                raise GPSOutOfBoundsError(
+                    f"Latitude out of bounds: {decimal_coord}")
 
-            # Validate latitude and longitude bounds
-            if direction in [GPSDir.North, GPSDir.South] and \
-                    not (-90.0 <= result <= 90.0):
-                raise GPSOutOfBoundsError(f"Latitude out of bounds: {result}")
-            if direction in [GPSDir.East, GPSDir.West] and \
-                    not (-180.0 <= result <= 180.0):
-                raise GPSOutOfBoundsError(f"Longitude out of bounds: {result}")
+            # Validate longitude bounds
+            if direction in [GPSDir.East, GPSDir.West] \
+                         and not (-180.0 <= decimal_coord <= 180.0):
+                raise GPSOutOfBoundsError(
+                    f"Longitude out of bounds: {decimal_coord}")
 
-            return result
+            return decimal_coord
+
         except (ValueError, IndexError) as e:
-            logging.error(
-                "GPS: Invalid coordinate format for '%s'. Error: %s",
-                gps_coord, e)
+            logging.error("GPS: Invalid coordinate format for '%s'. Error: %s",
+                          gps_coord, e)
             raise GPSOutOfBoundsError(
                 f"Invalid GPS coordinate format: {gps_coord}") from e
 
@@ -316,8 +336,13 @@ class GPS:
                 "GPS: Format issue during checksum calculation: %s", e)
             return False
 
-    def pwr_on(self) -> None:
-        """Power up the GPS module by enabling its power pin."""
+    def pwr_on(self,wait_after:Optional[float]) -> None:
+        """Power up the GPS module by enabling its power pin.
+
+        Args:
+            wait_after (Optional[float]): Time to wait after power on
+                                          before continuing
+        """
         set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.ON,
                                        self._pwr_up_time)
 
@@ -338,9 +363,13 @@ class GPS:
         Raises:
             GPSInvalid: Raised if a valid fix cannot be obtained within the
                         specified time.
+
+        Notes:
+            **Run in a separate thread** or you could potentially
+            be stuck in a loop until you fix or the max_fix_time expires
         """
         if pwr_up_wait is None:
-            pwr_up_wait =self._pwr_up_time
+            pwr_up_wait = self._pwr_up_time
 
         if max_fix_time is None:
             max_fix_time = self._max_fix_time
@@ -378,7 +407,8 @@ class GPS:
         logging.info("GPS: Attempting to read %s message for %s seconds",
                            msg, max_time)
         start_time:dt.datetime = dt.datetime.now()
-
+        # Keep trying until we get the required message and it validates
+        # or we reach the defined maximum attempt duration
         while dt.datetime.now() - start_time < dt.timedelta(seconds = max_time):
             ser_line:str = self._gps_ser.readline()
 
@@ -541,12 +571,14 @@ class GPS:
         try:
             if date_str:
                 date_parts = [date_str[:2], date_str[2:4], date_str[4:]]
+                print(date_parts)
                 date_obj = dt.date(int("20" + date_parts[0]),
                                           int(date_parts[1]),
                                           int(date_parts[2]))
             else:
                 date_obj = dt.date.today()
-            return dt.datetime.combine(date_obj, utc_time_obj, dt.timezone.utc)
+            return dt.datetime.combine(
+                date_obj, utc_time_obj).replace(tzinfo=dt.timezone.utc)
         except (ValueError, IndexError) as e:
             logging.error("GPS: Invalid date format '%s'. Error: %s",
                                 date_str, e)
