@@ -387,7 +387,7 @@ class ConfigLoader:
         try:
             # Attempt to load and validate the configuration file
             if not self.__validate_and_load(self.config_path):
-                logging.warning("Invalid configuration, using fallback values.")
+                logging.warning("CONFIG: Invalid configuration, using fallback values.")
                 # Load fallback configuration if validation fails
                 self.config.read_dict(self._FALLBACK_VALUES)
             else:
@@ -396,7 +396,7 @@ class ConfigLoader:
                 self._valid_config = True
         except (FileNotFoundError, configparser.Error) as e:
         # Log the error and raise an exception if loading fails
-                logging.error("Failed to load configuration file: %s", e)
+                logging.error("CONFIG: Failed to load configuration file: %s", e)
                 raise ConfigNotLoaded("Configuration could not be loaded.")
 
     def validate_config_file(self, file_path: str) -> bool:
@@ -439,10 +439,10 @@ class ConfigLoader:
             # methods to avoid altering the main configuration state
             if self.__validate_config_structure(temp_config) and \
             self.__validate_unique_pins(temp_config):
-                logging.info("Temporary config file at %s is valid.", file_path)
+                logging.info("CONFIG: Alternative config file at %s is valid.", file_path)
                 return True  # File is valid if it meets structural expectations
             else:
-                logging.warning("Temporary config file at %s is invalid.",
+                logging.warning("CONFIG: Alternative config file at %s is invalid.",
                                 file_path)
                 return False  # File is invalid if structure or pins
                               # assignments do not meet expectations
@@ -451,7 +451,7 @@ class ConfigLoader:
             # Log any errors encountered during parsing and return False to
             # indicate invalid config
             logging.error(
-                "Error parsing temporary config file %s: %s", file_path, e)
+                "CONFIG: Error parsing alternative config file %s: %s", file_path, e)
             return False
 
     @staticmethod
@@ -494,7 +494,7 @@ class ConfigLoader:
         """
         def_val = self._FALLBACK_VALUES.get(section, {}).\
             get(option, {}).get("value")
-        logging.debug("Default value for %s.%s is [%s]",
+        logging.debug("CONFIG: Default value for %s.%s is [%s]",
                       section, option, def_val)
         return def_val
 
@@ -527,27 +527,36 @@ class ConfigLoader:
                         specified type.
         """
         # Retrieve the fallback dictionary entry for type and value
-        logging.info("Getting config value for %s.%s",section,option)
+        logging.debug("CONFIG: Getting config value for %s.%s",section,option)
         default_value = self._get_default_value(section, option)
-        fallback_entry = self._FALLBACK_VALUES.get(section, {}).get(option, {})
-        specified_type = fallback_entry.get("type", str)
-        accepts_list = fallback_entry.get("accepts_list", False)
-        logging.debug("[%s].%s default = %s",section,option,default_value)
-        logging.debug("[%s].%s type = %s",section,option,specified_type)
-        logging.debug("[%s].%s accepts lists = %s",section,option,accepts_list)
+        option_spec = self._FALLBACK_VALUES.get(section, {}).get(option, {})
+        specified_type = option_spec.get("type", str)
+        accepts_list = option_spec.get("accepts_list", False)
+        logging.debug("CONFIG: [%s].%s default = %s",
+                      section,option,default_value)
+        logging.debug("CONFIG: [%s].%s type = %s",
+                      section,option,specified_type)
+        logging.debug("CONFIG: [%s].%s accepts lists = %s",
+                      section,option,accepts_list)
 
         try:
             # Retrieve the raw value from the config, or use the fallback
             raw_value = config.get(section, option, fallback=default_value)
             # Convert the raw value to the correct type
+            logging.info("CONFIG: Option %s.%s set with value from config "
+                         "file, type is [%s], value is %s, (%s accept lists)",
+                         section,option, str(specified_type), raw_value,
+                         "does" if accepts_list else "doesn't")
             return ConfigLoader._convert_to_type(raw_value,
                                                  specified_type, accepts_list)
 
         except (configparser.NoSectionError,
                 configparser.NoOptionError, ValueError) as e:
             logging.warning(
-                "Defaulting for missing or invalid config %s.%s: %s",
-                section, option, e)
+                "CONFIG: Value for %s.%s is missing or invalid in the config "
+                "file, using default value %s of type [%s], "
+                "(%s accept lists): %s", section, option, default_value,
+                str(specified_type), "does" if accepts_list else "doesn't", e)
             # Use the fallback value and convert it to the correct type
             return self._convert_to_type(default_value,
                                         specified_type, accepts_list)
@@ -576,7 +585,7 @@ class ConfigLoader:
         try:
             # Attempt to read the configuration file
             config.read(file_path)
-            logging.info("Loaded configuration from %s", file_path)
+            logging.info("CONFIG: Read config file from %s", file_path)
 
             # Validate configuration structure and GPIO pin assignments
             if not self.__validate_config_structure(config):
@@ -585,11 +594,12 @@ class ConfigLoader:
                 return False
 
             # If all checks pass, assign the validated config to the instance
+            logging.info("CONFIG: config file at %s is valid")
             self.config = config
             return True
         except configparser.Error as e:
             logging.error(
-                "Configuration parsing error for %s: %s", file_path, e)
+                "CONFIG: Parsing error for config file %s: %s", file_path, e)
             return False
 
     def __validate_config_structure(self,
@@ -614,11 +624,13 @@ class ConfigLoader:
         for section in required_sections:
             # Check if each required section exists in the loaded config
             if section not in config:
-                logging.error("Missing required section: %s", section)
+                logging.error("CONFIG: config file is invalid, required "
+                              "section is missing: %s", section)
                 return False
             # Log a warning if the section exists but is empty
             elif not config.items(section):
-                logging.warning("Section %s is empty.", section)
+                logging.warning("CONFIG: Section [%s] in config file contains "
+                                "no values.", section)
         return True
 
     def __validate_unique_pins(self, config: configparser.ConfigParser) -> bool:
@@ -651,12 +663,15 @@ class ConfigLoader:
                         if isinstance(pins, int):
                             pins = [pins]
 
-                        logging.info("%s.%s is pin assignment (%s)", section, key, pins)
+                        logging.debug("CONFIG: %s.%s is pin assignment (%s)",
+                                      section, key, pins)
 
                         for pin in pins:
                             # Check for duplicate pin assignments
                             if pin in pins_used:
-                                logging.error("Pin %s is defined multiple times. [%s]", pin, pins_used)
+                                logging.error("CONFIG: Pin %s is defined"
+                                              " multiple times. [%s]",
+                                              pin, pins_used)
                                 return False
                             pins_used.add(pin)
         return True

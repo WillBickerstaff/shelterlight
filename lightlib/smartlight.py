@@ -1,6 +1,7 @@
 import logging
 import time
 import sys
+import inspect
 from enum import Enum
 from typing import Optional
 from RPi import GPIO # type: ignore
@@ -15,6 +16,79 @@ class GPIO_PIN_STATE(Enum):
 class CANCEL_CONFIRM(Enum):
     CANCEL = False
     CONFIRM = True
+
+import inspect
+import logging
+
+def get_caller_info():
+    """Get the names of the two previous calling functions and the arguments
+    of the most recent call, excluding `log_caller` if present.
+
+    This function uses the inspect module to analyze the call stack and
+    extracts the names of the two functions preceding the current call.
+    If `log_caller` is found in the stack, it will be excluded, and the
+    next two functions will be considered. It formats these names as a
+    '>>' separated string to indicate the call chain and retrieves the
+    local variables (arguments) of the most recent caller.
+
+    Returns:
+        tuple: A tuple containing:
+            - str: A '>>' string representing the names of the two
+                   previous calling functions, excluding `log_caller`.
+            - dict: A dictionary of local variables from the most recent
+                    caller.
+    """
+    stack = inspect.stack()
+
+    # Ensure the stack has sufficient depth
+    if len(stack) < 3:
+        return "Insufficient stack depth", {}
+
+    # Initialize indices to skip `log_caller` if present
+    index = 1  # Start from 1 because 0 is the current frame (get_caller_info)
+    if stack[index].function == "log_caller":
+        index += 1  # Skip `log_caller` if it's the current function
+
+    if len(stack) <= index + 1:
+        return "Insufficient stack depth", {}
+
+    # Get the two previous frames
+    first_caller_frame = stack[index + 1]
+    second_caller_frame = stack[index]
+
+    # Extract function names from the frames
+    first_caller_function = first_caller_frame.function
+    second_caller_function = second_caller_frame.function
+
+    # Combine them into a '>>' separated string
+    caller_function = f"{first_caller_function} >> {second_caller_function}"
+
+    # Get the arguments (locals) from the most recent caller
+    caller_locals = second_caller_frame.frame.f_locals
+
+    return caller_function, caller_locals
+
+def log_caller(loglevel: int = logging.ERROR, module: str = None) -> None:
+    """Log information about the calling functions and their arguments.
+
+    Args:
+        loglevel (int): The logging level, such as logging.ERROR or logging.INFO.
+        module (str, optional): Additional module information to include in the log.
+
+    Returns:
+        None
+    """
+    # Get the stack message from get_caller_info
+    stack_message, caller_args = get_caller_info()
+
+    module = f"{module}: " if module is not None else ""
+
+    # Use the logging module to log the message at the specified log level
+    logging.log(loglevel, f"{module}Called by:")
+    logging.log(loglevel, f"{module}  {stack_message} with args:")
+    for key, value in caller_args.items():
+        logging.log(loglevel,f"{module}    {key}: {value}")
+
 
 def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
                     wait_after: Optional[float] = None) -> None:

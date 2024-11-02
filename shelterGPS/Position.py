@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Union, Optional
 import RPi.GPIO as GPIO # type: ignore
 from lightlib.config import ConfigLoader
-from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE
+from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE, log_caller
 
 
 class GPSInvalid(Exception):
@@ -210,17 +210,13 @@ class GPS:
 
             lat_lng_str = "Latitude" if direction in \
                 [GPSDir.North, GPSDir.South] else "Longitude"
-            logging.info(
-                "%s, NEMA GPS coordinate string is %s with direction %s",
+            logging.debug(
+                "GPS: %s, NMEA GPS coordinate string is %s with direction %s",
                 lat_lng_str, gps_coord, direction.value)
             # Split the string into degrees and minutes
             degrees = int(gps_coord[:d_len])
             minutes = float(gps_coord[d_len:])
             seconds = abs((minutes - int(minutes)) * 60)
-            logging.info(
-                "%s\t%s%s\t(%s degrees, %s minutes, %s seconds %s)",
-                lat_lng_str, gps_coord, direction.value, degrees, int(minutes),
-                round(seconds, 1), direction.value)
 
             # Convert to decimal format
             decimal_coord = degrees + (minutes / 60.0)
@@ -228,8 +224,10 @@ class GPS:
             # Apply negative sign for South or West directions
             if direction in [GPSDir.South, GPSDir.West]:
                 decimal_coord = -decimal_coord
-            logging.info("%s,\t\t\t%s decimal degrees", lat_lng_str,
-                         round(decimal_coord, 6))
+            logging.info("GPS: %s is %s decimal degrees (%s degrees, "
+                         "%s minutes, %s seconds %s)", lat_lng_str,
+                         round(decimal_coord, 6), degrees, int(minutes),
+                         round(seconds,2), direction.value)
             # Validate latitude bounds
             if direction in [GPSDir.North, GPSDir.South] \
                          and not (-90.0 <= decimal_coord <= 90.0):
@@ -284,17 +282,49 @@ class GPS:
 
         return gps_coord
 
-# Attribution: NMEA checksum calculation adapted from Josh Sherman's guide
+# Attribution: NMEA checksum calculation from Josh Sherman's guide
 # https://doschman.blogspot.com/2013/01/calculating-nmea-sentence-checksums.html
     @staticmethod
-    def nema_checksum(msg_str: str = "") -> bool:
+    def nmea_checksum(msg_str: str = "") -> bool:
         """Calculate and verify the NMEA checksum for a GPS message string.
 
+        This function is used to verify the integrity of an NMEA (National
+        Marine Electronics Association) message received from a GPS device.
+        The NMEA message includes a checksum at the end of the string, which is
+        used to ensure that the message has not been corrupted during
+        transmission. The checksum is calculated by XOR-ing the ASCII values of
+        all characters between the '$' and '*' symbols.
+
         Args:
-            msg_str (str): NMEA message string.
+            msg_str (str): The full NMEA message string, which should begin with
+                           a '$' character and end with a '*' followed by the
+                           two-character hexadecimal checksum.
 
         Returns:
-            bool: True if the checksum matches, False otherwise.
+            bool: True if the calculated checksum matches the checksum in the
+                  message string, indicating that the message is valid and
+                  uncorrupted. False if the checksums do not match, indicating
+                  potential corruption or tampering.
+
+        Example:
+            A valid NMEA message might look like:
+            ```
+            $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+            ```
+            - The checksum `*47` at the end of the message is compared to the
+              calculated checksum to verify the message integrity.
+
+        Raises:
+            ValueError: If the message string is incorrectly formatted or does
+                        not contain a valid checksum section. This error is
+                        logged but does not halt the function.
+
+        Note:
+            - The checksum calculation only includes characters between '$' and
+              '*', not including the '$' and '*'.
+            - The comparison is case-insensitive, as the checksum is typically
+              presented in uppercase but may be compared with a lowercase
+              representation.
         """
         try:
             # Extract the checksum from the last two characters after  the '*'
@@ -324,7 +354,8 @@ class GPS:
             # Log and return result of checksum comparison
             # Log the result: pass or fail, based on if the checksum matched.
             if is_valid:
-                logging.debug("GPS: NMEA checksum validation passed.")
+                logging.debug("GPS: NMEA checksum validation passed, computed "
+                              "%s, expected %s.", hex(csum), cksum)
             else:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
                                 "expected %s", hex(csum), cksum)
@@ -334,7 +365,9 @@ class GPS:
         except (TypeError, ValueError) as e:
             logging.debug(
                 "GPS: Format issue during checksum calculation: %s", e)
+            log_caller(module="GPS")
             return False
+
 
     def pwr_on(self,wait_after:Optional[float]) -> None:
         """Power up the GPS module by enabling its power pin.
@@ -418,7 +451,8 @@ class GPS:
                 self._decode_message(ser_line)
                 if self._validate_message_content(msg):
                     return  # Exit once a valid message is confirmed
-                logging.debug("GPS: Non-tracked message type; skipping.")
+                logging.debug("GPS: Non-tracked message type %s; skipping.",
+                              self._last_msg[0])
 
         raise GPSInvalid(f"No valid fix obtained after {max_time} seconds")
 
@@ -436,7 +470,7 @@ class GPS:
         # identifier, some basic data fields, and a valid checksum (e.g.,
         # $GPGGA,1234.56,N*CS).
         MIN_MSG_LEN: int = 14
-        return len(ser_line) > MIN_MSG_LEN and self.nema_checksum(ser_line)
+        return len(ser_line) > MIN_MSG_LEN and self.nmea_checksum(ser_line)
 
     def _decode_message(self, ser_line: bytes) -> None:
         """Decode and parse GPS message, removing checksum for validation.
@@ -486,7 +520,7 @@ class GPS:
                 # Verify that the message status\validation field contains
                 # a value indicating validated data
                 if self._last_msg[entry['ValidIdx']] in entry['ValidVals']:
-                    logging.info("GPS: Validated %s message.", msg)
+                    logging.info("GPS: Validated message [%s].", msg)
                     return True
         return False
 
@@ -511,7 +545,7 @@ class GPS:
                     self._lon = self.gpsCoord2Dec(lon, GPSDir[ew])
                     if entry['ALT'] != -1:
                         self._alt = float(self._last_msg[entry['ALT']])
-                    logging.info("GPS: Coordinates fix obtained - Lat: %s, "
+                    logging.info("GPS: Position fix obtained - Lat: %s, "
                                        "Lon: %s, Alt: %s",
                                        self._lat, self._lon, self._alt)
                 except GPSOutOfBoundsError as obe:
@@ -538,7 +572,7 @@ class GPS:
                                 if entry['DATE'] != -1 else None)
                     self._dt = self._process_datetime(utc_time, date_str)
                     logging.info(
-                        "GPS: Date and time fix obtained: %s", self._dt)
+                        "GPS: Date and time obtained: %s", self._dt)
                 except (KeyError, ValueError) as e:
                     logging.error("GPS: Error processing datetime: %s", e)
                     raise GPSInvalid("Failed to retrieve datetime.")
@@ -559,27 +593,38 @@ class GPS:
             ValueError: If `utc_time` or `date_str` is incorrectly formatted.
         """
         try:
-            time_parts = [utc_time[:2], utc_time[2:4], utc_time[4:6]]
+            # Split every 2 characters
+            time_parts = [utc_time[i:i+2] for i in range(0, len(utc_time), 2)]
+            logging.debug("GPS: Time string contains HH %s : MM %s : SS %s",
+                         time_parts[0], time_parts[1], time_parts[2],)
             utc_time_obj = dt.time(int(time_parts[0]),
                                    int(time_parts[1]),
                                    int(time_parts[2]))
         except (ValueError, IndexError) as e:
             logging.error("GPS: Invalid UTC time format '%s'. Error: %s",
                                 utc_time, e)
+            log_caller(module="GPS")
             raise ValueError(f"Invalid UTC time format: {utc_time}") from e
 
         try:
             if date_str:
-                date_parts = [date_str[:2], date_str[2:4], date_str[4:]]
-                print(date_parts)
+                # Split every 2 characters
+                date_parts = [date_str[i:i+2] \
+                    for i in range(0, len(date_str), 2)]
+                logging.debug("GPS: Date string contains YY %s, MM %s, DD %s",
+                             date_parts[0], date_parts[1], date_parts[2],)
                 date_obj = dt.date(int("20" + date_parts[0]),
                                           int(date_parts[1]),
                                           int(date_parts[2]))
             else:
                 date_obj = dt.date.today()
-            return dt.datetime.combine(
-                date_obj, utc_time_obj).replace(tzinfo=dt.timezone.utc)
+
+            date_obj = dt.datetime.combine(
+                    date_obj, utc_time_obj).replace(tzinfo=dt.timezone.utc)
+            logging.info("GPS: Datetime is %s", str(date_obj))
+            return date_obj
         except (ValueError, IndexError) as e:
             logging.error("GPS: Invalid date format '%s'. Error: %s",
                                 date_str, e)
+            log_caller(module="GPS")
             raise ValueError(f"Invalid date format: {date_str}") from e
