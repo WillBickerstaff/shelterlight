@@ -282,7 +282,7 @@ class GPS:
 
         return gps_coord
 
-# Attribution: NMEA checksum calculation from Josh Sherman's guide
+# Attribution: NMEA checksum calculation adapted from Josh Sherman's guide
 # https://doschman.blogspot.com/2013/01/calculating-nmea-sentence-checksums.html
     @staticmethod
     def nmea_checksum(msg_str: str = "") -> bool:
@@ -595,13 +595,13 @@ class GPS:
         try:
             # Split every 2 characters
             time_parts = [utc_time[i:i+2] for i in range(0, len(utc_time), 2)]
-            logging.debug("GPS: Time string contains HH %s : MM %s : SS %s",
+            logging.debug("GPS: Time string contains (hh)%s:(mm)%s:(ss)%s",
                          time_parts[0], time_parts[1], time_parts[2],)
             utc_time_obj = dt.time(int(time_parts[0]),
                                    int(time_parts[1]),
                                    int(time_parts[2]))
         except (ValueError, IndexError) as e:
-            logging.error("GPS: Invalid UTC time format '%s'. Error: %s",
+            logging.error("GPS: *** Invalid UTC time format '%s'. Error: %s",
                                 utc_time, e)
             log_caller(module="GPS")
             raise ValueError(f"Invalid UTC time format: {utc_time}") from e
@@ -611,7 +611,7 @@ class GPS:
                 # Split every 2 characters
                 date_parts = [date_str[i:i+2] \
                     for i in range(0, len(date_str), 2)]
-                logging.debug("GPS: Date string contains YY %s, MM %s, DD %s",
+                logging.debug("GPS: Date string contains (YY)%s-(MM)%s-(DD)%s",
                              date_parts[0], date_parts[1], date_parts[2],)
                 date_obj = dt.date(int("20" + date_parts[0]),
                                           int(date_parts[1]),
@@ -624,7 +624,7 @@ class GPS:
             logging.info("GPS: Datetime is %s", str(date_obj))
             return date_obj
         except (ValueError, IndexError) as e:
-            logging.error("GPS: Invalid date format '%s'. Error: %s",
+            logging.error("GPS: *** Invalid date format '%s'. Error: %s",
                                 date_str, e)
             log_caller(module="GPS")
             raise ValueError(f"Invalid date format: {date_str}") from e

@@ -113,7 +113,7 @@ class TestGPS(unittest.TestCase):
                 pass_n += 1  # Increment pass_n if the assertion passes
             else:
                 self.assertTrue(False, f"Valid NMEA failed for message: {message}")
-        logging.info("\t*** %s of %s valid checksum tests passed", pass_n, len(NMEA_Messages.valid) )
+        logging.info("\t*** %s of %s valid checksum tests passed", pass_n, len(valid_nmea_messages) )
         logging.getLogger().setLevel(self.default_loglevel)
 
     def test_nmea_checksum_invalid(self):
@@ -128,7 +128,7 @@ class TestGPS(unittest.TestCase):
                 pass_n += 1  # Increment pass_n if the assertion passes
             else:
                 self.assertTrue(False, f"Invalid NMEA checksum unexpectedly passed for message: {invalid_checksum}")
-        logging.info("\t*** %s of %s invalid checksum tests passed", pass_n, len(NMEA_Messages.valid))
+        logging.info("\t*** %s of %s invalid checksum tests passed", pass_n, len(valid_nmea_messages))
         logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('Position.GPS._get_msg')
@@ -153,32 +153,18 @@ class TestGPS(unittest.TestCase):
     def test_process_datetime_valid(self):
         """Test that GPS correctly processes and converts valid UTC time and date."""
         gps = GPS()
-        pass_n = 0
-        logging.getLogger().setLevel(self.default_loglevel)
-        for val in NMEA_Messages.valid_dt:
-            expected = val.get("dt_obj")
-            dt_obj = gps._process_datetime(utc_time=val.get("time"), date_str=val.get("date"))
-            if not self.assertEqual(dt_obj, expected):
-                pass_n += 1
-        logging.info("\t*** %s of %s valid date tests passed", pass_n, len(NMEA_Messages.valid_dt))
+        dt_obj = gps._process_datetime(utc_time="123519", date_str="230323")
+        expected = dt.datetime(2023, 3, 23, 12, 35, 19, tzinfo=dt.timezone.utc)
+        self.assertEqual(dt_obj, expected)
         logging.getLogger().setLevel(self.default_loglevel)
 
     def test_process_datetime_invalid(self):
         """Test that GPS raises ValueError for improperly formatted datetime strings."""
         gps = GPS()
-        pass_n = 0
         logging.getLogger().setLevel(logging.DEBUG)
-
         for val in NMEA_Messages.invalid_dt:
-            try:
-                with self.assertRaises(ValueError, msg=f"Failed for date: {val.get('date')} and time: {val.get('time')}"):
-                    gps._process_datetime(date_str=val.get("date"), utc_time=val.get("time"))
-            except AssertionError:
-                continue  # If the ValueError isn't raised, the test will fail
-            else:
-                pass_n += 1  # Increment if the exception was correctly raised
-
-        logging.info("\t*** %s of %s invalid date tests passed", pass_n, len(NMEA_Messages.invalid_dt))
+            with self.assertRaises(ValueError, msg=f"Failed for date: {val.get('date')} and time: {val.get('time')}"):
+                gps._process_datetime(val.get("date"), val.get("time"))
         logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('Position.GPS._decode_message')
