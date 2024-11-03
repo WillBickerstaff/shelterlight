@@ -89,15 +89,42 @@ class Coordinate:
 
     @property
     def degrees(self) -> int:
+        """Get the degrees component of the GPS coordinate.
+
+        Returns:
+            int: The degrees component of the GPS coordinate.
+        """
         return self._deg
 
     @property
     def minutes(self) -> int:
+        """Get the minutes component of the GPS coordinate.
+
+        Returns:
+            int: The minutes component of the GPS coordinate as an integer.
+        """
         return int(self._min)
 
     @property
     def seconds(self) -> float:
+        """Get the seconds component of the GPS coordinate.
+
+        Returns:
+            float: The seconds component of the GPS coordinate as a float.
+        """
         return (self._min - self.minutes) * 60
+
+    @property
+    def deg_min_sec(self) -> str:
+        """Get the Degrees, Minutes, Seconds (DMS) representation of the GPS coordinate.
+
+        Returns:
+            str: The formatted DMS string.
+        """
+        dms = "{} degrees, {} minutes, {} seconds {}".format(
+            self.degrees, self.minutes, round(self.seconds, 2),
+            self.direction.name)
+        return dms
 
     @property
     def is_longitude(self) -> bool:
@@ -175,10 +202,8 @@ class Coordinate:
         """
         if (self.is_latitude and -90.0 <= decimal_value <= 90.0) or \
            (self.is_longitude and -180.0 <= decimal_value <= 180.0):
-            logging.info("%s coordinate is %s degrees, %s minutes, %s seconds "
-                         "%s, (%s decimal degrees)", self.lat_lng_str,
-                         self.degrees, self.minutes, round(self.seconds,2),
-                         self.direction.name, self.decimal_value)
+            logging.info("%s coordinate is %s, (%s decimal degrees)",
+                         self.lat_lng_str, self.deg_min_sec, self.decimal_value)
             return True
         else:
             logging.error(
