@@ -165,13 +165,13 @@ class GPS:
     def latitude(self) -> float:
         """Return the most recent latitude from the GPS fix, in decimal
            degrees."""
-        return self._lat
+        return self._lat.decimal_value
 
     @property
     def longitude(self) -> float:
         """Return the most recent longitude from the GPS fix, in decimal
            degrees."""
-        return self._lon
+        return self._lon.decimal_value
 
     @property
     def altitude(self) -> float:
@@ -183,8 +183,8 @@ class GPS:
         """Return the current UTC date and time from the GPS fix."""
         return self._dt
 
-    @staticmethod
-    def gpsCoord2Dec(gps_coord: Union[str, float], direction: GPSDir) -> float:
+    def gpsCoord2Dec(self,
+                     gps_coord: Union[str, float], direction: GPSDir) -> float:
         """Convert GPS coordinates from DMS format to decimal format.
 
         Args:
@@ -198,89 +198,8 @@ class GPS:
             GPSOutOfBoundsError: If the result is out of latitude or longitude
                                 bounds or the input coordinate is negative.
         """
-        try:
-            # Determine degree length (3 for longitude, 2 for latitude)
-            d_len = 3 if direction in [GPSDir.East, GPSDir.West] else 2
-
-            # Ensure gps_coord is a string
-            if d_len == 3:
-                gps_coord = str(gps_coord).zfill(10)
-            else:
-                gps_coord = str(gps_coord).zfill(9)
-
-            lat_lng_str = "Latitude" if direction in \
-                [GPSDir.North, GPSDir.South] else "Longitude"
-            logging.debug(
-                "GPS: %s, NMEA GPS coordinate string is %s with direction %s",
-                lat_lng_str, gps_coord, direction.value)
-            # Split the string into degrees and minutes
-            degrees = int(gps_coord[:d_len])
-            minutes = float(gps_coord[d_len:])
-            seconds = abs((minutes - int(minutes)) * 60)
-
-            # Convert to decimal format
-            decimal_coord = degrees + (minutes / 60.0)
-
-            # Apply negative sign for South or West directions
-            if direction in [GPSDir.South, GPSDir.West]:
-                decimal_coord = -decimal_coord
-            logging.info("GPS: %s is %s decimal degrees (%s degrees, "
-                         "%s minutes, %s seconds %s)", lat_lng_str,
-                         round(decimal_coord, 6), degrees, int(minutes),
-                         round(seconds,2), direction.value)
-            # Validate latitude bounds
-            if direction in [GPSDir.North, GPSDir.South] \
-                         and not (-90.0 <= decimal_coord <= 90.0):
-                raise GPSOutOfBoundsError(
-                    f"Latitude out of bounds: {decimal_coord}")
-
-            # Validate longitude bounds
-            if direction in [GPSDir.East, GPSDir.West] \
-                         and not (-180.0 <= decimal_coord <= 180.0):
-                raise GPSOutOfBoundsError(
-                    f"Longitude out of bounds: {decimal_coord}")
-
-            return decimal_coord
-
-        except (ValueError, IndexError) as e:
-            logging.error("GPS: Invalid coordinate format for '%s'. Error: %s",
-                          gps_coord, e)
-            raise GPSOutOfBoundsError(
-                f"Invalid GPS coordinate format: {gps_coord}") from e
-
-    @staticmethod
-    def _check_GPS_Coord(gps_coord: Union[str, float], direction: GPSDir) -> str:
-        """Format and validate gps_coord as a string with correct length.
-
-        Args:
-            gps_coord (Union[str, float]): Coordinate from the GPS module.
-            direction (GPSDir): Directional indicator [N,S,E,W].
-
-        Returns:
-            str: The formatted gps_coord with leading zeros if necessary.
-        """
-        # Ensure gps_coord is a string
-        if isinstance(gps_coord, float):
-            gps_coord = str(gps_coord)
-
-        # Check the given coordinate is positive
-        if gps_coord.startswith("-"):
-            gps_coord = gps_coord[1:]
-            logging.warning(
-                "GPS: Negative coordinate provided [%s] treating as positive",
-                gps_coord)
-
-        # Determine required length based on direction
-        required_len = 8 if direction in [GPSDir.East, GPSDir.West] else 7
-
-        # Add leading zeros if the coordinate length is insufficient
-        if len(gps_coord) < required_len:
-            gps_coord = gps_coord.zfill(required_len) # add 0's
-            logging.warning(
-                "GPS: Coordinate too short; added leading 0's to [%s]",
-                gps_coord)
-
-        return gps_coord
+        self._coord = Coordinate(direction = direction, gps_string = gps_coord)
+        return self._coord.decimal_value
 
 # Attribution: NMEA checksum calculation adapted from Josh Sherman's guide
 # https://doschman.blogspot.com/2013/01/calculating-nmea-sentence-checksums.html
@@ -541,8 +460,10 @@ class GPS:
                                self._last_msg[entry['LON']]
                     ns, ew = self._last_msg[entry['NS']], \
                              self._last_msg[entry['EW']]
-                    self._lat = self.gpsCoord2Dec(lat, GPSDir[ns])
-                    self._lon = self.gpsCoord2Dec(lon, GPSDir[ew])
+                    self._lat = Coordinate(gps_string = lat,
+                                           direction = GPSDir[ns])
+                    self._lon = Coordinate(gps_string = lon,
+                                           direction = GPSDir[ew])
                     if entry['ALT'] != -1:
                         self._alt = float(self._last_msg[entry['ALT']])
                     logging.info("GPS: Position fix obtained - Lat: %s, "
@@ -601,6 +522,7 @@ class GPS:
                                    int(time_parts[1]),
                                    int(time_parts[2]))
         except (ValueError, IndexError) as e:
+            logging.error("\n%s","-"*79)
             logging.error("GPS: *** Invalid UTC time format '%s'. Error: %s",
                                 utc_time, e)
             log_caller(module="GPS")
@@ -624,7 +546,81 @@ class GPS:
             logging.info("GPS: Datetime is %s", str(date_obj))
             return date_obj
         except (ValueError, IndexError) as e:
+            logging.error("\n%s","-"*79)
             logging.error("GPS: *** Invalid date format '%s'. Error: %s",
                                 date_str, e)
             log_caller(module="GPS")
             raise ValueError(f"Invalid date format: {date_str}") from e
+
+class Coordinate:
+    def __init__(self, direction: Optional[GPSDir] = None, gps_string: Optional[str] = None):
+        self._dir = None
+        self._degree_len = 0
+        if direction is not None:
+            self.direction = direction
+        if gps_string is not None:
+            self.gps_string = gps_string
+
+    @property
+    def direction(self):
+        return self._dir
+
+    @direction.setter
+    def direction(self, direction: GPSDir):
+        if direction not in GPSDir:
+            raise ValueError(f"Coordinate direction is invalid: {direction}")
+        self._dir = direction
+        self._degree_len = 3 if self.is_longitude else 2
+
+    @property
+    def is_latitude(self):
+        return self.direction in [GPSDir.North, GPSDir.South]
+
+    @property
+    def is_longitude(self):
+        return self.direction in [GPSDir.East, GPSDir.West]
+
+    @property
+    def decimal_value(self):
+        return self._dec
+
+    @property
+    def gps_string(self):
+        return self._gps_str
+
+    @gps_string.setter
+    def gps_string(self, gps_str: Union[str, float]) -> None:
+        # GPS string should always be positive
+        if float(gps_str) < 0.0:
+            logging.error("COORD: GPS coordinate string (%s) cannot be negative", gps_str)
+            raise ValueError(f"GPS coordinate string ({gps_str}) cannot be negative")
+        self._gps_str = str(gps_str).zfill(10) if self.is_longitude else str(gps_str).zfill(9)
+        self._deg_min_sec()
+        self._decimal()
+
+    def _deg_min_sec(self):
+        if self._dir is None:
+            return
+        self._deg = int(self.gps_string[:self._degree_len])
+        self._min_real = float(self.gps_string[self._degree_len:])
+        self._min_int = int(self._min_real)
+        self._sec = (self._min_real - self._min_int) * 60
+        logging.debug("COORD: Coordinate is %s degrees, %s minutes, %s seconds %s",
+                      self._deg, self._min_int, round(self._sec, 2), self.direction.value)
+
+    def _decimal(self):
+        # Correct calculation of decimal degrees
+        self._dec = self._deg + (self._min_real / 60)
+        if self.direction in [GPSDir.South, GPSDir.West]:
+            self._dec = -self._dec
+        logging.debug("COORD: Decimal coordinate calculated as %s", self._dec)
+        if not self._validate_decimal(self._dec):
+            self._dec = None
+
+    def _validate_decimal(self, decimal_value: float) -> bool:
+        if (self.is_latitude and -90.0 <= decimal_value <= 90.0) or \
+           (self.is_longitude and -180.0 <= decimal_value <= 180.0):
+            return True
+        else:
+            logging.error("COORD: Decimal coordinate %s is out of bounds", decimal_value)
+            return False

@@ -4,7 +4,7 @@ from Position import GPSDir
 # Chat GPT used to generate test message.
 # GPT messages included incorrect checksums, validated at:
 # https://nmeachecksum.eqth.net/
-valid_NMEA = [
+valid = [
         # GGA - GPS (GP)
         "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47",
         "$GPGGA,104230,3723.5478,S,12218.8765,W,1,07,1.0,10.2,M,0.0,M,,*43",
