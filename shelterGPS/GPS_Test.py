@@ -10,7 +10,8 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir, Coordinate # Import after mocks
+from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir
+from coord import Coordinate # Import after mocks
 import NMEA_Messages
 
 class TestGPS(unittest.TestCase):
