@@ -565,6 +565,11 @@ class Coordinate:
     def direction(self):
         return self._dir
 
+    @property
+    def lat_lng_str(self):
+        if self.is_latitude: return "Latitude"
+        else: return "Longitude"
+
     @direction.setter
     def direction(self, direction: GPSDir):
         if direction not in GPSDir:
@@ -622,5 +627,6 @@ class Coordinate:
            (self.is_longitude and -180.0 <= decimal_value <= 180.0):
             return True
         else:
-            logging.error("COORD: Decimal coordinate %s is out of bounds", decimal_value)
-            return False
+            logging.error("COORD: Decimal coordinate %s is out of bounds for %s", decimal_value, self.lat_lng_str)
+            raise GPSOutOfBoundsError(
+                f"Coordinate {decimal_value} is out of bounds for {self.lat_lng_str}")

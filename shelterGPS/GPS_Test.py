@@ -10,7 +10,7 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir  # Import after mocks
+from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir, Coordinate # Import after mocks
 import NMEA_Messages
 
 class TestGPS(unittest.TestCase):
@@ -64,7 +64,7 @@ class TestGPS(unittest.TestCase):
         mock_pwr_off.assert_called_once()
         logging.getLogger().setLevel(self.default_loglevel)
 
-    def test_gpsCoord2Dec_valid(self):
+    def test_Coordinate_valid(self):
         logging.getLogger().setLevel(self.default_loglevel)
         logging.info("\n%s\n\t\t   Commencing coordinate conversion tests\n%s",
             "="*79, "-"*79)
@@ -74,20 +74,21 @@ class TestGPS(unittest.TestCase):
             expected = test_case.get("expected")
             coord = test_case.get("coord")
             dir = test_case.get("dir")
-            result = GPS.gpsCoord2Dec(coord,dir)
+            coord = Coordinate(direction=dir, gps_string=coord)
+            result = coord.decimal_value
             self.assertAlmostEqual(result, expected, places = 10)
             pass_n += 1
         logging.info("\t*** %s of %s valid coordinate tests passed", pass_n, len(NMEA_Messages.valid_coordinates))
         logging.getLogger().setLevel(self.default_loglevel)
 
-    def test_gpsCoord2Dec_out_of_bounds(self):
+    def test_Coordinate_out_of_bounds(self):
         """Test GPS coordinate conversion raises an error when out of bounds."""
         logging.info("\n%s\n\t\t   Commencing out of bounds coordinate tests\n%s",
                 "="*79, "-"*79)
         logging.getLogger().setLevel(self.default_loglevel)
         with self.assertRaises(GPSOutOfBoundsError):
-            GPS.gpsCoord2Dec("9145.1234", GPSDir.North)  # Latitude > 90
-            GPS.gpsCoord2Dec("18145.1234", GPSDir.North)  # Longitude > 180
+            coord = Coordinate(gps_string="9145.1234", direction=GPSDir.North)  # Latitude > 90
+            coord = Coordinate(gps_string="18145.1234", direction=GPSDir.East)  # Longitude > 180
             logging.getLogger().setLevel(self.default_loglevel)
         logging.getLogger().setLevel(self.default_loglevel)
 
