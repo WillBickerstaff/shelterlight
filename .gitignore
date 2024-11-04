@@ -1,6 +1,7 @@
 # Project specific
 directory_structure.txt
 req modules.txt
+RPi.GPIO.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
