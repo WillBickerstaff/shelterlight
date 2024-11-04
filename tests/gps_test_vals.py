@@ -1,9 +1,10 @@
 import datetime as dt
+from shelterGPS.common import GPSDir
 
 # Chat GPT used to generate test message.
 # GPT messages included incorrect checksums, validated at:
 # https://nmeachecksum.eqth.net/
-valid = [
+valid_NMEA = [
         # GGA - GPS (GP)
         "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47",
         "$GPGGA,104230,3723.5478,S,12218.8765,W,1,07,1.0,10.2,M,0.0,M,,*43",
@@ -58,13 +59,12 @@ valid = [
 valid_dt = [
     # Beginning and End of Time (Year, Month, Day, Hour, Minute, Second)
     {"date": "000101", "time": "000000", "dt_obj": dt.datetime(2000, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)},  # Start of the millennium
-    {"date": "311221", "time": "235959", "dt_obj": dt.datetime(2021, 12, 31, 23, 59, 59, tzinfo=dt.timezone.utc)},  # End of the year
-    {"date": "280229", "time": "000000", "dt_obj": dt.datetime(2028, 2, 29, 0, 0, 0, tzinfo=dt.timezone.utc)},  # Leap year boundary
-
+    {"date": "211231", "time": "235959", "dt_obj": dt.datetime(2021, 12, 31, 23, 59, 59, tzinfo=dt.timezone.utc)},  # End of the year
+    {"date": "991231", "time": "235959", "dt_obj": dt.datetime(2099, 12, 31, 23, 59, 59, tzinfo=dt.timezone.utc)},  # Leap year boundary
     # Start and End of Days
-    {"date": "010101", "time": "010101", "dt_obj": dt.datetime(2001, 1, 1, 1, 1, 1, tzinfo=dt.timezone.utc)},  # Just after midnight
-    {"date": "290522", "time": "045700", "dt_obj": dt.datetime(2022, 5, 29, 4, 57, 0, tzinfo=dt.timezone.utc)},  # Early morning
-    {"date": "121220", "time": "204530", "dt_obj": dt.datetime(2020, 12, 12, 20, 45, 30, tzinfo=dt.timezone.utc)},  # Late evening
+    {"date": "010101", "time": "000000", "dt_obj": dt.datetime(2001, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)},  # Just after midnight
+    {"date": "010101", "time": "235959", "dt_obj": dt.datetime(2001, 1, 1, 23, 59, 59, tzinfo=dt.timezone.utc)},  # Early morning
+    {"date": "011231", "time": "235959", "dt_obj": dt.datetime(2001, 12, 31, 23, 59, 59, tzinfo=dt.timezone.utc)},  # Late evening
 
     # Special Patterns and Palindromes
     {"date": "050505", "time": "050505", "dt_obj": dt.datetime(2005, 5, 5, 5, 5, 5, tzinfo=dt.timezone.utc)},  # Repeating pattern
@@ -72,32 +72,31 @@ valid_dt = [
     {"date": "090909", "time": "090909", "dt_obj": dt.datetime(2009, 9, 9, 9, 9, 9, tzinfo=dt.timezone.utc)},  # All nines
 
     # Symmetrical and Unique Time Patterns
-    {"date": "200202", "time": "202020", "dt_obj": dt.datetime(2002, 2, 20, 20, 20, 20, tzinfo=dt.timezone.utc)},  # Symmetrical date and time
-    {"date": "151515", "time": "151515", "dt_obj": dt.datetime(2015, 6, 15, 15, 15, 15, tzinfo=dt.timezone.utc)},  # Repeating number pattern
-    {"date": "222324", "time": "222324", "dt_obj": dt.datetime(2024, 3, 22, 22, 23, 24, tzinfo=dt.timezone.utc)},  # Sequential time pattern
+    {"date": "200220", "time": "022020", "dt_obj": dt.datetime(2020, 2, 20, 2, 20, 20, tzinfo=dt.timezone.utc)},  # Symmetrical date and time
+    {"date": "121212", "time": "121212", "dt_obj": dt.datetime(2012, 12, 12, 12, 12, 12, tzinfo=dt.timezone.utc)},  # Repeating number pattern
+    {"date": "111213", "time": "111213", "dt_obj": dt.datetime(2011, 12, 13, 11, 12, 13, tzinfo=dt.timezone.utc)},  # Sequential time pattern
 
     # Leap and Non-Leap Year Transitions
     {"date": "230323", "time": "123456", "dt_obj": dt.datetime(2023, 3, 23, 12, 34, 56, tzinfo=dt.timezone.utc)},  # Normal year
-    {"date": "150822", "time": "091530", "dt_obj": dt.datetime(2022, 8, 15, 9, 15, 30, tzinfo=dt.timezone.utc)},  # Mid-year
-    {"date": "080923", "time": "164200", "dt_obj": dt.datetime(2023, 9, 8, 16, 42, 0, tzinfo=dt.timezone.utc)},  # Late summer
+    {"date": "220615", "time": "091530", "dt_obj": dt.datetime(2022, 6, 15, 9, 15, 30, tzinfo=dt.timezone.utc)},  # Mid-year
+    {"date": "230908", "time": "164200", "dt_obj": dt.datetime(2023, 9, 8, 16, 42, 0, tzinfo=dt.timezone.utc)},  # Late summer
 
     # Year, Month, Day Combinations
-    {"date": "123123", "time": "123123", "dt_obj": dt.datetime(2023, 12, 31, 12, 31, 23, tzinfo=dt.timezone.utc)},  # End of the month
-    {"date": "170722", "time": "112233", "dt_obj": dt.datetime(2022, 7, 17, 11, 22, 33, tzinfo=dt.timezone.utc)},  # Summer day
-    {"date": "220921", "time": "070809", "dt_obj": dt.datetime(2021, 9, 22, 7, 8, 9, tzinfo=dt.timezone.utc)},  # Autumn equinox
+    {"date": "231231", "time": "123123", "dt_obj": dt.datetime(2023, 12, 31, 12, 31, 23, tzinfo=dt.timezone.utc)},  # End of the month
+    {"date": "220717", "time": "112233", "dt_obj": dt.datetime(2022, 7, 17, 11, 22, 33, tzinfo=dt.timezone.utc)},  # Summer day
+    {"date": "210922", "time": "070809", "dt_obj": dt.datetime(2021, 9, 22, 7, 8, 9, tzinfo=dt.timezone.utc)},  # Autumn equinox
 
     # Random Valid Dates and Times
-    {"date": "010203", "time": "010203", "dt_obj": dt.datetime(2003, 1, 2, 1, 2, 3, tzinfo=dt.timezone.utc)},
-    {"date": "040506", "time": "040506", "dt_obj": dt.datetime(2006, 4, 5, 4, 5, 6, tzinfo=dt.timezone.utc)},
-    {"date": "070809", "time": "070809", "dt_obj": dt.datetime(2009, 7, 8, 7, 8, 9, tzinfo=dt.timezone.utc)},
-    {"date": "101112", "time": "101112", "dt_obj": dt.datetime(2012, 10, 11, 10, 11, 12, tzinfo=dt.timezone.utc)},
-    {"date": "130314", "time": "131415", "dt_obj": dt.datetime(2014, 3, 13, 13, 14, 15, tzinfo=dt.timezone.utc)},
-    {"date": "160718", "time": "161718", "dt_obj": dt.datetime(2018, 7, 16, 16, 17, 18, tzinfo=dt.timezone.utc)},
-    {"date": "192021", "time": "192021", "dt_obj": dt.datetime(2021, 2, 19, 19, 20, 21, tzinfo=dt.timezone.utc)},
-    {"date": "030405", "time": "030405", "dt_obj": dt.datetime(2005, 4, 3, 3, 4, 5, tzinfo=dt.timezone.utc)},
-    {"date": "060708", "time": "060708", "dt_obj": dt.datetime(2008, 7, 6, 6, 7, 8, tzinfo=dt.timezone.utc)},
-    {"date": "090101", "time": "090101", "dt_obj": dt.datetime(2001, 1, 9, 9, 1, 1, tzinfo=dt.timezone.utc)},
-    {"date": "121314", "time": "121314", "dt_obj": dt.datetime(2014, 12, 13, 12, 13, 14, tzinfo=dt.timezone.utc)}
+    {"date": "030102", "time": "010203", "dt_obj": dt.datetime(2003, 1, 2, 1, 2, 3, tzinfo=dt.timezone.utc)},
+    {"date": "060504", "time": "040506", "dt_obj": dt.datetime(2006, 5, 4, 4, 5, 6, tzinfo=dt.timezone.utc)},
+    {"date": "090807", "time": "070809", "dt_obj": dt.datetime(2009, 8, 7, 7, 8, 9, tzinfo=dt.timezone.utc)},
+    {"date": "121110", "time": "101112", "dt_obj": dt.datetime(2012, 11, 10, 10, 11, 12, tzinfo=dt.timezone.utc)},
+    {"date": "140313", "time": "131415", "dt_obj": dt.datetime(2014, 3, 13, 13, 14, 15, tzinfo=dt.timezone.utc)},
+    {"date": "180716", "time": "161718", "dt_obj": dt.datetime(2018, 7, 16, 16, 17, 18, tzinfo=dt.timezone.utc)},
+    {"date": "210219", "time": "192021", "dt_obj": dt.datetime(2021, 2, 19, 19, 20, 21, tzinfo=dt.timezone.utc)},
+    {"date": "030405", "time": "030405", "dt_obj": dt.datetime(2003, 4, 5, 3, 4, 5, tzinfo=dt.timezone.utc)},
+    {"date": "060708", "time": "060708", "dt_obj": dt.datetime(2006, 7, 8, 6, 7, 8, tzinfo=dt.timezone.utc)},
+    {"date": "090101", "time": "090101", "dt_obj": dt.datetime(2009, 1, 1, 9, 1, 1, tzinfo=dt.timezone.utc)}
 ]
 
 invalid_dt = [
@@ -118,8 +117,7 @@ invalid_dt = [
 
     # Invalid Minute on Its Own
     {"date": "040312", "time": "126100"},  # Minute 61 is invalid
-    {"date": "120410", "time": "080800"},  # Minute 80 is invalid
-    {"date": "091209", "time": "173500"},  # Minute 35 in 35th hour is misplaced (conceptual error)
+    {"date": "120410", "time": "088000"},  # Minute 80 is invalid
 
     # Invalid Second on Its Own
     {"date": "020210", "time": "123460"},  # Second 60 is invalid
@@ -139,7 +137,6 @@ invalid_dt = [
     # Invalid Format (Conceptual Issues)
     {"date": "abcd12", "time": "120000"},  # Non-numeric date
     {"date": "010120", "time": "xx2359"},  # Non-numeric time
-    {"date": "130220", "time": "075000"},  # Invalid format with misplaced digits
 
     # Extreme Invalid Values
     {"date": "999999", "time": "999999"},  # Completely invalid date and time
@@ -152,4 +149,61 @@ invalid_dt = [
     {"date": "062532", "time": "123060"},  # Second overflow
     {"date": "123132", "time": "142561"},  # Minute and second invalid
     {"date": "021532", "time": "255959"},  # Hour overflow
+]
+
+valid_coordinates = [
+    # Edge cases near zero
+    {"coord": "0000.0001", "dir": GPSDir.North, "expected": 0.0000016667},
+    {"coord": "0000.0001", "dir": GPSDir.East, "expected": 0.0000016667},
+
+    # Exact degree boundaries
+    {"coord": "0100.0000", "dir": GPSDir.North, "expected": 1.0},
+    {"coord": "1000.0000", "dir": GPSDir.East, "expected": 10.0},
+
+    # Decimal precision
+    {"coord": "4530.1234", "dir": GPSDir.North, "expected": 45.50205666666667},
+    {"coord": "1720.9876", "dir": GPSDir.West, "expected": -17.349793333333334},
+
+    # Minimum and maximum valid values
+    {"coord": "0000.0001", "dir": GPSDir.South, "expected": -0.0000016667},
+    {"coord": "8959.9999", "dir": GPSDir.North, "expected": 89.99999833333334},
+    {"coord": "17959.9999", "dir": GPSDir.West, "expected": -179.99999833333334},
+
+    # High precision decimal values
+    {"coord": "1234.5678", "dir": GPSDir.North, "expected": 12.57613},
+    {"coord": "0959.9999", "dir": GPSDir.East, "expected": 9.999998333333334},
+
+    # Mixed leading zeros
+    {"coord": "0034.5678", "dir": GPSDir.North, "expected": 0.57613},
+    {"coord": "34.5678", "dir": GPSDir.North, "expected": 0.57613},  # Equivalent to the previous case
+
+    # Single degree values
+    {"coord": "100.0000", "dir": GPSDir.West, "expected": -1.0},
+    {"coord": "100.0000", "dir": GPSDir.East, "expected": 1.0},
+
+    # Alternate hemisphere testing
+    {"coord": "4530.0000", "dir": GPSDir.North, "expected": 45.5},
+    {"coord": "4530.0000", "dir": GPSDir.South, "expected": -45.5},
+    {"coord": "1720.0000", "dir": GPSDir.East, "expected": 17.333333333333332},
+    {"coord": "1720.0000", "dir": GPSDir.West, "expected": -17.333333333333332},
+
+    # Boundary conditions for longitude
+    {"coord": "00000.0001", "dir": GPSDir.West, "expected": -0.0000016667},
+    {"coord": "17959.9999", "dir": GPSDir.East, "expected": 179.99999833333334},
+    {"coord": "00000.0000", "dir": GPSDir.West, "expected": 0.0},
+    {"coord": "18000.0000", "dir": GPSDir.East, "expected": 180.0},
+
+
+    # Additional precision cases
+    {"coord": "8500.1234", "dir": GPSDir.South, "expected": -85.00205666666666},
+    {"coord": "0200.0000", "dir": GPSDir.North, "expected": 2.0},
+]
+
+invalid_coordinates = [
+    {"coord": "9100.0000", "dir": GPSDir.North},  # Latitude > 90 degrees
+    {"coord": "9100.0000", "dir": GPSDir.South},  # Latitude < -90 degrees
+    {"coord": "18100.0000", "dir": GPSDir.East},  # Longitude > 180 degrees
+    {"coord": "18100.0000", "dir": GPSDir.West},  # Longitude < -180 degrees
+    {"coord": "-1234.5678", "dir": GPSDir.North}, # Negative value for North
+    {"coord": "abcd.efgh", "dir": GPSDir.South},  # Non-numeric characters
 ]

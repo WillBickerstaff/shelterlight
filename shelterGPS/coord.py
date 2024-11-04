@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Union
-from common import GPSDir, GPSOutOfBoundsError
+from shelterGPS.common import GPSDir, GPSOutOfBoundsError
 
 class Coordinate:
     """
@@ -48,6 +48,7 @@ class Coordinate:
             ValueError: If the provided GPS coordinate string is negative.
         """
         self._dir = None
+        self._gps_str = None
         self._degree_len = 0
         if direction is not None:
             self.direction = direction
@@ -80,6 +81,7 @@ class Coordinate:
             raise ValueError(f"Coordinate direction is invalid: {direction}")
         self._dir = direction
         self._degree_len = 3 if self.is_longitude else 2
+        self._calc_coords()
 
     @property
     def is_latitude(self) -> bool:
@@ -116,7 +118,8 @@ class Coordinate:
 
     @property
     def deg_min_sec(self) -> str:
-        """Get the Degrees, Minutes, Seconds (DMS) representation of the GPS coordinate.
+        """Get the Degrees, Minutes, Seconds (DMS) representation of the GPS
+           coordinate.
 
         Returns:
             str: The formatted DMS string.
@@ -153,16 +156,25 @@ class Coordinate:
             format.
 
         Raises:
-            ValueError: If the GPS coordinate string is negative.
+            GPSOutOfBoundsError: If the GPS coordinate string is negative.
         """
-        if float(gps_str) < 0.0:
-            logging.error(
-                "COORD: GPS coordinate string (%s) cannot be negative",
-                gps_str)
-            raise ValueError(
-                f"GPS coordinate string ({gps_str}) cannot be negative")
-        self._gps_str = str(gps_str).zfill(10) if self.is_longitude \
-                   else str(gps_str).zfill(9)
+        try:
+            if float(gps_str) < 0.0:
+                logging.error(
+                    "COORD: GPS coordinate string (%s) cannot be negative",
+                    gps_str)
+                raise GPSOutOfBoundsError(
+                    f"GPS coordinate string ({gps_str}) cannot be negative")
+            self._gps_str = str(gps_str).zfill(10) if self.is_longitude \
+                    else str(gps_str).zfill(9)
+            self._calc_coords()
+        except ValueError:
+            raise GPSOutOfBoundsError(
+                f"GPS string [{gps_str}] cannot be converted to a nymber")
+
+    def _calc_coords(self) -> None:
+        if self._gps_str is None or self._dir is None:
+            return
         self._deg_min_sec()
         self._decimal()
 

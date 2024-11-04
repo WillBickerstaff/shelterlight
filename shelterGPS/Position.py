@@ -6,10 +6,10 @@ from threading import Lock
 from enum import Enum
 from typing import Union, Optional
 import RPi.GPIO as GPIO # type: ignore
-from coord import Coordinate
+from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE, log_caller
-from common import GPSDir, GPSInvalid, GPSOutOfBoundsError
+from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
 
 class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.
@@ -138,6 +138,10 @@ class GPS:
         except RuntimeError as e:
             logging.warning("GPS: Failed to clean up GPIO resources: %s", e)
 
+    @property
+    def message_type(self) -> str:
+        if self._last_msg is None: return
+        return self._last_msg[0]
 
     @property
     def latitude(self) -> float:
@@ -348,8 +352,6 @@ class GPS:
                 self._decode_message(ser_line)
                 if self._validate_message_content(msg):
                     return  # Exit once a valid message is confirmed
-                logging.debug("GPS: Non-tracked message type %s; skipping.",
-                              self._last_msg[0])
 
         raise GPSInvalid(f"No valid fix obtained after {max_time} seconds")
 
@@ -357,7 +359,8 @@ class GPS:
         """Check if the message has content and passes checksum validation.
 
         Args:
-            ser_line (bytes): Raw byte line read from the GPS serial input.
+            ser_line (Union[bytes,str]): Raw byte line or string read from the
+                                        GPS serial input.
 
         Returns:
             bool: True if the message has content and passes checksum
@@ -369,7 +372,7 @@ class GPS:
         MIN_MSG_LEN: int = 14
         return len(ser_line) > MIN_MSG_LEN and self.nmea_checksum(ser_line)
 
-    def _decode_message(self, ser_line: bytes) -> None:
+    def _decode_message(self, ser_line: Union[bytes,str]) -> None:
         """Decode and parse GPS message, removing checksum for validation.
 
         Decodes the raw message, splits it by commas, removes the checksum,
@@ -384,7 +387,9 @@ class GPS:
         """
         try:
             # Decode the raw line and split into components by commas
-            self._last_msg = ser_line.decode(errors="ignore").split(",")
+            if isinstance(ser_line, bytes):
+                ser_line = ser_line.decode(errors="ignore")
+            self._last_msg = ser_line.split(",")
             logging.debug("GPS: Decoded message: %s", self._last_msg)
 
             # Parse and store checksum, then remove it from the main message
@@ -406,19 +411,31 @@ class GPS:
         cross-referencing with `self.msg_validate`.
 
         Args:
-            msg (str): Expected NMEA message type for validation.
+            msg (str): Expected NMEA message type for validation e.g GGA, RMC.
 
         Returns:
             bool: True if the message content meets validation criteria;
                 False otherwise.
         """
+        valid_vals = None
+        valid_idx = None
         for entry in self.msg_validate:
             if self._last_msg[0] == entry['MSG']:
                 # Verify that the message status\validation field contains
                 # a value indicating validated data
-                if self._last_msg[entry['ValidIdx']] in entry['ValidVals']:
-                    logging.info("GPS: Validated message [%s].", msg)
+                valid_idx = entry['ValidIdx']
+                valid_vals = entry['ValidVals']
+                if self._last_msg[valid_idx] in valid_vals:
+                    logging.debug("GPS: Validated %s message.", msg)
                     return True
+                logging.info(
+                    "GPS: %s message does not include a validated data "
+                    "indicator. (field %s does not contain%s%s)",
+                     msg, valid_idx, " any of "if msg == "GGA" else " ",
+                     valid_vals)
+                return False
+
+        logging.debug("GPS: Non-tracked message type %s; skipping.", msg)
         return False
 
     def _get_coordinates(self, fix_wait: float) -> None:

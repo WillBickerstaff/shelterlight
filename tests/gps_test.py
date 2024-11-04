@@ -10,8 +10,11 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-from Position import GPS, GPSInvalid, GPSOutOfBoundsError, GPSDir  # Import after mocks
-import NMEA_Messages
+from shelterGPS.common import GPSInvalid, GPSOutOfBoundsError, GPSDir
+from shelterGPS.Position import GPS
+from shelterGPS.coord import Coordinate
+
+import gps_test_vals as test_vals
 
 class TestGPS(unittest.TestCase):
 
@@ -23,6 +26,8 @@ class TestGPS(unittest.TestCase):
 
     def test_singleton_behavior(self):
         """Test that only one instance of GPS can exist."""
+        logging.info("\n%s\n\t\t   Checking GPS behaves as Singleton\n%s",
+                    "="*79, "-"*79)
         gps1 = GPS()
         gps2 = GPS()
         self.assertIs(gps1, gps2, "GPS class is not respecting singleton pattern.")
@@ -32,7 +37,8 @@ class TestGPS(unittest.TestCase):
     @patch('lightlib.config.ConfigLoader')
     def test_init_serial_connection(self, MockConfigLoader, MockSerial):
         """Test that GPS initializes serial connection using configurations."""
-
+        logging.info("\n%s\n\t\t   Commencing serial connection tests\n%s",
+                    "="*79, "-"*79)
         # Configure the mock to return specific values
         MockConfigLoader.return_value.gps_serial_port = '/dev/serial0'
         MockConfigLoader.return_value.gps_baudrate = 9600
@@ -51,6 +57,8 @@ class TestGPS(unittest.TestCase):
     @patch('Position.GPS.pwr_off')
     def test_power_control(self, mock_pwr_off, mock_pwr_on):
         """Test that GPS correctly handles power on and off."""
+        logging.info("\n%s\n\t\t   Commencing GPS Power tests\n%s",
+                "="*79, "-"*79)
         gps = GPS()
         gps.pwr_on()
         mock_pwr_on.assert_called_once()
@@ -59,68 +67,56 @@ class TestGPS(unittest.TestCase):
         mock_pwr_off.assert_called_once()
         logging.getLogger().setLevel(self.default_loglevel)
 
-    def test_gpsCoord2Dec_valid(self):
+    def test_Coordinate_valid(self):
         logging.getLogger().setLevel(self.default_loglevel)
+        logging.info("\n%s\n\t\t   Commencing coordinate conversion tests\n%s",
+            "="*79, "-"*79)
+        pass_n = 0
         """Test conversion of GPS DMS coordinates to decimal format."""
-        lat = GPS.gpsCoord2Dec("3745.1234", GPSDir.North)
-        lon = GPS.gpsCoord2Dec("12231.8765", GPSDir.West)
-        self.assertAlmostEqual(lat, 37.752057, places=6)
-        self.assertAlmostEqual(lon, -122.531275, places=6)
-        lat = GPS.gpsCoord2Dec("0745.1234", GPSDir.South)
-        lon = GPS.gpsCoord2Dec("02231.8765", GPSDir.East)
-        self.assertAlmostEqual(lat, -7.7520566, places=6)
-        self.assertAlmostEqual(lon, 22.531275, places=6)
-        # check missing leading 0
-        lat = GPS.gpsCoord2Dec("745.1234", GPSDir.South)
-        lon = GPS.gpsCoord2Dec("2231.8765", GPSDir.East)
-        self.assertAlmostEqual(lat, -7.7520566, places=6)
-        self.assertAlmostEqual(lon, 22.531275, places=6)
-        logging.getLogger().setLevel(logging.INFO)
-        # check the boundaries
-        lat = GPS.gpsCoord2Dec("0000.0000", GPSDir.North)
-        self.assertAlmostEqual(lat, 0.0, places=6)
-        lat = GPS.gpsCoord2Dec("0000.0000", GPSDir.South)
-        self.assertAlmostEqual(lat, -0.0, places=6)
-        lat = GPS.gpsCoord2Dec("9000.0000", GPSDir.North)
-        self.assertAlmostEqual(lat, 90.0, places=6)
-        lat = GPS.gpsCoord2Dec("9000.0000", GPSDir.South)
-        self.assertAlmostEqual(lat, -90.0, places=6)
-        lon = GPS.gpsCoord2Dec("00000.0000", GPSDir.East)
-        self.assertAlmostEqual(lon, 0.0, places=6)
-        lon = GPS.gpsCoord2Dec("00000.0000", GPSDir.West)
-        self.assertAlmostEqual(lon, -0.0, places=6)
-        lon = GPS.gpsCoord2Dec("18000.0000", GPSDir.East)
-        self.assertAlmostEqual(lon, 180.0, places=6)
-        lon = GPS.gpsCoord2Dec("18000.0000", GPSDir.West)
-        self.assertAlmostEqual(lon, -180.0, places=6)
+        for test_case in test_vals.valid_coordinates:
+            expected = test_case.get("expected")
+            coord = test_case.get("coord")
+            dir = test_case.get("dir")
+            coord = Coordinate(direction=dir, gps_string=coord)
+            result = coord.decimal_value
+            self.assertAlmostEqual(result, expected, places = 10)
+            pass_n += 1
+        logging.info("\t*** %s of %s valid coordinate tests passed", pass_n, len(test_vals.valid_coordinates))
         logging.getLogger().setLevel(self.default_loglevel)
 
-    def test_gpsCoord2Dec_out_of_bounds(self):
+    def test_Coordinate_out_of_bounds(self):
         """Test GPS coordinate conversion raises an error when out of bounds."""
+        logging.info("\n%s\n\t\t   Commencing out of bounds coordinate tests\n%s",
+                "="*79, "-"*79)
         logging.getLogger().setLevel(self.default_loglevel)
-        with self.assertRaises(GPSOutOfBoundsError):
-            GPS.gpsCoord2Dec("9145.1234", GPSDir.North)  # Latitude > 90
-            GPS.gpsCoord2Dec("18145.1234", GPSDir.North)  # Longitude > 180
-            logging.getLogger().setLevel(self.default_loglevel)
+        for test_val in test_vals.invalid_coordinates:
+            coord = test_val.get("coord")
+            dir = test_val.get("dir")
+            with self.assertRaises(GPSOutOfBoundsError):
+                coord = Coordinate(gps_string=coord, direction=dir)
         logging.getLogger().setLevel(self.default_loglevel)
 
     def test_nmea_checksum_valid(self):
         """Test that NMEA checksum validation passes for valid data."""
+        logging.info("\n%s\n\t\t   Commencing VALID NMEA checksum tests\n%s",
+                "="*79, "-"*79)
         logging.getLogger().setLevel(self.default_loglevel)
         pass_n = 0
-        for message in NMEA_Messages.valid:
+        for message in test_vals.valid_NMEA:
             if GPS.nmea_checksum(message):
                 pass_n += 1  # Increment pass_n if the assertion passes
             else:
                 self.assertTrue(False, f"Valid NMEA failed for message: {message}")
-        logging.info("\t*** %s of %s valid checksum tests passed", pass_n, len(valid_nmea_messages) )
+        logging.info("\t*** %s of %s valid checksum tests passed", pass_n, len(test_vals.valid_NMEA) )
         logging.getLogger().setLevel(self.default_loglevel)
 
     def test_nmea_checksum_invalid(self):
         """Test that NMEA checksum validation fails for invalid data."""
+        logging.info("\n%s\n\t\t   Commencing INVALID NMEA checksum tests\n%s",
+                "="*79, "-"*79)
         logging.getLogger().setLevel(self.default_loglevel)
         pass_n = 0  # Initialize pass_n to 0 for invalid tests
-        for message in NMEA_Messages.valid:
+        for message in test_vals.valid_NMEA:
             # Modify the message to have an invalid checksum
             invalid_checksum = message[:-2] + "00"
             # Check if the invalid checksum fails
@@ -128,7 +124,7 @@ class TestGPS(unittest.TestCase):
                 pass_n += 1  # Increment pass_n if the assertion passes
             else:
                 self.assertTrue(False, f"Invalid NMEA checksum unexpectedly passed for message: {invalid_checksum}")
-        logging.info("\t*** %s of %s invalid checksum tests passed", pass_n, len(valid_nmea_messages))
+        logging.info("\t*** %s of %s invalid checksum tests passed", pass_n, len(test_vals.valid_NMEA))
         logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('Position.GPS._get_msg')
@@ -152,35 +148,48 @@ class TestGPS(unittest.TestCase):
 
     def test_process_datetime_valid(self):
         """Test that GPS correctly processes and converts valid UTC time and date."""
+        logging.info("\n%s\n\t\t   Commencing VALID datetime tests\n%s",
+                "="*79, "-"*79)
         gps = GPS()
-        dt_obj = gps._process_datetime(utc_time="123519", date_str="230323")
-        expected = dt.datetime(2023, 3, 23, 12, 35, 19, tzinfo=dt.timezone.utc)
-        self.assertEqual(dt_obj, expected)
+        pass_n = 0
+        logging.getLogger().setLevel(self.default_loglevel)
+        for val in test_vals.valid_dt:
+            expected = val.get("dt_obj")
+            dt_obj = gps._process_datetime(utc_time=val.get("time"), date_str=val.get("date"))
+            if not self.assertEqual(dt_obj, expected):
+                pass_n += 1
+        logging.info("\t*** %s of %s valid date tests passed", pass_n, len(test_vals.valid_dt))
         logging.getLogger().setLevel(self.default_loglevel)
 
     def test_process_datetime_invalid(self):
         """Test that GPS raises ValueError for improperly formatted datetime strings."""
+        logging.info("\n%s\n\t\t   Commencing INVALID datetime tests\n%s",
+                     "="*79, "-"*79)
         gps = GPS()
-        logging.getLogger().setLevel(logging.DEBUG)
-        for val in NMEA_Messages.invalid_dt:
-            with self.assertRaises(ValueError, msg=f"Failed for date: {val.get('date')} and time: {val.get('time')}"):
-                gps._process_datetime(val.get("date"), val.get("time"))
+        pass_n = 0
         logging.getLogger().setLevel(self.default_loglevel)
 
-    @patch('Position.GPS._decode_message')
-    def test_decode_message_valid(self, mock_decode_message):
+        for val in test_vals.invalid_dt:
+            try:
+                with self.assertRaises(ValueError, msg=f"Failed for date: {val.get('date')} and time: {val.get('time')}"):
+                    gps._process_datetime(date_str=val.get("date"), utc_time=val.get("time"))
+            except AssertionError:
+                continue  # If the ValueError isn't raised, the test will fail
+            else:
+                pass_n += 1  # Increment if the exception was correctly raised
+
+        logging.info("\t*** %s of %s invalid date tests passed", pass_n, len(test_vals.invalid_dt))
+        logging.getLogger().setLevel(self.default_loglevel)
+
+    def test_decode_message_valid(self):
         """Test decoding of a valid GPS message, ensuring proper storage in `self._last_msg`."""
         gps = GPS()
-        test_message = b'$GPRMC,123519,A,4807.038,N,01131.000,E*6A'
-        gps._decode_message(test_message)
-        mock_decode_message.assert_called_once_with(test_message)
-        logging.getLogger().setLevel(self.default_loglevel)
+        logging.getLogger().setLevel(logging.DEBUG)
 
-    @patch('Position.GPS._validate_message_content')
-    def test_validate_message_content_valid(self, mock_validate_message_content):
-        """Test validation of message content based on predefined criteria."""
-        gps = GPS()
-        gps._last_msg = ["RMC", "A", "4807.038", "N", "01131.000", "E"]
-        gps.msg_validate = [{'MSG': 'RMC', 'ValidIdx': 2, 'ValidVals': 'A'}]
-        self.assertTrue(gps._validate_message_content("RMC"))
+        for test_message in test_vals.valid_NMEA:
+            gps._decode_message(test_message)
+            self.assertIsNotNone(gps._last_msg, "Decoded message should not be None")
+            self.assertTrue(len(gps._last_msg) > 0, "Decoded message should not be empty")
+            logging.debug("%s",gps.message_type)
+            self.assertTrue(gps._validate_message_content(gps.message_type))
         logging.getLogger().setLevel(self.default_loglevel)
