@@ -108,8 +108,8 @@ class GPS:
         self._pwr_up_time = ConfigLoader().gps_pwr_up_time
         self._max_fix_time = ConfigLoader().gps_max_fix_time
         self.__pwr_pin = ConfigLoader().gps_pwr_pin
-        self._lat = 0.0
-        self._lon = 0.0
+        self._lat = Coordinate()
+        self._lon = Coordinate()
         self._alt = 0.0
         self._dt = dt.datetime(1970, 1, 1, 0, 0, 0, 0, tzinfo=dt.timezone.utc)
         self._last_msg = []
@@ -146,10 +146,20 @@ class GPS:
         return self._last_msg[0]
 
     @property
+    def latitude_coord(self) -> Coordinate:
+        """Coordinate object that represents latitude """
+        return self._lat
+
+    @property
     def latitude(self) -> float:
         """Return the most recent latitude from the GPS fix, in decimal
            degrees."""
         return self._lat.decimal_value
+
+    @property
+    def longitude_coord(self) -> Coordinate:
+        """Coordinate object that represents longitude """
+        return self._lon
 
     @property
     def longitude(self) -> float:

@@ -216,7 +216,8 @@ class Coordinate:
     def to_string(self) -> str:
         """String representation of the coordinate as deg, min, sec and
         decimal coordinate """
-        return "{}: {}".format(self.lat_lng_str, self.deg_min_sec)
+        return "{}: {}\t({})".format(self.lat_lng_str, self.deg_min_sec,
+                                    round(self.decimal_value,4))
 
     def _pad_gps_string(self) -> None:
         """Pad a coordinate string with 0's to match NMEA 0183 format.

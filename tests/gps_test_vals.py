@@ -4,8 +4,11 @@ from shelterGPS.common import GPSDir
 # Chat GPT used to generate test message.
 # GPT messages included incorrect checksums, validated at:
 # https://nmeachecksum.eqth.net/
+# Sunrise, sunset calculator at:
+# https://gml.noaa.gov/grad/solcalc/
 
 # VAlid NMEA sentences, containing valid coordinates, dates and times
+
 valid_NMEA = [
     # GGA - GPS (GP)
     {"msg": "$GPGGA,123519,4807.0380,N,01131.0000,E,1,08,0.9,545.4,M,46.9,M,,*47", "lat": 48.1173, "lon": 11.5167, "alt": 545.4, "datetime": None},

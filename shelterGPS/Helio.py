@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..')))
-import Position as pos
+import shelterGPS.Position as pos
 from lightlib.config import ConfigLoader
 
 class SolarEvent(Enum):
@@ -85,7 +85,7 @@ class SunTimes:
         # Log successful initialization with validated offset values
         logging.info(
             "SunTimes initialized with sunrise offset: %s seconds, "
-            "sunset offset: %s seconds.", 
+            "sunset offset: %s seconds.",
             self.sunrise_offset, self.sunset_offset)
 
     def __del__(self) -> None:
@@ -319,8 +319,18 @@ class SunTimes:
         try:
             # Calculate solar events based on observer location and specified
             # date
-            solar_times = sun(observer, date)
-            logging.info("Calculated solar times for %s: %s", date, solar_times)
+            solar_times = {
+            "sunrise": sun.sunrise(observer, date),
+            "sunset": sun.sunset(observer, date)
+            }
+            logging.info("SUNT: Calculated solar times at location "
+                         "%s, %s\n  for     : %s\n  Sunrise : %s"
+                         "\n  Sunset  : %s",
+                         round(observer.latitude,2),
+                         round(observer.longitude,2),
+                         date.strftime("%d-%b-%Y"),
+                         solar_times['sunrise'].strftime("%H:%M:%S"),
+                         solar_times['sunset'].strftime("%H:%M:%S"))
             return solar_times
 
         except ValueError as ve:
@@ -366,16 +376,21 @@ class SunTimes:
         """
         try:
             # Set up the observer location based on current GPS coordinates
+            logging.debug("SUNT: Location information: "
+                          "\n  lat     : %s\n  lng     : %s\n  elev    : %s",
+                          self._gps.latitude_coord.to_string(),
+                          self._gps.longitude_coord.to_string(),
+                          self._gps.altitude)
             observer = Observer(
                 latitude=self._gps.latitude,
                 longitude=self._gps.longitude,
-                elevation=self._gps.altitude
-            )
+                elevation=self._gps.altitude)
 
             # Calculate solar times for today and tomorrow
             today = dt.date.today()
+            logging.debug("Todays date is %s",
+                          today.strftime("%d-%b-%Y %H:%M:%S"))
             tomorrow = today + dt.timedelta(days=1)
-
             sun_times_today = SunTimes.calculate_solar_times(observer,
                                                              today)
             sun_times_tomorrow = SunTimes.calculate_solar_times(observer,
@@ -388,9 +403,6 @@ class SunTimes:
             # Update tomorrow's solar event times
             self._sr_tomorrow = sun_times_tomorrow["sunrise"].timestamp()
             self._ss_tomorrow = sun_times_tomorrow["sunset"].timestamp()
-
-            logging.info("Updated solar times for today and tomorrow based on "
-                         "GPS location.")
 
         except Exception as e:
             logging.error("Failed to update solar times: %s", e)
@@ -406,7 +418,7 @@ class SunTimes:
             subprocess.CalledProcessError: If the system time cannot be set,
                 an error is logged, detailing the failure.
         """
-        gps_datetim = dt.datetime(1970,1,1,0,0,0,0,tzinfo)
+        gps_datetime = dt.datetime(1970,1,1,0,0,0,0,tzinfo=dt.timezone.utc)
         try:
             # Ensure this code only runs on Linux/Unix-like systems
             if os.name != 'posix':
