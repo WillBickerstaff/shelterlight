@@ -50,10 +50,13 @@ class Coordinate:
         self._dir = None
         self._gps_str = None
         self._degree_len = 0
+        self._dec = 0.0
         if direction is not None:
             self.direction = direction
         if gps_string is not None:
+            logging.debug("COORD: Initialized with GPS string %s", gps_string)
             self.gps_string = gps_string
+        self._calc_coords()
 
     @property
     def direction(self):
@@ -80,8 +83,9 @@ class Coordinate:
         if direction not in GPSDir:
             raise ValueError(f"Coordinate direction is invalid: {direction}")
         self._dir = direction
+        logging.debug("COORD: Direction set to %s (%s)", self._dir, type(self._dir))
         self._degree_len = 3 if self.is_longitude else 2
-        self._calc_coords()
+        self._pad_gps_string()
 
     @property
     def is_latitude(self) -> bool:
@@ -158,31 +162,51 @@ class Coordinate:
         Raises:
             GPSOutOfBoundsError: If the GPS coordinate string is negative.
         """
+        logging.debug("COORD: Setting gps string to %s", gps_str)
         try:
+            self._gps_str = gps_str
+            self._pad_gps_string()
             if float(gps_str) < 0.0:
                 logging.error(
                     "COORD: GPS coordinate string (%s) cannot be negative",
                     gps_str)
                 raise GPSOutOfBoundsError(
                     f"GPS coordinate string ({gps_str}) cannot be negative")
-            self._gps_str = str(gps_str).zfill(10) if self.is_longitude \
-                    else str(gps_str).zfill(9)
-            self._calc_coords()
+
         except ValueError:
             raise GPSOutOfBoundsError(
-                f"GPS string [{gps_str}] cannot be converted to a nymber")
+                f"GPS string [{gps_str}] cannot be converted to a number")
+
+    def to_string(self) -> str:
+        return "{}: {}".format(self.lat_lng_str, self.deg_min_sec)
+
+    def _pad_gps_string(self) -> None:
+        logging.debug("COORD: gps_string=%s dir=%s", self.gps_string, self._dir)
+        if self.gps_string is None or self._dir is None: return
+        split_str = self.gps_string.split(".")
+        if len(split_str) > 2:
+            raise ValueError(
+                f"Invalid GPS string format: {self._gps_str} has too many "
+                "parts (too many .)")
+
+        split_str[0] = str(split_str[0]).zfill(5) if self.is_longitude \
+                  else str(split_str[0]).zfill(4)
+        split_str[1] = str(split_str[1]).ljust(4,"0")
+        self._gps_str = ".".join(split_str)
 
     def _calc_coords(self) -> None:
         if self._gps_str is None or self._dir is None:
             return
         self._deg_min_sec()
         self._decimal()
+        logging.debug("COORD: %s coordinate is %s", self.lat_lng_str, self.decimal_value)
 
     def _deg_min_sec(self):
         """Convert the GPS coordinate string into degrees, minutes, and
            seconds."""
         if self._dir is None:
             return
+        logging.debug("COORD: NMEA %s is %s", self.lat_lng_str, self._gps_str)
         self._deg = int(self.gps_string[:self._degree_len])
         self._min = float(self.gps_string[self._degree_len:])
         logging.debug("COORD: Coordinate is %s degrees, %s minutes, %s "

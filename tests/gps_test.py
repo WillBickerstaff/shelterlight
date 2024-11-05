@@ -67,6 +67,33 @@ class TestGPS(unittest.TestCase):
         mock_pwr_off.assert_called_once()
         logging.getLogger().setLevel(self.default_loglevel)
 
+    @patch('serial.Serial')
+    def test_coordinate_extraction(self, mock_serial):
+        logging.getLogger().setLevel(logging.DEBUG)
+
+        # Create a mock serial instance
+        mock_instance = mock_serial.return_value
+
+        # Initialize the GPS class and assign the mock serial instance
+        gps = GPS()
+        gps._gps_ser = mock_instance  # Assign the mocked serial instance
+
+        # Iterate over each test case in test_data
+        for tv in test_vals.valid_NMEA:
+            # Set the mock serial instance to return the NMEA sentence
+            mock_instance.readline.return_value = tv['msg'].encode()
+
+            # Call the _get_coordinates method, which should read from the mocked serial
+            gps._get_coordinates(fix_wait=5)
+
+            # Check the extracted latitude, longitude, and altitude
+            self.assertAlmostEqual(gps.latitude, tv['lat'], places=4)
+            self.assertAlmostEqual(gps.longitude, tv['lon'], places=4)
+            self.assertAlmostEqual(gps.altitude, tv['alt'], places=1)
+
+        # Reset the logging level
+        logging.getLogger().setLevel(self.default_loglevel)
+
     def test_Coordinate_valid(self):
         logging.getLogger().setLevel(self.default_loglevel)
         logging.info("\n%s\n\t\t   Commencing coordinate conversion tests\n%s",
@@ -103,10 +130,11 @@ class TestGPS(unittest.TestCase):
         logging.getLogger().setLevel(self.default_loglevel)
         pass_n = 0
         for message in test_vals.valid_NMEA:
-            if GPS.nmea_checksum(message):
+            msg = message['msg']
+            if GPS.nmea_checksum(msg):
                 pass_n += 1  # Increment pass_n if the assertion passes
             else:
-                self.assertTrue(False, f"Valid NMEA failed for message: {message}")
+                self.assertTrue(False, f"Valid NMEA failed for message: {msg}")
         logging.info("\t*** %s of %s valid checksum tests passed", pass_n, len(test_vals.valid_NMEA) )
         logging.getLogger().setLevel(self.default_loglevel)
 
@@ -118,7 +146,7 @@ class TestGPS(unittest.TestCase):
         pass_n = 0  # Initialize pass_n to 0 for invalid tests
         for message in test_vals.valid_NMEA:
             # Modify the message to have an invalid checksum
-            invalid_checksum = message[:-2] + "00"
+            invalid_checksum = message['msg'][:-2] + "00"
             # Check if the invalid checksum fails
             if not GPS.nmea_checksum(invalid_checksum):
                 pass_n += 1  # Increment pass_n if the assertion passes

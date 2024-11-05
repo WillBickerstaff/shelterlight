@@ -228,10 +228,21 @@ class GPS:
               representation.
         """
         try:
+            # Decode the message if it's in bytes
+            if isinstance(msg_str, bytes):
+                msg_str = msg_str.decode('utf-8')
             # Extract the checksum from the last two characters after  the '*'
             # `cksum` holds the expected checksum in hex format, located at
             # the end of the sentence.
-            cksum = msg_str[-2:]
+            # Check if '*' is in the string, otherwise return False
+            if '*' not in msg_str:
+                logging.warning(
+                    "GPS: NMEA message does not contain a '*' for checksum "
+                    "extraction.")
+                return False
+
+            # Extract the checksum from the characters after '*'
+            cksum = msg_str[msg_str.find("*") + 1:msg_str.find("*") + 3]
 
             # Isolate the main message content to compute checksum
             # Locate the part between '$' and '*', excluding both symbols.
@@ -451,17 +462,22 @@ class GPS:
         for entry in self.msg_coords:
             if self._last_msg[0] == entry['MSG']:
                 try:
+                    logging.debug("COORD: %s", self._last_msg)
                     self._lat = Coordinate(
                         gps_string = self._last_msg[entry['LAT']],
-                        direction = self._last_msg[entry['NS']])
+                        direction = GPSDir[self._last_msg[entry['NS']]])
                     self._lon = Coordinate(
                         gps_string = self._last_msg[entry['LON']],
-                        direction = self._last_msg[entry['EW']])
-                    if entry['ALT'] != -1:
+                        direction = GPSDir[self._last_msg[entry['EW']]])
+                    # Check if 'ALT' field exists and set altitude accordingly
+                    if entry['ALT'] != -1 and entry['ALT'] < len(self._last_msg):
                         self._alt = float(self._last_msg[entry['ALT']])
-                    logging.info("GPS: Position fix obtained - Lat: %s, "
-                                       "Lon: %s, Alt: %s",
-                                       self._lat, self._lon, self._alt)
+                    else:
+                        self._alt = 0.0
+                    logging.info("GPS: Position fix obtained - %s, "
+                                       "%s, Alt: %s",
+                                       self._lat.to_string(),
+                                       self._lon.to_string(), self._alt)
                 except GPSOutOfBoundsError as obe:
                     logging.warning("GPS: Out-of-bounds coordinate: %s", obe)
                 except (KeyError, ValueError) as e:

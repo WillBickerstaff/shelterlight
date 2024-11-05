@@ -3,9 +3,13 @@ from enum import Enum
 class GPSDir(Enum):
     """Enumeration for cardinal directions in GPS coordinates."""
     North = 'N'
+    N = 'N'
     South = 'S'
+    S = 'S'
     East = 'E'
+    E = 'E'
     West = 'W'
+    W = 'W'
 
 
 class GPSInvalid(Exception):
