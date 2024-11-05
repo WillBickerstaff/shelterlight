@@ -20,7 +20,7 @@ sys.path.append(os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..')))
 import shelterGPS.Position as pos
 from lightlib.config import ConfigLoader
-
+from lightlib.common import EPOCH_DATETIME, strftime,strfdate,strfdt
 class SolarEvent(Enum):
     """Enumeration of key solar events for sun position calculations."""
     SUNRISE = "sunrise"
@@ -65,18 +65,10 @@ class SunTimes:
         # Offsets are validated and set via the property methods
         self.sunrise_offset: int = ConfigLoader().sunrise_offset
         self.sunset_offset: int = ConfigLoader().sunset_offset
-
-        # Initialize GPS, solar event timestamps, GPS fix tracking
-        self._gps: pos.GPS = pos.GPS()
-        self._sr_today: float = 0
-        self._ss_today: float = 0
-        self._sr_tomorrow: float = 0
-        self._ss_tomorrow: float = 0
-        self._fix_err_day: int = 0
-        self._fixed_today: Optional[dt.date] = None
-        self._fix_window: list[float] = [0, 0]  # [start_time, end_time]
         self._observer: Observer = None
-        self._local_tz = pytz.timezone('UTC')
+        self._init_dt()
+        self._fix_err_day: int = 0
+        self._fixed_today: bool = False
 
         # Initialize threading components for GPS fix status management
         self._gps_fix_running: threading.Event = threading.Event()
@@ -92,6 +84,19 @@ class SunTimes:
         """Destructor to ensure resources are cleaned up."""
         self._stop_gps_fix_process()
         logging.info("SunTimes resources cleaned up upon deletion.")
+
+    def _init_dt(self):
+        # Initialize GPS, solar event timestamps, GPS fix tracking
+        self._gps: pos.GPS = pos.GPS()
+        self._sr_today: dt.datetime = EPOCH_DATETIME
+        self._ss_today: dt.datetime = EPOCH_DATETIME
+        self._sr_tomorrow: dt.datetime = EPOCH_DATETIME
+        self._ss_tomorrow: dt.datetime = EPOCH_DATETIME
+        # [start_time, end_time]
+        self._fix_window: dict[str, dt.datetime] = {"start": EPOCH_DATETIME,
+                                                      "end": EPOCH_DATETIME}
+        # Until we know better from a GPS fix use UTC
+        self._local_tz = pytz.timezone('UTC')
 
     @property
     def gps_fix_is_running(self) -> bool:
@@ -127,7 +132,7 @@ class SunTimes:
         Returns:
             dt.datetime: UTC date and time for today's sunset
         """
-        return dt.datetime.fromtimestamp(self._ss_today,tz=dt.timezone.utc)
+        return self._ss_today
 
     @property
     def local_sunset_today(self) -> dt.datetime:
@@ -145,7 +150,7 @@ class SunTimes:
         Returns:
             dt.datetime: UTC date and time for tomorrow's sunrise
         """
-        return dt.datetime.fromtimestamp(self._sr_tomorrow,tz=dt.timezone.utc)
+        return self._sr_tomorrow
 
     @property
     def local_sunrise_tomorrow(self) -> dt.datetime:
@@ -163,7 +168,7 @@ class SunTimes:
         Returns:
             dt.datetime: UTC date and time for tomorrows's sunset
         """
-        return dt.datetime.fromtimestamp(self._ss_tomorrow,tz=dt.timezone.utc)
+        return self._ss_tomorrow
 
     @property
     def local_sunset_tomorrow(self) -> dt.datetime:
@@ -202,7 +207,7 @@ class SunTimes:
             bool: `True` if a GPS fix was successfully obtained today, `False`
             otherwise.
         """
-        return self._fixed_today == dt.date.today()
+        return self._fixed_today
 
     @property
     def sunrise_offset(self) -> int:
@@ -215,21 +220,21 @@ class SunTimes:
 
     @sunrise_offset.setter
     def sunrise_offset(self, offset: int) -> None:
-        """Sets sunrise offset in seconds, with validation.
+        """Sets sunrise offset in minutes, with validation.
 
         Args:
-            offset (int): Number of seconds for sunrise offset.
+            offset (int): Number of minutes for sunrise offset.
 
         Raises:
-            ValueError: If offset exceeds reasonable negative bounds.
+            ValueError: If offset exceeds reasonable bounds.
         """
-        if offset < -3600:
-            logging.error(
-                "GPS: Invalid sunrise_offset. Offset too large: %s", offset)
-            raise ValueError("Sunrise offset is unreasonably large.")
-
-        self._sunrise_offset = offset
-        logging.info("GPS: sunrise_offset set to %s seconds", offset)
+        if -60 <= offset <= 60:
+            self._sunrise_offset = offset
+            logging.info("GPS: sunrise_offset set to %s minutes", offset)
+            return
+        logging.error("SUNT: Invalid sunrise offset. Offset out of allowed "
+                        "range: %s", offset)
+        raise ValueError("Offset must be within ±60 minutes.")
 
     @property
     def sunset_offset(self) -> int:
@@ -238,37 +243,41 @@ class SunTimes:
 
     @sunset_offset.setter
     def sunset_offset(self, offset: int) -> None:
-        """Sets sunset offset in seconds, with validation.
+        """Sets sunset offset in minutes, with validation.
 
         Args:
-            offset (int): Number of seconds for sunset offset.
+            offset (int): Number of minutes for sunset offset.
 
         Raises:
-            ValueError: If offset exceeds reasonable positive bounds.
+            ValueError: If offset exceeds reasonable bounds.
         """
-        if offset > 3600:
-            logging.error(
-                "GPS: Invalid sunset_offset. Offset too large: %s", offset)
-            raise ValueError("Sunset offset is unreasonably large.")
-
-        self._sunset_offset = offset
-        logging.info("GPS: sunset_offset set to %s seconds", offset)
+        if -60 <= offset <= 60:
+            self._sunset_offset = offset
+            logging.info("GPS: sunset_offset set to %s seconds", offset)
+            return
+        logging.error("SUNT: Invalid sunset offset. Offset out of allowed "
+                        "range: %s", offset)
+        raise ValueError("Offset must be within ±60 minutes.")
 
     @property
     def fix_window_open(self) -> dt.datetime:
         """Returns the opening time of the GPS fixing window."""
-        return self._fix_window[0]
+        return self._fix_window['start']
 
     @property
     def fix_window_close(self) -> dt.datetime:
         """Returns the closing time of the GPS fixing window."""
-        return self._fix_window[1]
+        return self._fix_window['end']
 
     @property
     def in_fix_window(self) -> bool:
-        """Checks if the current time falls within the GPS fixing window."""
-        current_time = dt.datetime.now()
-        return self.fix_window_open < current_time < self.fix_window_close
+        """Checks if the current time falls within the GPS fixing window.
+
+        This method checks if the current time is within the defined fix window.
+        if either the start or end points of the window are not set this method
+        will return True """
+        if EPOCH_DATETIME in self._fix_window.values(): return True
+        return self.fix_window_open < dt.datetime.now() < self.fix_window_close
 
     def UTC_to_local(self, UTC_time: dt.datetime) -> dt.datetime:
         """ Convert a UTC time to local time.
@@ -328,9 +337,9 @@ class SunTimes:
                          "\n  Sunset  : %s",
                          round(observer.latitude,2),
                          round(observer.longitude,2),
-                         date.strftime("%d-%b-%Y"),
-                         solar_times['sunrise'].strftime("%H:%M:%S"),
-                         solar_times['sunset'].strftime("%H:%M:%S"))
+                         strfdate(date),
+                         strftime(solar_times['sunrise']),
+                         strftime(solar_times["sunset"]))
             return solar_times
 
         except ValueError as ve:
@@ -381,28 +390,24 @@ class SunTimes:
                           self._gps.latitude_coord.to_string(),
                           self._gps.longitude_coord.to_string(),
                           self._gps.altitude)
-            observer = Observer(
-                latitude=self._gps.latitude,
-                longitude=self._gps.longitude,
-                elevation=self._gps.altitude)
+            observer = Observer(latitude=self._gps.latitude,
+                                longitude=self._gps.longitude,
+                                elevation=self._gps.altitude)
 
             # Calculate solar times for today and tomorrow
-            today = dt.date.today()
-            logging.debug("Todays date is %s",
-                          today.strftime("%d-%b-%Y %H:%M:%S"))
-            tomorrow = today + dt.timedelta(days=1)
-            sun_times_today = SunTimes.calculate_solar_times(observer,
-                                                             today)
-            sun_times_tomorrow = SunTimes.calculate_solar_times(observer,
-                                                                tomorrow)
+            td = dt.date.today()
+            logging.debug("Todays date is %s", strfdt(td))
 
             # Update today's solar event times
-            self._sr_today = sun_times_today["sunrise"].timestamp()
-            self._ss_today = sun_times_today["sunset"].timestamp()
+            st = SunTimes.calculate_solar_times(observer, td)
+            self._sr_today = st["sunrise"]
+            self._ss_today = st["sunset"]
 
             # Update tomorrow's solar event times
-            self._sr_tomorrow = sun_times_tomorrow["sunrise"].timestamp()
-            self._ss_tomorrow = sun_times_tomorrow["sunset"].timestamp()
+            st = SunTimes.calculate_solar_times(
+                observer, td + dt.timedelta(days=1))
+            self._sr_tomorrow = st["sunrise"]
+            self._ss_tomorrow = st["sunset"]
 
         except Exception as e:
             logging.error("Failed to update solar times: %s", e)
@@ -418,7 +423,7 @@ class SunTimes:
             subprocess.CalledProcessError: If the system time cannot be set,
                 an error is logged, detailing the failure.
         """
-        gps_datetime = dt.datetime(1970,1,1,0,0,0,0,tzinfo=dt.timezone.utc)
+        gps_datetime = EPOCH_DATETIME
         try:
             # Ensure this code only runs on Linux/Unix-like systems
             if os.name != 'posix':
@@ -430,8 +435,7 @@ class SunTimes:
 
             # Validate that gps_datetime is a datetime instance and is set
             if not isinstance(gps_datetime, dt.datetime) or \
-                gps_datetime == dt.datetime(
-                    1970, 1, 1, 0, 0, 0, 0, tzinfo=dt.timezone.utc):
+                gps_datetime == EPOCH_DATETIME:
                 logging.error("GPS datetime is not set or invalid. "
                               "Exiting system time update.")
                 return
@@ -460,14 +464,14 @@ class SunTimes:
         try:
             # Set observer location based on current GPS coordinates
             self._observer = Observer(latitude=self._gps.latitude,
-                                    longitude=self._gps.longitude,
-                                    elevation=self._gps.altitude)
+                                      longitude=self._gps.longitude,
+                                      elevation=self._gps.altitude)
 
             # Calculate solar times for today
             sun_times_today = SunTimes.calculate_solar_times(self._observer,
                                                             dt.date.today())
             # Define the fixing window based on today's solar events
-            self._fix_window_start, self._fix_window_end = \
+            self._fix_window["start"], self._fix_window["end"] = \
                 self._define_fixing_window(sun_times_today)
 
             # Log the calculated times for reference
@@ -658,7 +662,7 @@ class SunTimes:
             dt.date.today()
 
     def _define_fixing_window(
-          self, sun_times_today: Dict[str, dt.datetime]) -> Tuple[float, float]:
+          self, sun_times_today: Dict[str, dt.datetime]) -> None:
         """Defines the GPS fixing window start and end timestamps based on
            today's sunrise and sunset times.
 
@@ -683,36 +687,42 @@ class SunTimes:
             TypeError: If the provided times are not in datetime format.
         """
         try:
-            # Get sunrise and sunset timestamps for today's date, logging each
-            self._sr_today = sun_times_today['sunrise'].timestamp()
-            self._ss_today = sun_times_today['sunset'].timestamp()
+            if dt.date.today() == self._sr_today.date():
+                logging.debug("SUNT: Fix window already set for today")
+                return
+            logging.debug("\n%s\n\SUNT:\t\tDefining fix window\n%s",
+                          "="*79,"-"*79)
+            # Get sunrise and sunset timestamps for today's date
+            self._sr_today = sun_times_today['sunrise']
+            self._ss_today = sun_times_today['sunset']
             logging.debug(
-                "Sunrise (UTC) timestamp: %s, Sunset (UTC) timestamp: %s",
-                self._sr_today, self._ss_today
-            )
+                "\n  Sunrise (UTC) : %s\n  Sunset (UTC)  : %s",
+                strftime(self._sr_today), strftime(self._ss_today))
 
             # Calculate fixing window start and end by applying offsets
-            start_time = self._sr_today + self.sunrise_offset
-            end_time = self._ss_today + self.sunset_offset
-            self._fix_window = [start_time, end_time]
+            start_time = self._sr_today + dt.timedelta(
+                minutes = self.sunrise_offset)
+            end_time = self._ss_today + dt.timedelta(
+                minutes=self.sunset_offset)
+            self._fix_window["start"] = start_time,
+            self._fix_window["end"] = end_time
 
             logging.info(
-                "Fixing window defined: Start - %s, End - %s",
-                dt.datetime.fromtimestamp(start_time, tz=dt.timezone.utc),
-                dt.datetime.fromtimestamp(end_time, tz=dt.timezone.utc)
-            )
+                "Fixing window defined:\n "
+                "  Start         : %s\n  End                : %s",
+                strftime(start_time), strftime(end_time))
 
             return start_time, end_time
 
         except KeyError as ke:
             logging.error(
-                "Missing required solar event in sun_times_today: %s", ke)
+                "Missing required solar event : %s", ke)
             raise KeyError(
                 "Missing required solar events (sunrise or sunset).") from ke
 
         except TypeError as te:
             logging.error(
-                "Invalid data type in sun_times_today: %s", te)
+                "Invalid data type in: %s", te)
             raise TypeError(
                 "Invalid data type for solar times; expected datetime.") from te
 
@@ -732,7 +742,7 @@ class SunTimes:
         self._gps_fix_running.set()
         try:
             while self._gps_fix_running.is_set():
-                self._attempt_fix_for_today()  # Attempt GPS fix for the day
+                self.attempt_fix_for_today()  # Attempt GPS fix for the day
                 # Wait to retry
                 time.sleep(ConfigLoader().gps_fix_retry_interval)
 
