@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Union
-from shelterGPS.common import GPSDir, GPSOutOfBoundsError
+from shelterGPS.common import GPSDir, GPSOutOfBoundsError, NegativeValueError
 
 class Coordinate:
     """
@@ -59,26 +59,48 @@ class Coordinate:
         self._calc_coords()
 
     @property
-    def direction(self):
+    def direction(self) -> GPSDir:
         """Get the direction of the coordinate."""
         return self._dir
 
     @property
-    def lat_lng_str(self):
+    def lat_lng_str(self) -> str:
         """Return 'Latitude' if the coordinate is a latitude, 'Longitude'
            otherwise."""
         return "Latitude" if self.is_latitude else "Longitude"
 
     @direction.setter
     def direction(self, direction: GPSDir):
-        """
-        Set the direction of the coordinate and determine the degree length.
+        """Set the GPS coordinate string, ensuring it is positive and formatted correctly.
+
+        This method accepts the GPS coordinate in either string or float format.
+        If a float is provided, it is converted to a string to ensure consistent
+        formatting. The coordinate is then formatted to match NMEA 0183
+        standards:
+        - Latitude: ddmm.ssss
+        - Longitude: dddmm.ssss
+
+        The string is padded with 0's as needed before being stored in the class
+        variable. If the coordinate string is set before direction, padding of
+        the string will not occur until direction is set.
 
         Args:
-            direction (GPSDir): The direction of the coordinate (N, S, E, W).
+            gps_str (Union[str, float]): The GPS coordinate in string or float
+                                         format.
+                - If a float is provided, it will be converted to a string.
 
         Raises:
-            ValueError: If the provided direction is not a valid GPSDir value.
+            GPSOutOfBoundsError: If the GPS coordinate string is negative or
+                                 cannot be converted to a valid number.
+
+        Example:
+            # Pads to '00123.4560' if longitude '0123.4560 if latitude
+            instCoordinate.gps_string = "123.456"
+            # Converts to '45.6700' and pads to :
+            # '00045.6700' if  longitude and ' 0045.6700' if latitude
+            instCoordinate.gps_string = 45.67
+            # Resets _gps_str to None
+            instCoordinate.gps_string = None
         """
         if direction not in GPSDir:
             raise ValueError(f"Coordinate direction is invalid: {direction}")
@@ -151,9 +173,17 @@ class Coordinate:
 
     @gps_string.setter
     def gps_string(self, gps_str: Union[str, float]) -> None:
-        """
-        Set the GPS coordinate string, ensuring it is positive and formatted
+        """ Set the GPS coordinate string, ensuring it is positive and formatted
         correctly.
+
+        This method will make sure the string is correctly formatted to NMEA
+        0183 ddmm.ssss for latitude and dddmm.ssss for longitude by padding
+        left and right with 0's if required before storing the value in the
+        class variable.
+
+        Note:
+            If the coordinate string is set before direction, padding of
+            the string will not occur until direction is set
 
         Args:
             gps_str (Union[str, float]): The GPS coordinate in string or float
@@ -163,6 +193,12 @@ class Coordinate:
             GPSOutOfBoundsError: If the GPS coordinate string is negative.
         """
         logging.debug("COORD: Setting gps string to %s", gps_str)
+        if gps_str is None:
+            self._gps_str = None
+            return
+        # Convert float to string if necessary
+        if isinstance(gps_str, float):
+            gps_str = f"{gps_str}"
         try:
             self._gps_str = gps_str
             self._pad_gps_string()
@@ -178,24 +214,78 @@ class Coordinate:
                 f"GPS string [{gps_str}] cannot be converted to a number")
 
     def to_string(self) -> str:
+        """String representation of the coordinate as deg, min, sec and
+        decimal coordinate """
         return "{}: {}".format(self.lat_lng_str, self.deg_min_sec)
 
     def _pad_gps_string(self) -> None:
-        logging.debug("COORD: gps_string=%s dir=%s", self.gps_string, self._dir)
-        if self.gps_string is None or self._dir is None: return
-        split_str = self.gps_string.split(".")
-        if len(split_str) > 2:
-            raise ValueError(
-                f"Invalid GPS string format: {self._gps_str} has too many "
-                "parts (too many .)")
+        """Pad a coordinate string with 0's to match NMEA 0183 format.
 
-        split_str[0] = str(split_str[0]).zfill(5) if self.is_longitude \
-                  else str(split_str[0]).zfill(4)
-        split_str[1] = str(split_str[1]).ljust(4,"0")
+        This method formats a coordinate string to conform to NMEA 0183
+        standards:
+        - Latitude: ddmm.ssss
+        - Longitude: dddmm.ssss
+
+        It pads the string with 0's as needed. For example:
+        - A longitude given as '123.123' will be padded to '00123.1230'.
+        - A latitude given as '234.56' will be padded to '0234.5600'.
+
+        Raises:
+            ValueError: If the `gps_string` is not a numeric value or is negative.
+            GPSOutOfBoundsError: If the integer part of the coordinate is too large.
+        """
+        logging.debug("COORD: gps_string=%s dir=%s", self.gps_string, self._dir)
+        if self.gps_string is None or self._dir is None:
+            return
+
+        # Ensure the value is numeric and positive
+        try:
+            value = float(self.gps_string)
+            if value < 0.0:
+                raise NegativeValueError(
+                    f"NMEA coordinate cannot be negative: {self.gps_string} "
+                    "was given"
+                )
+        except ValueError:
+            logging.error(
+                "COORD: GPS coordinate %s is not numeric", self.gps_string)
+            raise ValueError(f"{self.gps_string} is not numeric")
+
+        # Split into [ddmm / dddmm] & [ssss]
+        split_str = self.gps_string.split(".")
+        req_int_len = 5 if self.is_longitude else 4
+        if len(split_str[0]) > req_int_len:
+            logging.error(
+                    "COORD: GPS string %s is too long, should be: '%s'",
+                    self.gps_string,
+                    "dddmm.ssss" if self.is_longitude else "ddmm.ssss")
+            raise GPSOutOfBoundsError(
+                f"Coordinate is too big: {self.gps_string}")
+
+        # Pad the integer part
+        split_str[0] = split_str[0].zfill(req_int_len)
+
+        # Pad the decimal part or create it if missing
+        if len(split_str) == 1:
+            split_str.append("0000")  # If no decimal part, add "0000"
+        else:
+            split_str[1] = split_str[1].ljust(4, "0")  # Pad the decimal part
+
+        # Rejoin the string
         self._gps_str = ".".join(split_str)
+        logging.debug("COORD: Padded GPS string is %s", self._gps_str)
+
 
     def _calc_coords(self) -> None:
-        if self._gps_str is None or self._dir is None:
+        """Calculate and update the GPS coordinate values.
+
+        This method calculates and updates both the degree-minute-second (DMS)
+        representation and the decimal degree value of the GPS coordinate using
+        the `_deg_min_sec()` and `_decimal()` methods. Calculations are
+        performed only if the GPS string (`gps_string`) and direction
+        (`direction`) properties are set.
+        """
+        if self.gps_string is None or self.direction is None:
             return
         self._deg_min_sec()
         self._decimal()

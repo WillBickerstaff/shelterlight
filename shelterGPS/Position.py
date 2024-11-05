@@ -123,8 +123,8 @@ class GPS:
         This method ensures that the serial connection and GPIO resources
         are properly released when the instance is no longer in use.
         """
-        # Close the serial connection if it is open
-        if self.__gps_ser.is_open:
+        # Close the serial connection if it exists and is open
+        if hasattr(self, '_GPS__gps_ser') and self.__gps_ser.is_open:
             try:
                 self.__gps_ser.close()
                 logging.info("GPS: Serial connection closed.")
@@ -140,6 +140,8 @@ class GPS:
 
     @property
     def message_type(self) -> str:
+        """Get the message type of the last message received from
+        the GPS module (RMC, GGA, GLL, ZDA etc)  """
         if self._last_msg is None: return
         return self._last_msg[0]
 
@@ -279,7 +281,6 @@ class GPS:
                 "GPS: Format issue during checksum calculation: %s", e)
             log_caller(module="GPS")
             return False
-
 
     def pwr_on(self,wait_after:Optional[float]) -> None:
         """Power up the GPS module by enabling its power pin.

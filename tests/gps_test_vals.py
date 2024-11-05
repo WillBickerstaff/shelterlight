@@ -195,10 +195,21 @@ valid_coordinates = [
     {"coord": "00000.0000", "dir": GPSDir.West, "expected": 0.0},
     {"coord": "18000.0000", "dir": GPSDir.East, "expected": 180.0},
 
-
     # Additional precision cases
     {"coord": "8500.1234", "dir": GPSDir.South, "expected": -85.00205666666666},
     {"coord": "0200.0000", "dir": GPSDir.North, "expected": 2.0},
+
+    # Badly formatted valid cases for longitude
+    {"coord": "12.3", "dir": GPSDir.West, "expected": -0.205},  # Should pad to "0012.3000"
+    {"coord": "1234.5", "dir": GPSDir.East, "expected": 12.575},  # Should pad to "1234.5000"
+    {"coord": "1.23", "dir": GPSDir.West, "expected": -0.0205},  # Should pad to "0001.2300"
+    {"coord": "12345.678", "dir": GPSDir.East, "expected": 123.7613},  # Should pad to "12345.6780"
+
+    # Badly formatted valid cases for latitude
+    {"coord": "90.1", "dir": GPSDir.North, "expected": 01.5016666667},  # Should pad to "0090.1000"
+    {"coord": "8912.3", "dir": GPSDir.South, "expected": -89.205},  # Should pad to "9012.3000"
+    {"coord": "0.56", "dir": GPSDir.North, "expected": 0.0093333333334},  # Should pad to "0000.5600"
+    {"coord": "8912.34", "dir": GPSDir.South, "expected": -89.2056666667},  # Should pad to "8912.3400"
 ]
 
 invalid_coordinates = [
@@ -208,4 +219,6 @@ invalid_coordinates = [
     {"coord": "18100.0000", "dir": GPSDir.West},  # Longitude < -180 degrees
     {"coord": "-1234.5678", "dir": GPSDir.North}, # Negative value for North
     {"coord": "abcd.efgh", "dir": GPSDir.South},  # Non-numeric characters
+    {"coord": "12.34.5678", "dir": GPSDir.South},  # Too many parts
+    {"coord": "111111.5678", "dir": GPSDir.East},  # Longitude too long
 ]

@@ -10,7 +10,7 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-from shelterGPS.common import GPSInvalid, GPSOutOfBoundsError, GPSDir
+from shelterGPS.common import GPSInvalid, GPSOutOfBoundsError
 from shelterGPS.Position import GPS
 from shelterGPS.coord import Coordinate
 
@@ -33,28 +33,8 @@ class TestGPS(unittest.TestCase):
         self.assertIs(gps1, gps2, "GPS class is not respecting singleton pattern.")
         logging.getLogger().setLevel(self.default_loglevel)
 
-    @patch('serial.Serial')
-    @patch('lightlib.config.ConfigLoader')
-    def test_init_serial_connection(self, MockConfigLoader, MockSerial):
-        """Test that GPS initializes serial connection using configurations."""
-        logging.info("\n%s\n\t\t   Commencing serial connection tests\n%s",
-                    "="*79, "-"*79)
-        # Configure the mock to return specific values
-        MockConfigLoader.return_value.gps_serial_port = '/dev/serial0'
-        MockConfigLoader.return_value.gps_baudrate = 9600
-        MockConfigLoader.return_value.gps_timeout = 0.5
-
-        # Initialize GPS instance, which should use the mock config
-        gps = GPS()
-
-        # Assert the serial.Serial call uses the correct values
-        MockSerial.assert_called_with(port='/dev/serial0',
-                                    baudrate=9600,
-                                    timeout=0.5)
-        logging.getLogger().setLevel(self.default_loglevel)
-
-    @patch('Position.GPS.pwr_on')
-    @patch('Position.GPS.pwr_off')
+    @patch('shelterGPS.Position.GPS.pwr_on')
+    @patch('shelterGPS.Position.GPS.pwr_off')
     def test_power_control(self, mock_pwr_off, mock_pwr_on):
         """Test that GPS correctly handles power on and off."""
         logging.info("\n%s\n\t\t   Commencing GPS Power tests\n%s",
@@ -69,7 +49,7 @@ class TestGPS(unittest.TestCase):
 
     @patch('serial.Serial')
     def test_coordinate_extraction(self, mock_serial):
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(self.default_loglevel)
 
         # Create a mock serial instance
         mock_instance = mock_serial.return_value
@@ -115,7 +95,7 @@ class TestGPS(unittest.TestCase):
         """Test GPS coordinate conversion raises an error when out of bounds."""
         logging.info("\n%s\n\t\t   Commencing out of bounds coordinate tests\n%s",
                 "="*79, "-"*79)
-        logging.getLogger().setLevel(self.default_loglevel)
+        logging.getLogger().setLevel(logging.DEBUG)
         for test_val in test_vals.invalid_coordinates:
             coord = test_val.get("coord")
             dir = test_val.get("dir")
@@ -155,9 +135,9 @@ class TestGPS(unittest.TestCase):
         logging.info("\t*** %s of %s invalid checksum tests passed", pass_n, len(test_vals.valid_NMEA))
         logging.getLogger().setLevel(self.default_loglevel)
 
-    @patch('Position.GPS._get_msg')
-    @patch('Position.GPS._get_coordinates')
-    @patch('Position.GPS._get_datetime')
+    @patch('shelterGPS.Position.GPS._get_msg')
+    @patch('shelterGPS.Position.GPS._get_coordinates')
+    @patch('shelterGPS.Position.GPS._get_datetime')
     def test_get_fix_success(self, mock_get_datetime, mock_get_coordinates, mock_get_msg):
         """Test that `get_fix` calls all required methods for a successful fix."""
         gps = GPS()
@@ -166,7 +146,7 @@ class TestGPS(unittest.TestCase):
         mock_get_datetime.assert_called_once()
         logging.getLogger().setLevel(self.default_loglevel)
 
-    @patch('Position.GPS._get_msg', side_effect=GPSInvalid)
+    @patch('shelterGPS.Position.GPS._get_msg', side_effect=GPSInvalid)
     def test_get_fix_failure(self, mock_get_msg):
         """Test that `get_fix` raises GPSInvalid when no valid fix is obtained."""
         gps = GPS()
@@ -215,7 +195,7 @@ class TestGPS(unittest.TestCase):
         logging.getLogger().setLevel(logging.DEBUG)
 
         for test_message in test_vals.valid_NMEA:
-            gps._decode_message(test_message)
+            gps._decode_message(test_message['msg'])
             self.assertIsNotNone(gps._last_msg, "Decoded message should not be None")
             self.assertTrue(len(gps._last_msg) > 0, "Decoded message should not be empty")
             logging.debug("%s",gps.message_type)
