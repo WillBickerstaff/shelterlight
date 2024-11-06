@@ -11,13 +11,28 @@ if 'RPi' not in sys.modules:
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
 from lightlib.persist import GPSDataStore
+from lightlib.common import strfdt
 
 import gps_test_vals as test_vals
 
-class TestGPS(unittest.TestCase):
+class TestPersist(unittest.TestCase):
 
     def setUp(self):
-        """Setup for each test, ensuring singleton reset for GPS."""
-        GPS._instance = None  # Reset singleton instance
-        self.default_loglevel = logging.INFO
+        self.default_loglevel = logging.WARN
         logging.basicConfig(level=self.default_loglevel)
+
+    def test_json_storage(self):
+        logging.getLogger().setLevel(logging.DEBUG)
+        json_obj = GPSDataStore()
+        json_obj.last_latitude = 10.5
+        json_obj.last_longitude = -5.2
+        s_time = dt.datetime.now()
+        s_time = s_time + dt.timedelta(hours = -4)
+        json_obj.add_sunrise_time(datetime_instance=s_time)
+        s_time = dt.datetime.now()
+        s_time = s_time + dt.timedelta(hours = +4)
+        json_obj.add_sunset_time(datetime_instance=s_time)
+        json_obj.store_data()
+
+    def test_json_retrieval(self):
+        json_obj = GPSDataStore()

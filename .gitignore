@@ -3,6 +3,7 @@ directory_structure.txt
 req modules.txt
 RPi.GPIO.py
 .vscode/
+persist.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

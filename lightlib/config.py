@@ -466,6 +466,8 @@ class ConfigLoader:
         Returns:
             The converted value, either as a single value or a list.
         """
+        logging.debug("CONFIG: Converting %s to type %s",
+                      raw_value, specified_type)
         # If the value is expected to be a list and accepts_list is True
         if accepts_list and specified_type == int:
             return [int(item.strip()) for item in str(raw_value).split(",") if item.strip()]
@@ -476,7 +478,7 @@ class ConfigLoader:
         elif specified_type == float:
             return float(raw_value)
         elif specified_type == str:
-            return str(raw_value)
+            return str(raw_value[1:-1])
 
         return raw_value
 

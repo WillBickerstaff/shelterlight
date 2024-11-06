@@ -49,7 +49,9 @@ class GPSDataStore:
            data structure."""
         try:
             # Create a basic structure if the JSON file does not exist
-            with open(ConfigLoader().JSON_persistent_data, 'a+') as file:
+            logging.debug("JSON: Attempting to initialize data storage file %s",
+                          ConfigLoader().persistent_data_json)
+            with open(ConfigLoader().persistent_data_json, 'a+') as file:
                 file.seek(0)
                 if file.read().strip() == "":
                     empty_data = {
@@ -61,29 +63,13 @@ class GPSDataStore:
                     }
                     json.dump(empty_data, file)
                     logging.info("GPSDataStore JSON file initialized at %s",
-                                 ConfigLoader().JSON_persistent_data)
+                                 ConfigLoader().persistent_data_json)
         except IOError as e:
             logging.error("Failed to initialize GPSDataStore JSON file: %s", e)
             raise DataStorageError("Failed to initialize JSON file.") from e
 
-    def _add_date(self, iso_datetime_string: str,
-                 is_sunrise: Optional[bool]=False) -> None:
-        if is_sunrise:
-            self._sunrise_times.append(iso_datetime_string)
-        else:
-            self._sunset_times.append(iso_datetime_string)
 
-    def add_sunrise_time(self, datetime_instance: dt.datetime) -> None:
-        self._add_date(iso_datetime_string = datetime_instance.isoformat(),
-                       is_sunrise = True)
-
-    def add_sunset_time(self, datetime_instance: dt.date) -> None:
-        self._add_date(iso_datetime_string = datetime_instance.isoformat(),
-                       is_sunrise = False)
-
-    def store_data(self, max_fix_time: int, latitude: float, longitude: float,
-                   sunrise_times: List[dt.datetime],
-                   sunset_times: List[dt.datetime]) -> None:
+    def store_data(self) -> None:
         """Store the latest GPS data in the JSON file, overwriting existing
            data.
 
@@ -102,11 +88,10 @@ class GPSDataStore:
         try:
             # Convert datetime objects to ISO strings for JSON compatibility
             data = {
-                "max_fix_time": max_fix_time,
-                "latitude": latitude,
-                "longitude": longitude,
-                "sunrise_times": [t.isoformat() for t in sunrise_times],
-                "sunset_times": [t.isoformat() for t in sunset_times],
+                "latitude": self.last_latitude,
+                "longitude": self.last_longitude,
+                "sunrise_times": [t.isoformat() for t in self._sunrise_times],
+                "sunset_times": [t.isoformat() for t in self._sunset_times],
                 "last_updated": dt.datetime.now().isoformat()
             }
             with open(ConfigLoader().persistent_data_json, 'w') as file:
@@ -117,29 +102,33 @@ class GPSDataStore:
             raise DataStorageError("Failed to store data in JSON.") from e
 
     @property
-    def max_fix_time(self) -> Optional[int]:
-        """Retrieve the maximum time to obtain a GPS fix."""
-        return self._fetch_data("max_fix_time")
+    def last_latitude(self) -> float:
+        return self._last_lat
+
+    @last_latitude.setter
+    def last_latitude(self, lat: float) -> None:
+        self._last_lat = lat
 
     @property
-    def latitude(self) -> Optional[float]:
-        """Retrieve the stored latitude."""
-        return self._fetch_data("latitude")
+    def last_longitude(self) -> float:
+        return self._last_lng
 
-    @property
-    def longitude(self) -> Optional[float]:
-        """Retrieve the stored longitude."""
-        return self._fetch_data("longitude")
+    @last_longitude.setter
+    def last_longitude(self, lng: float) -> None:
+        self._last_lng = lng
 
-    @property
-    def sunrise_times(self) -> Optional[List[dt.datetime]]:
-        """Retrieve the list of stored sunrise times."""
-        return self._fetch_datetime_list("sunrise_times")
+    def _add_date(self, dt_obj: str,
+                 is_sunrise: Optional[bool]=False) -> None:
+        if is_sunrise:
+            self._sunrise_times.append(dt_obj)
+        else:
+            self._sunset_times.append(dt_obj)
 
-    @property
-    def sunset_times(self) -> Optional[List[dt.datetime]]:
-        """Retrieve the list of stored sunset times."""
-        return self._fetch_datetime_list("sunset_times")
+    def add_sunrise_time(self, datetime_instance: dt.datetime) -> None:
+        self._add_date(dt_obj = datetime_instance, is_sunrise = True)
+
+    def add_sunset_time(self, datetime_instance: dt.date) -> None:
+        self._add_date(dt_obj = datetime_instance,is_sunrise = False)
 
     def _populate_locals_from_file(self):
         key = ""
