@@ -20,7 +20,7 @@ class DataRetrievalError(DataStoreError):
     pass
 
 
-class GPSDataStore:
+class PersistentData:
     """Class for storing GPS and time data in JSON format to persist across
        power cycles.
 
@@ -28,9 +28,25 @@ class GPSDataStore:
     longitude, maximum time to obtain a fix, and sunrise and sunset times for
     today and the next seven days.
     """
+    def __new__(cls, *args, **kwargs):
+        """Ensure only one instance of PersistentData is created.
 
-    def __init__(self, file_path: str = "gps_data.json"):
-        """Initialize the GPSDataStore with a JSON file.
+        This method implements the Singleton pattern for the `PersistentData`
+        class, ensuring that only one instance of the class can exist at any
+        time.
+
+        Returns:
+            GPS: A single instance of the `PersistentData` class.
+        """
+        if not cls._instance:
+            with cls._lock:  # Thread-safe check and assignment
+                if not cls._instance:
+                    cls._instance = super(PersistenetData, cls).__new__(cls)
+                    cls._instance.__initialized = False
+        return cls._instance
+
+    def __init__(self, file_path: str = "persist.json"):
+        """Initialize PersistentData with a JSON file.
 
         Args:
             file_path (str): Path to the JSON file for data storage.
@@ -38,11 +54,15 @@ class GPSDataStore:
         Raises:
             DataStorageError: If the JSON file cannot be initialized.
         """
+        if self.__initialized:
+            return  # Skip reinitialization for singleton pattern
         self._sunrise_times = []
         self._sunset_times = []
         self._initialize_file()
         self._last_lat = 0.0
         self._last_lng = 0.0
+        # Mark as initialized
+        self.__initialized = True
 
     def _initialize_file(self) -> None:
         """Initialize the JSON file if it doesn't exist, creating an empty

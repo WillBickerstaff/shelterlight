@@ -10,7 +10,7 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-from lightlib.persist import GPSDataStore
+from lightlib.persist import PersistentData
 from lightlib.common import strfdt
 
 import gps_test_vals as test_vals
@@ -23,7 +23,7 @@ class TestPersist(unittest.TestCase):
 
     def test_json_storage(self):
         logging.getLogger().setLevel(logging.DEBUG)
-        json_obj = GPSDataStore()
+        json_obj = PersistentData()
         json_obj.last_latitude = 10.5
         json_obj.last_longitude = -5.2
         s_time = dt.datetime.now()
@@ -35,4 +35,4 @@ class TestPersist(unittest.TestCase):
         json_obj.store_data()
 
     def test_json_retrieval(self):
-        json_obj = GPSDataStore()
+        json_obj = PersistentData()
