@@ -1,6 +1,7 @@
 import json
 import datetime as dt
 from typing import Union, Optional, List
+from threading import Lock
 import logging
 from lightlib.config import ConfigLoader
 
@@ -28,6 +29,8 @@ class PersistentData:
     longitude, maximum time to obtain a fix, and sunrise and sunset times for
     today and the next seven days.
     """
+    _instance = None
+    _lock = Lock()  # Thread-safe lock for instance creation
     def __new__(cls, *args, **kwargs):
         """Ensure only one instance of PersistentData is created.
 
@@ -41,7 +44,7 @@ class PersistentData:
         if not cls._instance:
             with cls._lock:  # Thread-safe check and assignment
                 if not cls._instance:
-                    cls._instance = super(PersistenetData, cls).__new__(cls)
+                    cls._instance = super(PersistentData, cls).__new__(cls)
                     cls._instance.__initialized = False
         return cls._instance
 

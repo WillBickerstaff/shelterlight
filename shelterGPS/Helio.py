@@ -21,7 +21,7 @@ sys.path.append(os.path.abspath(
 import shelterGPS.Position as pos
 from lightlib.config import ConfigLoader
 from lightlib.common import EPOCH_DATETIME, strftime,strfdate,strfdt
-from lightlib.persist import GPSDataStore
+from lightlib.persist import PersistentData
 class SolarEvent(Enum):
     """Enumeration of key solar events for sun position calculations."""
     SUNRISE = "sunrise"
