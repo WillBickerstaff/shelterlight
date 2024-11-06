@@ -38,7 +38,11 @@ class GPSDataStore:
         Raises:
             DataStorageError: If the JSON file cannot be initialized.
         """
+        self._sunrise_times = []
+        self._sunset_times = []
         self._initialize_file()
+        self._last_lat = 0.0
+        self._last_lng = 0.0
 
     def _initialize_file(self) -> None:
         """Initialize the JSON file if it doesn't exist, creating an empty
@@ -49,9 +53,8 @@ class GPSDataStore:
                 file.seek(0)
                 if file.read().strip() == "":
                     empty_data = {
-                        "max_fix_time": None,
-                        "latitude": None,
-                        "longitude": None,
+                        "last_latitude": None,
+                        "last_longitude": None,
                         "sunrise_times": [],
                         "sunset_times": [],
                         "last_updated": None
@@ -62,6 +65,21 @@ class GPSDataStore:
         except IOError as e:
             logging.error("Failed to initialize GPSDataStore JSON file: %s", e)
             raise DataStorageError("Failed to initialize JSON file.") from e
+
+    def _add_date(self, iso_datetime_string: str,
+                 is_sunrise: Optional[bool]=False) -> None:
+        if is_sunrise:
+            self._sunrise_times.append(iso_datetime_string)
+        else:
+            self._sunset_times.append(iso_datetime_string)
+
+    def add_sunrise_time(self, datetime_instance: dt.datetime) -> None:
+        self._add_date(iso_datetime_string = datetime_instance.isoformat(),
+                       is_sunrise = True)
+
+    def add_sunset_time(self, datetime_instance: dt.date) -> None:
+        self._add_date(iso_datetime_string = datetime_instance.isoformat(),
+                       is_sunrise = False)
 
     def store_data(self, max_fix_time: int, latitude: float, longitude: float,
                    sunrise_times: List[dt.datetime],
@@ -91,7 +109,7 @@ class GPSDataStore:
                 "sunset_times": [t.isoformat() for t in sunset_times],
                 "last_updated": dt.datetime.now().isoformat()
             }
-            with open(ConfigLoader().JSON_persistent_data, 'w') as file:
+            with open(ConfigLoader().persistent_data_json, 'w') as file:
                 json.dump(data, file)
             logging.info("GPS data stored successfully in JSON file.")
         except IOError as e:
@@ -123,6 +141,24 @@ class GPSDataStore:
         """Retrieve the list of stored sunset times."""
         return self._fetch_datetime_list("sunset_times")
 
+    def _populate_locals_from_file(self):
+        key = ""
+        try:
+            with open(ConfigLoader().persistent_data_json, 'r') as file:
+                data = json.load(file)
+                self._last_lat = float(data.get("last_lattitude"))
+                self._last_lng = float(data.get("last_longitude"))
+                sunrise_times = data.get("sunrise_times")
+                sunset_times = data.get("sunset_times")
+        except (IOError) as e:
+            logging.error(
+                "JSON: Failed to read persistent data from file %s : %s ",
+                          ConfigLoader().persistent_data_json), e
+        except  (json.JSONDecodeError) as e:
+            logging.WARNING(
+                "JSON: Unable to read key [%s] or key does not exist in %s : e",
+                key, e)
+
     def _fetch_data(self, key: str) -> Optional[Union[int, float]]:
         """Fetch a single data item from the JSON file.
 
@@ -137,7 +173,7 @@ class GPSDataStore:
                                 fails.
         """
         try:
-            with open(ConfigLoader().JSON_persistent_data, 'r') as file:
+            with open(ConfigLoader().persistent_data_json, 'r') as file:
                 data = json.load(file)
                 return data.get(key)
         except (IOError, json.JSONDecodeError) as e:

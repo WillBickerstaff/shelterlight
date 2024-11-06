@@ -21,6 +21,7 @@ sys.path.append(os.path.abspath(
 import shelterGPS.Position as pos
 from lightlib.config import ConfigLoader
 from lightlib.common import EPOCH_DATETIME, strftime,strfdate,strfdt
+from lightlib.persist import GPSDataStore
 class SolarEvent(Enum):
     """Enumeration of key solar events for sun position calculations."""
     SUNRISE = "sunrise"
@@ -76,8 +77,8 @@ class SunTimes:
 
         # Log successful initialization with validated offset values
         logging.info(
-            "SunTimes initialized with sunrise offset: %s seconds, "
-            "sunset offset: %s seconds.",
+            "SunTimes initialized with sunrise offset: %s minutes, "
+            "sunset offset: %s minutes.",
             self.sunrise_offset, self.sunset_offset)
 
     def __del__(self) -> None:
@@ -114,7 +115,7 @@ class SunTimes:
         Returns:
             dt.datetime: UTC date and time for today's sunrise
         """
-        return dt.datetime.fromtimestamp(self._sr_today,tz=dt.timezone.utc)
+        return self._sr_today
 
     @property
     def local_sunrise_today(self) -> dt.datetime:
@@ -354,7 +355,7 @@ class SunTimes:
     def cleanup(self) -> None:
         """Explicit method to stop GPS fix process and release resources."""
         self._stop_gps_fix_process()
-        logging.info("Explicit cleanup method called. Resources released.")
+        logging.info("SUNT: Cleanup. Resources released.")
 
     def start_gps_fix_process(self) -> None:
         """Start the GPS fix process in a separate thread if it is not already
@@ -372,9 +373,9 @@ class SunTimes:
                 target=self._gps_fix_process, daemon=True
             )
             self._gps_fix_thread.start()
-            logging.info("GPS fix process started.")
+            logging.info("SUNT: GPS fix process started.")
         else:
-            logging.info("GPS fix process already running.")
+            logging.debug("SUNT:GPS fix process already running.")
 
     def update_solar_times(self) -> None:
         """Calculate and update solar event times for today and tomorrow.
@@ -396,7 +397,7 @@ class SunTimes:
 
             # Calculate solar times for today and tomorrow
             td = dt.date.today()
-            logging.debug("Todays date is %s", strfdt(td))
+            logging.debug("SUNT: Todays date is %s", strfdt(td))
 
             # Update today's solar event times
             st = SunTimes.calculate_solar_times(observer, td)
@@ -428,7 +429,7 @@ class SunTimes:
             # Ensure this code only runs on Linux/Unix-like systems
             if os.name != 'posix':
                 logging.warning(
-                    "System time setting skipped on non-Linux systems.")
+                    "SUNT: System time setting skipped on non-Linux systems.")
                 return
             # Access the datetime property from the GPS instance
             gps_datetime = self._gps.datetime
@@ -436,7 +437,7 @@ class SunTimes:
             # Validate that gps_datetime is a datetime instance and is set
             if not isinstance(gps_datetime, dt.datetime) or \
                 gps_datetime == EPOCH_DATETIME:
-                logging.error("GPS datetime is not set or invalid. "
+                logging.error("SUNT: GPS datetime is not set or invalid. "
                               "Exiting system time update.")
                 return
 
@@ -476,9 +477,10 @@ class SunTimes:
 
             # Log the calculated times for reference
             logging.info(
-                "Fixing window defined for today: Start - %s, End - %s",
-                        dt.datetime.fromtimestamp(self._fix_window_start),
-                        dt.datetime.fromtimestamp(self._fix_window_end))
+                "Fixing window defined for today: \n  Start : %s"
+                        "\n  End    : %s",
+                        strftime(self.fix_window_open),
+                        strftime(self.fix_window_close))
 
         except Exception as e:
             logging.error(
@@ -616,7 +618,7 @@ class SunTimes:
         # Begin attempts to obtain a GPS fix within the defined fixing window
         while True:
             try:
-                logging.info("Attempting GPS fix.")
+                logging.info("SUNT: Attempting GPS fix.")
                 self._gps.get_fix()  # Attempt to obtain GPS fix
 
                 # Set system time based on GPS fix, update solar times, and
@@ -624,7 +626,7 @@ class SunTimes:
                 self._set_system_time()
                 self._fixed_today = dt.date.today()
                 self.update_solar_times()
-                logging.info("GPS fix obtained and solar times updated.")
+                logging.info("SUNT: GPS fix obtained and solar times updated.")
                 # Set the local timezone
                 tz_finder = TimezoneFinder()
                 self._local_tz =tz_finder.timezone_at(
@@ -650,6 +652,17 @@ class SunTimes:
                          ConfigLoader().gps_fix_retry_interval)
             time.sleep(ConfigLoader().gps_fix_retry_interval)
 
+    def _store_persistent_data(self) -> None:
+        data_store = GPSDataStore()
+        data_store.store_data(
+                max_fix_time = ConfigLoader().gps_max_fix_time,
+                latitude = self._gps.latitude,
+                longitude=self._gps.longitude,
+                sunrise_times = [self.UTC_sunrise_today.isoformat(),
+                                 self.UTC_sunrise_tomorrow.isoformat()],
+                sunset_times=[self.UTC_sunset_today.isoformat(),
+                              self.UTC_sunset_tomorrow.isoformat()])
+
     def _within_fix_window(self) -> bool:
         """Check if the current time falls within the GPS fixing window."""
         current_time = time.time()
@@ -658,8 +671,9 @@ class SunTimes:
     def _is_window_set_for_today(self) -> bool:
         """Check if the fixing window is already set for today based on
            sunrise time."""
-        return dt.datetime.fromtimestamp(self._fix_window_start).date() == \
-            dt.date.today()
+        window_set = self.fix_window_open.date() == dt.date.today()
+        logging.debug("SUNT: Fix window is %s set", "" if window_set else "")
+        return window_set
 
     def _define_fixing_window(
           self, sun_times_today: Dict[str, dt.datetime]) -> None:
