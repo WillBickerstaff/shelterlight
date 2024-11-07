@@ -21,18 +21,33 @@ class TestPersist(unittest.TestCase):
         self.default_loglevel = logging.WARN
         logging.basicConfig(level=self.default_loglevel)
 
+
+    def test_singleton_behaviour(self):
+        p1=PersistentData()
+        p2=PersistentData()
+        self.assertIs(p1,p2)
+
     def test_json_storage(self):
         logging.getLogger().setLevel(logging.DEBUG)
-        json_obj = PersistentData()
-        json_obj.last_latitude = 10.5
-        json_obj.last_longitude = -5.2
-        s_time = dt.datetime.now()
+
+        PersistentData().current_latitude = 10.6
+        PersistentData().current_longitude = -5.2
+        s_time = dt.datetime.now(tz = dt.timezone.utc)
         s_time = s_time + dt.timedelta(hours = -4)
-        json_obj.add_sunrise_time(datetime_instance=s_time)
-        s_time = dt.datetime.now()
+        PersistentData().add_sunrise_time(datetime_instance=s_time)
+        s_time = dt.datetime.now(tz = dt.timezone.utc)
         s_time = s_time + dt.timedelta(hours = +4)
-        json_obj.add_sunset_time(datetime_instance=s_time)
-        json_obj.store_data()
+        PersistentData().add_sunset_time(datetime_instance=s_time)
+        s_time = dt.datetime.now(tz = dt.timezone.utc)
+        s_time = s_time + dt.timedelta(hours = -4, minutes = 3, days = 1)
+        PersistentData().add_sunrise_time(datetime_instance=s_time)
+        s_time = dt.datetime.now(tz = dt.timezone.utc)
+        s_time = s_time + dt.timedelta(hours = 4,minutes = -4, days = 1)
+        PersistentData().add_sunset_time(datetime_instance=s_time)
+        PersistentData().store_data()
+        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_json_retrieval(self):
-        json_obj = PersistentData()
+        logging.getLogger().setLevel(logging.DEBUG)
+       # self.assertEqual(PersistentData().last_latitude,10.5)
+        PersistentData()._populate_locals_from_file()

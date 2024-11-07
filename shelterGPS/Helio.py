@@ -377,13 +377,17 @@ class SunTimes:
         else:
             logging.debug("SUNT:GPS fix process already running.")
 
-    def update_solar_times(self) -> None:
+    def update_solar_times(self, lat: Optional[float] = None,
+                                 lng: Optional[float] = None,
+                                 alt: Optional[float] = None) -> None:
         """Calculate and update solar event times for today and tomorrow.
 
         This method uses the GPS coordinates to calculate the sunrise and sunset
         times for the current and next day, updating the attributes:
         `_sr_today`, `_ss_today`, `_sr_tomorrow`, and `_ss_tomorrow`.
         """
+        if ((lat is None) or (lng is None)) and \
+            (not self._gps.position_established)
         try:
             # Set up the observer location based on current GPS coordinates
             logging.debug("SUNT: Location information: "
@@ -527,6 +531,9 @@ class SunTimes:
             logging.info("GPS fix already completed for today.")
             return
 
+        # Proceed to attempt GPS fix within the defined window
+        self._perform_gps_fix_attempts()
+
         # Ensure solar times and fixing window are set for today
         if not self._is_window_set_for_today():
             self._set_solar_times_and_window()
@@ -535,9 +542,6 @@ class SunTimes:
         if not self._within_fix_window():
             logging.info("Current time is outside the fixing window.")
             return
-
-        # Proceed to attempt GPS fix within the defined window
-        self._perform_gps_fix_attempts()
 
     def _set_solar_times_and_window(self) -> None:
         """Calculate today's solar event times and define the GPS fixing window.
@@ -621,17 +625,18 @@ class SunTimes:
                 logging.info("SUNT: Attempting GPS fix.")
                 self._gps.get_fix()  # Attempt to obtain GPS fix
 
-                # Set system time based on GPS fix, update solar times, and
-                # mark fix as obtained
-                self._set_system_time()
-                self._fixed_today = dt.date.today()
-                self.update_solar_times()
-                logging.info("SUNT: GPS fix obtained and solar times updated.")
-                # Set the local timezone
-                tz_finder = TimezoneFinder()
-                self._local_tz =tz_finder.timezone_at(
+                if self._gps.datetime_established and \
+                   self._gps.position_established:
+
+                    # Set system time based on GPS fix
+                    self._set_system_time()
+                    logging.info(
+                        "SUNT: GPS fix obtained and solar times updated.")
+                    # Set the local timezone
+                    tz_finder = TimezoneFinder()
+                    self._local_tz = tz_finder.timezone_at(
                     lng = self._gps.longitude, lat = self._gps.latitude)
-                break  # Exit loop on successful GPS fix
+                    break  # Exit loop on successful GPS fix
 
             except pos.GPSInvalid:
                 # Increment the error counter and check against maximum allowed
@@ -646,6 +651,10 @@ class SunTimes:
             finally:
                 # Power off GPS module after each attempt
                 self._gps.pwr_off()
+                # If a fix was or wasn't obtained update sunrise/sunset times
+                # regardless using system time.
+                self.update_solar_times()
+                self._store_persistent_data()
 
             # Wait before retrying, as specified in configuration
             logging.info("Retrying GPS fix in %s seconds.",
@@ -653,15 +662,15 @@ class SunTimes:
             time.sleep(ConfigLoader().gps_fix_retry_interval)
 
     def _store_persistent_data(self) -> None:
-        data_store = GPSDataStore()
-        data_store.store_data(
-                max_fix_time = ConfigLoader().gps_max_fix_time,
-                latitude = self._gps.latitude,
-                longitude=self._gps.longitude,
-                sunrise_times = [self.UTC_sunrise_today.isoformat(),
-                                 self.UTC_sunrise_tomorrow.isoformat()],
-                sunset_times=[self.UTC_sunset_today.isoformat(),
-                              self.UTC_sunset_tomorrow.isoformat()])
+        #Add sunrise/sunset for today and tomorrow
+        PersistentData().add_sunrise_time(self.UTC_sunrise_today)
+        PersistentData().add_sunrise_time(self.UTC_sunrise_tomorrow)
+        PersistentData().add_sunset_time(self.UTC_sunset_today)
+        PersistentData().add_sunset_time(self.UTC_sunset_tomorrow)
+        if self._gps.position_established:
+            PersistentData().current_latitude = self._gps.latitude
+            PersistentData().current_longitude = self._gps.longitude
+            PersistentData().current_altitude = self._gps.altitude
 
     def _within_fix_window(self) -> bool:
         """Check if the current time falls within the GPS fixing window."""

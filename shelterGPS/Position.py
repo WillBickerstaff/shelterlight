@@ -113,6 +113,8 @@ class GPS:
         self._alt = 0.0
         self._dt = dt.datetime(1970, 1, 1, 0, 0, 0, 0, tzinfo=dt.timezone.utc)
         self._last_msg = []
+        self._datetime_established = False
+        self._position_established = False
 
         # Mark as initialized
         self.__initialized = True
@@ -137,6 +139,18 @@ class GPS:
             logging.info("GPS: GPIO resources cleaned up.")
         except RuntimeError as e:
             logging.warning("GPS: Failed to clean up GPIO resources: %s", e)
+
+    @property
+    def position_established(self) -> bool:
+        """ Return a boolean representing if the latitude and longitude
+        has been established"""
+        return self._position_established
+
+    @property
+    def datetime_established(self) -> bool:
+        """ Return a boolean representing if the date and time have
+        been established"""
+        return self._position_established
 
     @property
     def message_type(self) -> str:
@@ -470,6 +484,7 @@ class GPS:
             GPSInvalid: If coordinates cannot be retrieved within `fix_wait`.
         """
         self._get_msg('GGA', fix_wait)
+        self._position_established = False
         for entry in self.msg_coords:
             if self._last_msg[0] == entry['MSG']:
                 try:
@@ -489,6 +504,7 @@ class GPS:
                                        "%s, Alt: %s",
                                        self._lat.to_string(),
                                        self._lon.to_string(), self._alt)
+                    self._position_established = True
                 except GPSOutOfBoundsError as obe:
                     logging.warning("GPS: Out-of-bounds coordinate: %s", obe)
                 except (KeyError, ValueError) as e:
@@ -505,6 +521,7 @@ class GPS:
             GPSInvalid: If datetime cannot be retrieved within `fix_wait`.
         """
         self._get_msg('RMC', fix_wait)
+        self._datetime_established = False
         for entry in self.msg_dt:
             if self._last_msg[0] == entry['MSG']:
                 try:
@@ -514,6 +531,7 @@ class GPS:
                     self._dt = self._process_datetime(utc_time, date_str)
                     logging.info(
                         "GPS: Date and time obtained: %s", self._dt)
+                    self._datetime_established = True
                 except (KeyError, ValueError) as e:
                     logging.error("GPS: Error processing datetime: %s", e)
                     raise GPSInvalid("Failed to retrieve datetime.")
