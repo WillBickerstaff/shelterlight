@@ -45,6 +45,19 @@ class ConfigLoader:
                                          "accepts_list": False}
         },
         #------------------------------------------------------------#
+        "LOCATION": {
+        #------------------------------------------------------------#
+            "ISO_country2":              {"value": "GB",
+                                          "type": str,
+                                          "is_pin": False,
+                                          "accepts_list": False},
+
+            "place_name":                {"value": "London",
+                                          "type": str,
+                                          "is_pin": False,
+                                          "accepts_list": False},
+        },
+        #------------------------------------------------------------#
         "GPS": {
         #------------------------------------------------------------#
             "serial_port":              {"value": "/dev/serial0",
@@ -234,143 +247,159 @@ class ConfigLoader:
     def max_activity_time(self) -> int:
         """Max time any activity detection can remain high before a fault
         should be generated"""
-        return self.get_config_value(
-            self.config, "IO","max_activity_time")
+        return self.get_config_value(self.config,
+            section = "IO", option = "max_activity_time")
 
     @property
     def health_check_interval(self) -> int:
         """How often inputs are checked to see if they are stuck"""
-        return self.get_config_value(self.config, "IO","health_check_interval")
+        return self.get_config_value(config = self.config,
+            section = "IO", option = "health_check_interval")
 
     @property
     def cancel_input(self) -> int:
         """Pin used for responding to system messages."""
-        return self.get_config_value(self.config, "GENERAL", "cancel_input")
+        return self.get_config_value(config = self.config,
+            section = "GENERAL", option = "cancel_input")
 
     @property
     def confirm_input(self) -> int:
         """Pin used for responding to system messages."""
-        return self.get_config_value(self.config, "GENERAL", "confirm_input")
+        return self.get_config_value(config = self.config,
+            section = "GENERAL", option = "confirm_input")
 
     @property
     def log_file(self) -> str:
         """str: Path to the log file."""
-        return self.get_config_value(self.config, "GENERAL", "log_file")
+        return self.get_config_value(config = self.config,
+            section = "GENERAL", option = "log_file")
 
     @property
     def log_file(self) -> str:
         """str: Path to the log file."""
-        return self.get_config_value(
-            self.config, "GENERAL", "log_file")
+        return self.get_config_value(config = self.config,
+            section = "GENERAL", option = "log_file")
 
     @property
     def log_level(self) -> str:
         """str: Logging level."""
-        return self.get_config_value(
-            self.config, "GENERAL", "log_level"),
+        return self.get_config_value(config = self.config,
+            section = "GENERAL", option = "log_level"),
 
     @property
     def cycle_time(self) -> int:
         """int: System cycle time in seconds."""
-        return self.get_config_value(
-            self.config, "GENERAL", "cycle_time")
+        return self.get_config_value(config = self.config,
+            section = "GENERAL", option = "cycle_time")
 
     @property
     def gps_serial_port(self) -> str:
         """str: Serial port used for GPS communication."""
-        return self.get_config_value(
-            self.config, "GPS", "serial_port")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "serial_port")
 
     @property
     def gps_baudrate(self) -> int:
         """int: Baud rate for GPS communication."""
-        return self.get_config_value(
-            self.config, "GPS", "baudrate")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "baudrate")
 
     @property
     def gps_timeout(self) -> float:
         """float: Timeout for GPS communication."""
-        return self.get_config_value(
-            self.config, "GPS", "timeout")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "timeout")
 
     @property
     def gps_pwr_pin(self) -> int:
         """int: GPIO pin number used to power the GPS module."""
-        return self.get_config_value(
-            self.config, "GPS", "pwr_pin")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "pwr_pin")
 
     @property
     def gps_pwr_up_time(self) -> float:
         """float: Time in seconds to wait after powering up GPS."""
-        return self.get_config_value(
-            self.config, "GPS", "pwr_up_time")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "pwr_up_time")
 
     @property
     def gps_fix_retry_interval(self) -> float:
         """float: Interval in seconds between GPS fix retries."""
-        return self.get_config_value(
-            self.config, "GPS", "fix_retry_interval")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "fix_retry_interval")
 
     @property
     def gps_max_fix_time(self) -> float:
         """float: Maximum time in seconds for a GPS fix attempt."""
-        return self.get_config_value(
-            self.config, "GPS", "max_fix_time")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "max_fix_time")
 
     @property
     def gps_failed_fix_days(self) -> int:
         """int: Number of days after which a GPS fix failure triggers an
            alarm."""
-        return self.get_config_value(
-            self.config, "GPS", "failed_fix_days")
+        return self.get_config_value(config = self.config,
+            section = "GPS", option = "failed_fix_days")
 
     @property
     def activity_digital_inputs(self) -> list:
         """list of int: GPIO pins for sensor inputs."""
-        return self.get_config_value(
-            self.config, "IO", "sensor_inputs")
+        return self.get_config_value(config = self.config,
+            section = "IO", option = "sensor_inputs")
 
     @property
     def lights_output(self) -> int:
         """int: GPIO pin for lights output."""
-        return self.get_config_value(
-            self.config, "IO", "lights_output")
+        return self.get_config_value(config = self.config,
+            section = "IO", option = "lights_output")
 
     @property
     def fault_output(self) -> int:
         """int: GPIO pin for fault output."""
-        return self.get_config_value(
-            self.config, "IO", "fault_output")
+        return self.get_config_value(config = self.config,
+            section = "IO", option = "fault_output")
 
     @property
     def crit_fault_out(self) -> int:
         """int: GPIO pin for critical fault output."""
-        return self.get_config_value(
-            self.config, "IO", "crit_fault_out")
+        return self.get_config_value(config = self.config,
+            section = "IO", option = "crit_fault_out")
 
     @property
     def sunrise_offset(self) -> int:
         """int: Offset from sunrise in seconds for GPS fixing window."""
-        return self.get_config_value(
-            self.config, "FIX_WINDOW", "sunrise_offset")
+        return self.get_config_value(config = self.config,
+            section = "FIX_WINDOW", option = "sunrise_offset")
 
     @property
     def sunset_offset(self) -> int:
         """int: Offset from sunset in seconds for GPS fixing window."""
-        return self.get_config_value(
-            self.config, "FIX_WINDOW", "sunset_offset")
+        return self.get_config_value(config = self.config,
+            section = "FIX_WINDOW", option = "sunset_offset")
 
     @property
     def media_mount_point(self) -> str:
         """str: Mount point of attached USB drives."""
-        return self.get_config_value(
-            self.config, "DATA_STORE", "media_mount_point")
+        return self.get_config_value(config = self.config,
+            section = "DATA_STORE", option = "media_mount_point")
 
     @property
     def persistent_data_json(self) -> str:
         """str: Path to persistent JSON data file."""
-        return self.get_config_value(
-            self.config, "DATA_STORE", "persistent_data_JSON")
+        return self.get_config_value(config = self.config,
+            section = "DATA_STORE", option = "persistent_data_JSON")
+
+    @property
+    def ISO_country2(self) -> str:
+        """str: 2character ISO country code."""
+        return self.get_config_value(config = self.config,
+            section = "LOCATION", option = "ISO_country2")
+
+    @property
+    def place_name(self) -> str:
+        """str: Location place name."""
+        return self.get_config_value(config = self.config,
+            section = "LOCATION", option = "place_name")
 
     def load_config(self) -> None:
         """Load and validate configuration values or fall back to defaults.
@@ -478,7 +507,10 @@ class ConfigLoader:
         elif specified_type == float:
             return float(raw_value)
         elif specified_type == str:
-            return str(raw_value[1:-1])
+            str_val = str(raw_value)
+            if str_val.startswith('"') and str_val.endswith('"'):
+                return str(raw_value[1:-1])
+            return str_val
 
         return raw_value
 

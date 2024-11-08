@@ -4,6 +4,7 @@ req modules.txt
 RPi.GPIO.py
 .vscode/
 persist.json
+cities*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -139,6 +139,7 @@ class TestGPS(unittest.TestCase):
     @patch('shelterGPS.Position.GPS._get_coordinates')
     @patch('shelterGPS.Position.GPS._get_datetime')
     def test_get_fix_success(self, mock_get_datetime, mock_get_coordinates, mock_get_msg):
+        logging.getLogger().setLevel(logging.DEBUG)
         """Test that `get_fix` calls all required methods for a successful fix."""
         gps = GPS()
         gps.get_fix()
