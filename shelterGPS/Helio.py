@@ -387,35 +387,34 @@ class SunTimes:
         `_sr_today`, `_ss_today`, `_sr_tomorrow`, and `_ss_tomorrow`.
         """
         if ((lat is None) or (lng is None)) and \
-            (not self._gps.position_established)
-        try:
-            # Set up the observer location based on current GPS coordinates
-            logging.debug("SUNT: Location information: "
-                          "\n  lat     : %s\n  lng     : %s\n  elev    : %s",
-                          self._gps.latitude_coord.to_string(),
-                          self._gps.longitude_coord.to_string(),
-                          self._gps.altitude)
-            observer = Observer(latitude=self._gps.latitude,
-                                longitude=self._gps.longitude,
-                                elevation=self._gps.altitude)
+            (not self._gps.position_established):
+            try:
+                # Set up the observer location based on current GPS coordinates
+                logging.debug("SUNT: Location information: "
+                            "\n  lat     : %s\n  lng     : %s\n  elev    : %s",
+                            self._gps.latitude_coord.to_string(),
+                            self._gps.longitude_coord.to_string(),
+                            self._gps.altitude)
+                observer = Observer(latitude=self._gps.latitude,
+                                    longitude=self._gps.longitude,
+                                    elevation=self._gps.altitude)
 
-            # Calculate solar times for today and tomorrow
-            td = dt.date.today()
-            logging.debug("SUNT: Todays date is %s", strfdt(td))
+                # Calculate solar times for today and tomorrow
+                td = dt.date.today()
+                logging.debug("SUNT: Todays date is %s", strfdt(td))
+                # Update today's solar event times
+                st = SunTimes.calculate_solar_times(observer, td)
+                self._sr_today = st["sunrise"]
+                self._ss_today = st["sunset"]
 
-            # Update today's solar event times
-            st = SunTimes.calculate_solar_times(observer, td)
-            self._sr_today = st["sunrise"]
-            self._ss_today = st["sunset"]
+                # Update tomorrow's solar event times
+                st = SunTimes.calculate_solar_times(
+                    observer, td + dt.timedelta(days=1))
+                self._sr_tomorrow = st["sunrise"]
+                self._ss_tomorrow = st["sunset"]
 
-            # Update tomorrow's solar event times
-            st = SunTimes.calculate_solar_times(
-                observer, td + dt.timedelta(days=1))
-            self._sr_tomorrow = st["sunrise"]
-            self._ss_tomorrow = st["sunset"]
-
-        except Exception as e:
-            logging.error("Failed to update solar times: %s", e)
+            except Exception as e:
+                logging.error("Failed to update solar times: %s", e)
 
     def _set_system_time(self) -> None:
         """Sets the system time using the GPS datetime property.
