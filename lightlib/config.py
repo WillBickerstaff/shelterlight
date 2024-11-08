@@ -45,19 +45,6 @@ class ConfigLoader:
                                          "accepts_list": False}
         },
         #------------------------------------------------------------#
-        "LOCATION": {
-        #------------------------------------------------------------#
-            "ISO_Country":              {"value": "GB",
-                                         "type": str,
-                                         "is_pin": False,
-                                         "accepts_list": False},
-
-            "Place_Name":               {"value": "London",
-                                         "type": str,
-                                         "is_pin": False,
-                                         "accepts_list": False}
-        },
-        #------------------------------------------------------------#
         "GPS": {
         #------------------------------------------------------------#
             "serial_port":              {"value": "/dev/serial0",
