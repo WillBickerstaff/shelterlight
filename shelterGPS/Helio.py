@@ -19,9 +19,11 @@ sys.path.append(os.path.abspath(
 sys.path.append(os.path.abspath(
     os.path.join(os.path.dirname(__file__), '..', '..')))
 import shelterGPS.Position as pos
+from shelterGPS.common import GPSNoFix
 from lightlib.config import ConfigLoader
 from lightlib.common import EPOCH_DATETIME, strftime,strfdate,strfdt
 from lightlib.persist import PersistentData
+from geocode.local import Location, InvalidLocationError
 class SolarEvent(Enum):
     """Enumeration of key solar events for sun position calculations."""
     SUNRISE = "sunrise"
@@ -208,7 +210,7 @@ class SunTimes:
             bool: `True` if a GPS fix was successfully obtained today, `False`
             otherwise.
         """
-        return self._fixed_today
+        return self._fixed_today == dt.datetime.now().date
 
     @property
     def sunrise_offset(self) -> int:
@@ -527,12 +529,21 @@ class SunTimes:
             Exception: If an error occurs during the setting of solar times or
             during GPS fix attempts, logs the error.
         """
-        if self.fixed_today:
-            logging.info("GPS fix already completed for today.")
+        if self.fixed_today and self._is_window_set_for_today():
+            logging.debug(
+                "GPS fix already completed and fix window set for today.")
             return
 
-        # Proceed to attempt GPS fix within the defined window
-        self._perform_gps_fix_attempts()
+        try:
+            # Proceed to attempt GPS fix within the defined window
+            self._perform_gps_fix_attempts()
+            # on success update the solar times
+            self.update_solar_times()
+        except GPSNoFix:
+            # GPS fixing failed, falling back to using any local information
+            logging.warning(
+                "GPS Fixing failed reverting to local geographic information")
+            self._use_local_geo()
 
         # Ensure solar times and fixing window are set for today
         if not self._is_window_set_for_today():
@@ -636,6 +647,9 @@ class SunTimes:
                     tz_finder = TimezoneFinder()
                     self._local_tz = tz_finder.timezone_at(
                     lng = self._gps.longitude, lat = self._gps.latitude)
+                    self._fixed_today = dt.datetime.now().date
+                    self.update_solar_times()
+                    self._store_persistent_data()
                     break  # Exit loop on successful GPS fix
 
             except pos.GPSInvalid:
@@ -651,15 +665,36 @@ class SunTimes:
             finally:
                 # Power off GPS module after each attempt
                 self._gps.pwr_off()
-                # If a fix was or wasn't obtained update sunrise/sunset times
-                # regardless using system time.
-                self.update_solar_times()
-                self._store_persistent_data()
 
             # Wait before retrying, as specified in configuration
             logging.info("Retrying GPS fix in %s seconds.",
                          ConfigLoader().gps_fix_retry_interval)
             time.sleep(ConfigLoader().gps_fix_retry_interval)
+
+    def _use_local_geo(self):
+        try:
+            # First look if something is stored in persistend data:
+            lat = PersistentData().current_latitude
+            lng = PersistentData().current_longitude
+            alt = PersistentData().current_altitude
+            if alt == None: alt = 0.0
+            # if there's nothing there revert to defined location in config file
+            if lat is None or lng is None:
+                config_vals = Location()
+                lat = config_vals.latitude,
+                lng = config_vals.longitude
+                place = config_vals.place
+                iso = config_vals.ISO_Country
+            self.update_solar_times(lat = lat, lng = lng, alt = alt)
+        except InvalidLocationError as e:
+            logging.error("SUNT: ***** CRITICAL ***** NO LOCATION ***** "
+                    "\n\t*** GPS FIX FAILED"
+                    "\n\t*** No previous fix information in persistent data"
+                    f"\n\t *** Invalid location in config file {place}({iso})")
+            # update times using system time
+            self.update_solar_times()
+
+        self._local_tz = config_vals.timezone
 
     def _store_persistent_data(self) -> None:
         #Add sunrise/sunset for today and tomorrow

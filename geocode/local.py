@@ -13,6 +13,9 @@ from lightlib.config import ConfigLoader
 GEODB = "geocode.db"
 GEOTABLE = "geocode_data"
 
+class InvalidLocationError(Exception):
+    pass
+
 class Location():
     def __init__(self):
         self._place_name: str = None
@@ -42,7 +45,7 @@ class Location():
         return self._country
 
     @property
-    def Place(self) -> str:
+    def place(self) -> str:
         """Return the place name of the location stored in the
         config file. Will return None if it's not set in the config"""
         return self._place_name
@@ -58,25 +61,29 @@ class Location():
         place = ConfigLoader().place_name
         logging.debug("GCODE: Retrieved Location %s, %s", iso, place)
         # Query the geocode db
-        df = self._query_location_data(iso_country = iso, place_name = place)
+        try:
+            df = self._query_location_data(iso_country = iso,
+                                           place_name = place)
 
-        # iloc gets the first record returned.
-        # None if the query returned no results or the column is missing
-
-        # Latitude from the results,
-        self._latitude = df.get("Lat").iloc[0] \
-            if not df.empty and "Lat" in df else None
-        # Longitude from the results,
-        self._longitude = df.get("Lng").iloc[0] \
-            if not df.empty and "Lng" in df else None
-        # Timezone from the results, transformed into a timezone instance for
-        # use in datetime objects,
-        tz = df.get("Timezone").iloc[0] \
-            if not df.empty and "Timezone" in df else None
-        self._tz = pytz.timezone(tz)
-        logging.debug(
-            "LOC: Retrieved lat %s, lng %s for %s in country %s. TZ=:%s",
-            self.latitude, self.longitude, place, iso, self.timezone)
+            if df.empty or not("Lat" in df and "Lng" in df):
+                raise InvalidLocationError (
+                    f"Location {place}({iso}) is either not in the database or "
+                    "the database does not provide lat or lng for the location")
+            # iloc gets the first record returned.
+            # Latitude from the results,
+            self._latitude = df.get("Lat").iloc[0]
+            # Longitude from the results,
+            self._longitude = df.get("Lng").iloc[0]
+            # Timezone from the results, transformed into a timezone instance
+            # for use in datetime objects,
+            tz = df.get("Timezone").iloc[0] \
+                if not df.empty and "Timezone" in df else None
+            self._tz = pytz.timezone(tz)
+            logging.debug(
+                "LOC: Retrieved lat %s, lng %s for %s in country %s. TZ=:%s",
+                self.latitude, self.longitude, place, iso, self.timezone)
+        except InvalidLocationError as e:
+            raise e
 
     def _query_location_data(self, iso_country: str, place_name: str) -> pd.DataFrame:
         # Connect to the SQLite database
