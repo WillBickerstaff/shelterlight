@@ -21,9 +21,14 @@ class test_SolarEvent(unittest.TestCase):
 
     # Doesn't test, just debug.logs all of the calculations for review
     @patch('serial.Serial')
+    def test_SunTimes_Initial_Location(self, mock_serial):
+        logging.getLogger().setLevel(logging.DEBUG)
+        test_instance = SunTimes()
+        logging.getLogger().setLevel(self.default_loglevel)
+
+    # Doesn't test, just debug.logs all of the calculations for review
     def test_solar_event_times(self, mock_serial):
-        # Set logging to WARN level initially
-        logging.getLogger().setLevel(logging.WARN)
+        logging.getLogger().setLevel(logging.DEBUG)
 
         # Create a mock serial instance
         mock_instance = mock_serial.return_value

@@ -13,7 +13,7 @@ from lightlib.common import EPOCH_DATETIME, strftime, strfdate, strfdt
 from lightlib.persist import PersistentData
 from shelterGPS.common import GPSNoFix
 import shelterGPS.Position as pos
-from geocode.local import Location
+from geocode.local import Location, InvalidLocationError
 
 class SolarEvent(Enum):
     """Enumeration of key solar events for sun position calculations."""
@@ -37,6 +37,13 @@ class SunTimes:
         logging.info(
             "SunTimes initialized with sunrise offset: %s minutes, sunset "
             "offset: %s minutes.", self.sunrise_offset, self.sunset_offset)
+
+        # Try to set the fix window from local data on system startup
+        if self._attempt_initial_fix_window():
+            logging.info("Fix window established from local data on startup.")
+        else:
+            logging.info("No local data available. GPS fix process will start.")
+            self.start_gps_fix_process()
 
     def _init_dt(self) -> None:
         """Init all datetime vars to 01 jan 1970"""
@@ -262,10 +269,13 @@ class SunTimes:
                 if self._gps.datetime_established and \
                    self._gps.position_established:
                     self._set_system_time()
-                    self._fixed_today = dt.datetime.now().date
+                    self._fixed_today = dt.datetime.now().date()
+
+                    # Update solar times and fix window based on GPS coordinates
                     self._set_solar_times_and_fix_window()
                     self._store_persistent_data()
                     break
+
             except pos.GPSInvalid:
                 self._fix_err_day += 1
                 if self._fix_err_day >= max_fix_errors:
@@ -277,6 +287,50 @@ class SunTimes:
             time.sleep(ConfigLoader().gps_fix_retry_interval)
 
     # -------------------- Solar Times and Fix Window Setup -------------------
+
+    def _attempt_initial_fix_window(self) -> bool:
+        """
+        Attempts to set the initial solar times and fix window from locally
+        stored data. Returns True if successful, False otherwise.
+        """
+        try:
+            lat, lng, alt = self._use_local_geo()
+            observer = Observer(latitude=lat, longitude=lng, elevation=alt)
+            self._set_solar_times(observer)
+            self._set_fix_window()
+            return True
+        except InvalidLocationError:
+            logging.warning("No valid local location data available.")
+            return False
+
+    def _set_solar_times_and_fix_window(self) -> None:
+        """
+        Calculate and set solar times and fix windows for today and tomorrow
+        based on the current geographic coordinates, updating local timezone.
+
+        This method retrieves the current geographic coordinates, either from an
+        active GPS fix or locally stored information. It then creates an
+        `Observer` instance for calculating solar events and invokes
+        `_set_solar_times` and `_set_fix_window` to establish the sunrise,
+        unset, and GPS fix windows for today and tomorrow.
+
+        Additionally, this method determines and sets the local timezone based
+        on latitude and longitude.
+
+        Returns:
+            None
+        """
+        # Use the updated coordinates or fallback coordinates
+        lat, lng, alt = self._get_coordinates()
+        observer = Observer(latitude=lat, longitude=lng, elevation=alt)
+
+        self._set_solar_times(observer)
+        self._set_fix_window()
+
+        # Determine the local timezone:
+        tz_finder = TimezoneFinder()
+        self._local_tz = pytz.timezone(
+            tz_finder.timezone_at(lng = lng, lat = lat))
 
     def _set_solar_times(self, observer:Observer) -> None:
         """ Calculate and update UTC sunrise and sunset times for today and
