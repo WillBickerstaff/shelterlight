@@ -53,7 +53,6 @@ class test_SolarEvent(unittest.TestCase):
                 logging.getLogger().setLevel(logging.DEBUG)
 
                 # Call the method to update solar times
-                test_instance.update_solar_times()
-
+                test_instance._set_solar_times_and_fix_window()
         # Reset logging level to INFO
         logging.getLogger().setLevel(logging.INFO)
