@@ -4,7 +4,8 @@ from typing import Union, Optional, List
 from threading import Lock
 import logging
 from lightlib.config import ConfigLoader
-from lightlib.common import iso_to_datetime, datetime_to_iso
+from lightlib.common import iso_to_datetime, datetime_to_iso, DATE_TODAY, \
+    DATE_TOMORROW
 
 
 class DataStoreError(Exception):
@@ -51,6 +52,12 @@ class PersistentData:
 
     def __init__(self, file_path: str = "persist.json"):
         """Initialize PersistentData with a JSON file.
+
+        This class makes available data stored in the persistent data file
+        defined in the config file. If the file does not exist, it is created
+        and populated with any known values when `store_data` is called. If the
+        data file does exist then the class properties will give direct access
+        to all available values, returning `None` if they are not set.
 
         Args:
             file_path (str): Path to the JSON file for data storage.
@@ -144,6 +151,72 @@ class PersistentData:
     @current_longitude.setter
     def current_longitude(self, lng: float) -> None:
         self._current_longitude = lng
+
+    @property
+    def sunrise_times(self) -> List[dt.datetime]:
+        return self._sunrise_times
+
+    @property
+    def sunset_times(self) -> List[dt.datetime]:
+        return self._sunrise_times
+
+    @property
+    def sunrise_today(self) -> Optional[dt.datetime]:
+        """Retrieve today's sunrise time from persistent data or handle
+        missing."""
+        try:
+            return PersistentData._date_in_dates(check_date=DATE_TODAY(),
+                                                dates_list=self.sunrise_times)
+        except DataRetrievalError:
+            logging.error(f"{datetime_to_iso(DATE_TODAY())} not found in "
+                        "persistent data sunrise times")
+            return None
+
+    @property
+    def sunset_today(self) -> Optional[dt.datetime]:
+        """Retrieve today's sunset time from persistent data or handle
+        missing."""
+        try:
+            return PersistentData._date_in_dates(check_date=DATE_TODAY(),
+                                                dates_list=self.sunset_times)
+        except DataRetrievalError:
+            logging.error(f"{datetime_to_iso(DATE_TODAY())} not found in "
+                        "persistent data sunset times")
+            return None
+
+    @property
+    def sunrise_tomorrow(self) -> Optional[dt.datetime]:
+        """Retrieve tomorrows sunrise time from persistent data or handle
+        missing."""
+        try:
+            return PersistentData._date_in_dates(check_date=DATE_TOMORROW(),
+                                                dates_list=self.sunrise_times)
+        except DataRetrievalError:
+            logging.error(f"{datetime_to_iso(DATE_TOMORROW())} not found in "
+                        "persistent data sunrise times")
+            return None
+
+    @property
+    def sunset_tomorrow(self) -> Optional[dt.datetime]:
+        """Retrieve tomorrows sunset time from persistent data or handle
+        missing."""
+        try:
+            return PersistentData._date_in_dates(check_date=DATE_TOMORROW(),
+                                                dates_list=self.sunset_times)
+        except DataRetrievalError:
+            logging.error(f"{datetime_to_iso(DATE_TOMORROW())} not found in "
+                        "persistent data sunset times")
+            return None
+
+    @staticmethod
+    def _date_in_dates(check_date: dt.date,
+                    dates_list: List[dt.datetime]) -> dt.datetime:
+        """Search for a datetime with a matching date in dates_list."""
+        for d in dates_list:
+            if d.date() == check_date:
+                return d
+        raise DataRetrievalError(
+            f"Date {datetime_to_iso(check_date)} not found in list")
 
     def _add_date(self, dt_obj: dt.datetime, is_sunrise: bool = False) -> None:
         # Remove any outdated datetimes before adding new ones
