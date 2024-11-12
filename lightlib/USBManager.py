@@ -6,6 +6,7 @@ from typing import Optional
 import RPi.GPIO as GPIO # type: ignore
 from lightlib.config import ConfigLoader
 from smartlight import CANCEL_CONFIRM, warn_and_wait
+from common import datetime_to_iso
 
 class USBFileManager:
     """Singleton for managing USB file operations, including backing up and
@@ -66,7 +67,7 @@ class USBFileManager:
             raise FileNotFoundError(
                 "USB drive not inserted or mount point inaccessible.")
 
-        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime_to_iso(dt.datetime.now())
         usb_backup_dir = os.path.join(self.mount_point, "smartlight", "configs")
         usb_log_dir = os.path.join(self.mount_point, "smartlight", "logs")
         os.makedirs(usb_backup_dir, exist_ok=True)

@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Optional, Tuple, Dict
 from astral import sun, Observer
 from lightlib.config import ConfigLoader
-from lightlib.common import EPOCH_DATETIME, strftime, strfdate, strfdt
+from lightlib.common import EPOCH_DATETIME, strftime, strfdate, strfdt, DATE_TODAY, DATE_TOMORROW
 from lightlib.persist import PersistentData
 from shelterGPS.common import GPSNoFix
 import shelterGPS.Position as pos
@@ -146,7 +146,7 @@ class SunTimes:
             bool: `True` if a GPS fix was successfully obtained today, `False`
             otherwise.
         """
-        return self._fixed_today == dt.datetime.now().date()
+        return self._fixed_today == DAT
 
     @property
     def in_fix_window(self) -> bool:
@@ -161,7 +161,7 @@ class SunTimes:
             bool: `True` if the current time is within today's or tomorrow's
             fixing window; `False` otherwise.
         """
-        dt_now = dt.datetime.now()
+        dt_now = DATE_TODAY
         return ((self._fix_window["start_today"] <= dt_now <= \
                                              self._fix_window["end_today"]) or
                 (self._fix_window["start_tomorrow"] <= dt_now <= \
@@ -352,8 +352,8 @@ class SunTimes:
         Returns:
             None
         """
-        today = dt.date.today()
-        tomorrow = today + dt.timedelta(days=1)
+        today = DATE_TODAY
+        tomorrow = DATE_TOMORROW
 
         # Calculate today's solar times
         solar_times_today = SunTimes.calculate_solar_times(observer, today)
