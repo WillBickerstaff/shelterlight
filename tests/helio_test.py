@@ -27,6 +27,7 @@ class test_SolarEvent(unittest.TestCase):
         logging.getLogger().setLevel(self.default_loglevel)
 
     # Doesn't test, just debug.logs all of the calculations for review
+    @patch('serial.Serial')
     def test_solar_event_times(self, mock_serial):
         logging.getLogger().setLevel(logging.DEBUG)
 

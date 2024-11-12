@@ -245,7 +245,7 @@ class PersistentData:
 
     def _clear_past_times(self) -> None:
         """Remove any sunrise or sunset times that are in the past."""
-        today = DATE_TODAY
+        today = DATE_TODAY()
         # Filter out times from previous days
         self._sunrise_times = [time for time in self._sunrise_times \
             if time.date() >= today]

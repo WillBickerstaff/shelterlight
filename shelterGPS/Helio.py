@@ -161,7 +161,7 @@ class SunTimes:
             bool: `True` if the current time is within today's or tomorrow's
             fixing window; `False` otherwise.
         """
-        dt_now = DATE_TODAY
+        dt_now = dt.datetime.now()
         return ((self._fix_window["start_today"] <= dt_now <= \
                                              self._fix_window["end_today"]) or
                 (self._fix_window["start_tomorrow"] <= dt_now <= \
@@ -352,8 +352,8 @@ class SunTimes:
         Returns:
             None
         """
-        today = DATE_TODAY
-        tomorrow = DATE_TOMORROW
+        today = DATE_TODAY()
+        tomorrow = DATE_TOMORROW()
 
         # Calculate today's solar times
         solar_times_today = SunTimes.calculate_solar_times(observer, today)
