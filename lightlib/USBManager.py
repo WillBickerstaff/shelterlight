@@ -1,16 +1,23 @@
 import os
+import sys
 import logging
 import datetime as dt
 import shutil
 from typing import Optional
-import RPi.GPIO as GPIO # type: ignore
+
+# Add paths for imports from the project directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+# Local application/library-specific imports
 from lightlib.config import ConfigLoader
-from smartlight import CANCEL_CONFIRM, warn_and_wait
-from common import datetime_to_iso, ConfigReloaded
+from lightlib.smartlight import CANCEL_CONFIRM, warn_and_wait
+from lightlib.common import datetime_to_iso, ConfigReloaded
 
 class USBFileManager:
     """Singleton for managing USB file operations, including backing up and
-    potentially overwriting onboard configuration with a validated USB config."""
+    potentially overwriting onboard configuration with a validated USB config
+    """
 
     _instance = None  # Singleton instance
 
@@ -25,7 +32,7 @@ class USBFileManager:
 
         Args:
             mount_point (Optional[str]): Path to the USB drive's mount point.
-                                         Defaults to config value if not provided.
+                                       Defaults to config value if not provided.
         """
         if not hasattr(self, "_initialized"):
             self.mount_point = mount_point or ConfigLoader().media_mount_point
