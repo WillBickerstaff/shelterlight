@@ -15,3 +15,9 @@ def strfdt(dt: dt.datetime) -> str:
     """Format a datetime object as dd-mmm-yyyy HH:MM:SS"""
     dt_str = "{} {}".format(strfdate(dt), strftime(dt))
     return dt_str
+
+def iso_to_datetime(iso_str: str) -> dt.datetime:
+        return dt.datetime.fromisoformat(iso_str)
+
+def datetime_to_iso(dt_obj: dt.datetime) -> str:
+    return dt_obj.isoformat()

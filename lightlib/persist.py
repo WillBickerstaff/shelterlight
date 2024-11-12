@@ -4,6 +4,7 @@ from typing import Union, Optional, List
 from threading import Lock
 import logging
 from lightlib.config import ConfigLoader
+from lightlib.common import iso_to_datetime, datetime_to_iso
 
 
 class DataStoreError(Exception):
@@ -98,27 +99,19 @@ class PersistentData:
         """Store the latest GPS data in the JSON file, overwriting existing
            data.
 
-        Args:
-            max_fix_time (int): Maximum time in seconds to obtain a GPS fix.
-            latitude (float): Current latitude.
-            longitude (float): Current longitude.
-            sunrise_times (List[dt.datetime]): List of sunrise times for the
-                next 7 days.
-            sunset_times (List[dt.datetime]): List of sunset times for the
-                next 7 days.
-
         Raises:
             DataStorageError: If storing data in the JSON file fails.
         """
         try:
-            # Convert datetime objects to ISO strings for JSON compatibility
             data = {
                 "latitude": self.current_latitude,
                 "longitude": self.current_longitude,
                 "altitude": self.current_altitude,
-                "sunrise_times": [t.isoformat() for t in self._sunrise_times],
-                "sunset_times": [t.isoformat() for t in self._sunset_times],
-                "last_updated": dt.datetime.now().isoformat()
+                "sunrise_times": [datetime_to_iso(t) for \
+                                                t in self._sunrise_times],
+                "sunset_times": [datetime_to_iso(t) for \
+                                                t in self._sunset_times],
+                "last_updated": datetime_to_iso(dt.datetime.now())
             }
             with open(ConfigLoader().persistent_data_json, 'w') as file:
                 json.dump(data, file)
@@ -152,8 +145,9 @@ class PersistentData:
     def current_longitude(self, lng: float) -> None:
         self._current_longitude = lng
 
-    def _add_date(self, dt_obj: str,
-                 is_sunrise: Optional[bool]=False) -> None:
+    def _add_date(self, dt_obj: dt.datetime, is_sunrise: bool = False) -> None:
+        # Remove any outdated datetimes before adding new ones
+        self._clear_past_times()
         if is_sunrise:
             self._sunrise_times.append(dt_obj)
         else:
@@ -165,45 +159,71 @@ class PersistentData:
     def add_sunset_time(self, datetime_instance: dt.date) -> None:
         self._add_date(dt_obj = datetime_instance,is_sunrise = False)
 
-    def _populate_times_from_local(self, iso_datetimes: tuple[str],
+    def _populate_times_from_local(self, iso_datetimes: List[str],
                                    is_sunrise: bool = True ) -> None:
         sr_ss_str = "sunrise" if is_sunrise else "sunset"
         logging.debug("JSON: Retrieved %s times: %s",
                       sr_ss_str, iso_datetimes)
         for srt in iso_datetimes:
-            self._add_date(dt_obj = dt.datetime.fromisoformat(srt),
+            self._add_date(dt_obj = iso_to_datetime(srt),
                             is_sunrise = is_sunrise)
         logging.debug("JSON: Converted %s times to date.datetimes: \n  %s",
                         sr_ss_str, self._sunrise_times)
+
+    def _clear_past_times(self) -> None:
+        """Remove any sunrise or sunset times that are in the past."""
+        today = dt.datetime.now().date()
+        # Filter out times from previous days
+        self._sunrise_times = [time for time in self._sunrise_times \
+            if time.date() >= today]
+        self._sunset_times = [time for time in self._sunset_times \
+            if time.date() >= today]
+        logging.debug("Past sunrise and sunset times cleared.")
 
     def _populate_locals_from_file(self):
         key = ""
         try:
             with open(ConfigLoader().persistent_data_json, 'r') as file:
                 data = json.load(file)
+
+                # Populate location and altitude values if not already set
                 if self._current_latitude is None:
-                    self._current_latitude = float(data.get("latitude"))
+                    key = "latitude"
+                    self._current_latitude = data.get(key)
+
                 if self._current_longitude is None:
-                    self._current_longitude = float(data.get("longitude"))
-                if self._current_longitude is None:
-                    self._current_longitude = float(data.get("altitude"))
-                if len(self._sunrise_times) == 0:
+                    key = "longitude"
+                    self._current_longitude = data.get(key)
+
+                if self._current_altitude is None:
+                    key = "altitude"
+                    self._current_altitude = data.get(key)
+
+                # Populate sunrise and sunset times if they are empty
+                if not self._sunrise_times:
+                    key = "sunrise_times"
                     self._populate_times_from_local(
-                        iso_datetimes = data.get("sunrise_times"),
-                        is_sunrise = True)
-                if len(self._sunset_times) == 0:
+                        iso_datetimes=data.get(key, []),
+                        is_sunrise=True
+                    )
+
+                if not self._sunset_times:
+                    key = "sunset_times"
                     self._populate_times_from_local(
-                        iso_datetimes = data.get("sunset_times"),
-                        is_sunrise = False)
-                file.close()
-        except (IOError) as e:
+                        iso_datetimes=data.get(key, []),
+                        is_sunrise=False
+                    )
+
+        except IOError as e:
             logging.error(
-                "JSON: Failed to read persistent data from file %s : %s ",
-                          ConfigLoader().persistent_data_json), e
-        except  (json.JSONDecodeError) as e:
-            logging.WARNING(
-                "JSON: Unable to read key [%s] or key does not exist in %s : e",
-                key, e)
+                "Failed to read persistent data from file %s : %s",
+                ConfigLoader().persistent_data_json, e
+            )
+        except json.JSONDecodeError as e:
+            logging.warning(
+                "Unable to decode key [%s] in %s : %s",
+                key, ConfigLoader().persistent_data_json, e
+            )
 
     def _fetch_data(self, key: str) -> Optional[Union[int, float]]:
         """Fetch a single data item from the JSON file.
@@ -222,7 +242,6 @@ class PersistentData:
             with open(ConfigLoader().persistent_data_json, 'r') as file:
                 data = json.load(file)
                 return data.get(key)
-            file.close()
         except (IOError, json.JSONDecodeError) as e:
             logging.error("Failed to fetch %s from JSON: %s", key, e)
             raise DataRetrievalError(
@@ -247,7 +266,7 @@ class PersistentData:
             with open(ConfigLoader().JSON_persistent_data, 'r') as file:
                 data = json.load(file)
                 if key in data:
-                    return [dt.datetime.fromisoformat(d) for d in data[key]]
+                    return [iso_to_datetime(d) for d in data[key]]
             return None
         except (IOError, json.JSONDecodeError, ValueError) as e:
             logging.error(
