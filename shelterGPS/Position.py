@@ -5,7 +5,7 @@ import serial
 from threading import Lock
 from enum import Enum
 from typing import Union, Optional
-import RPi.GPIO as GPIO # type: ignore
+import RPi.GPIO as GPIO
 from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE, log_caller

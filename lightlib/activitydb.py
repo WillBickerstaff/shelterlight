@@ -6,7 +6,7 @@ from enum import Enum
 
 import psycopg2
 from psycopg2 import sql
-import RPi.GPIO as GPIO  # type: ignore
+import RPi.GPIO as GPIO
 
 from lightlib.db import DB, ConfigLoader
 

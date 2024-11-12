@@ -3,7 +3,7 @@ import logging
 import socket
 import threading
 import time
-import RPi.GPIO as GPIO  # type: ignore
+import RPi.GPIO as GPIO
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
 from lightlib.smartlight import init_log
