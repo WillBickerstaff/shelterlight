@@ -5,6 +5,9 @@ EPOCH_DATETIME = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)
 DATE_TODAY = lambda: dt.datetime.now().date()
 DATE_TOMORROW = lambda: DATE_TODAY() + dt.timedelta(days=1)
 
+class ConfigReloaded(Exception):
+    pass
+
 def strftime(dt: dt.datetime) -> str:
     """Format a datetime object's time component as HH:MM:SS"""
     return dt.strftime("%H:%M:%S")

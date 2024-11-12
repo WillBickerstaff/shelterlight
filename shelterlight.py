@@ -1,14 +1,15 @@
 import argparse
 import logging
+import socket
+import threading
 import time
 import RPi.GPIO as GPIO  # type: ignore
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
+from lightlib.common import ConfigReloaded
 
-class ConfigReloaded(Exception):
-    pass
 
 def cleanup_resources(gps: SunTimes) -> None:
     """Perform resource cleanup for GPS, GPIO, and logging."""
@@ -16,6 +17,23 @@ def cleanup_resources(gps: SunTimes) -> None:
     gps.cleanup()  # Stops GPS fix process thread, if any
     GPIO.cleanup()  # Reset all GPIO pins
     logging.info("Resources cleaned up successfully.")
+
+def usb_listener(usb_manager, gps, host="localhost", port=9999):
+    """Listen for USB insert events via socket and trigger config reload."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+        server_socket.bind((host, port))
+        server_socket.listen(1)
+        logging.info(f"Listening for USB insert events on {host}:{port}...")
+
+        while True:
+            conn, _ = server_socket.accept()
+            with conn:
+                logging.info("USB insertion detected via socket signal")
+                try:
+                    usb_manager.usb_check()
+                except ConfigReloaded:
+                    cleanup_resources(gps)
+                    raise  # Propagate to restart main loop in main program
 
 def main_loop():
     while True:
@@ -47,15 +65,13 @@ def main():
     config_loader = ConfigLoader()  # Initialize the singleton config loader
     gps = SunTimes()  # Initialize GPS/SunTimes instance
 
+    # Start USB listener in a separate thread to handle USB insert signals
+    usb_thread = threading.Thread(target=usb_listener, args=(usb_manager, gps))
+    usb_thread.daemon = True
+    usb_thread.start()
+
     try:
         while True:
-            # Check for USB config and trigger reload if detected
-            if usb_manager.usb_check():
-                logging.info("USB config copied. Preparing to restart main.")
-                cleanup_resources(gps)
-                raise ConfigReloaded  # Raise custom exception for loop restart
-
-            # Start GPS fix if within the fixing window
             if not gps.fixed_today and gps.in_fix_window:
                 gps.start_gps_fix_process()
 
