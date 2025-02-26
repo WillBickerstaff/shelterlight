@@ -1,4 +1,5 @@
 import logging
+import json
 import datetime as dt
 import threading
 from typing import List, Dict, Union
@@ -113,7 +114,7 @@ class Activity:
         self._pin_status[pin]["status"] = PinStatus.OK  # Set status to OK
         self._pin_status[pin]["state"] = PinStatus.HIGH  # Set state to HIGH
         logging.info(
-            f"Activity started for pin {pin} at {self._start_times[pin]}"
+            f"Activity started on pin {pin} at {self._start_times[pin]}"
         )
 
     def _end_activity_event(self, pin: int) -> None:
@@ -129,15 +130,24 @@ class Activity:
             psycopg2.DatabaseError: If there is an error executing the database
                                     query.
         """
-        end_time = dt.datetime.now(dt.timezone.utc)  # Current timestamp
+        self._pin_status[pin]["status"] = PinStatus.OK  # Reset status to OK
+        self._pin_status[pin]["state"] = PinStatus.LOW  # Set state to LOW
         start_time = self._start_times.pop(pin, None)  # Retrieve start time
         if start_time is None:
             logging.warning(f"No start time found for pin {pin}, skipping log.")
             return
-        duration = (end_time - start_time).total_seconds()  # Calculate duration
-        day_of_week = end_time.strftime('%A')
-        month = end_time.month
-        year = end_time.year
+        try:
+            duration = (dt.datetime.now(dt.timezone.utc) -
+                        start_time).total_seconds()# Calc duration
+            DB.valid_smallint(duration)
+        except ValueError as e:
+            logging.error(f"Will not log an activity duration of {duration}s, "
+                          "duration must be <= 32767s (9h 6m)")
+            return
+
+        day_of_week = int(start_time.strftime('%w'))
+        month = start_time.month
+        year = start_time.year
 
         insert_query = sql.SQL(
             """
@@ -154,11 +164,9 @@ class Activity:
                 params=(start_time, day_of_week, month, year, pin, duration)
             )
             logging.info(
-                f"Activity event logged for pin {pin} at {end_time} with "
-                f"duration {duration} seconds."
+                f"Activity event logged for pin {pin} beginning at {start_time}"
+                f" with a duration of {duration} seconds."
             )
-            self._pin_status[pin]["status"] = PinStatus.OK  # Reset status to OK
-            self._pin_status[pin]["state"] = PinStatus.LOW  # Set state to LOW
         except psycopg2.DatabaseError as e:
             logging.error("Failed to log activity event for pin %s: %s", pin, e)
 
@@ -176,7 +184,7 @@ class Activity:
                     # Set FAULT
                     self._pin_status[pin]["status"] = PinStatus.FAULT
                     logging.warning(
-                        f"Pin {pin} is in FAULT status, high for {duration} "
+                        f"Pin {pin} set to FAULT status, high for {duration} "
                         "seconds."
                     )
                 else:

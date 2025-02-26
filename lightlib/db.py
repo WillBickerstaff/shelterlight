@@ -95,16 +95,20 @@ class DB:
 
         Executes SQL commands to create the `activity_log` table and an index on
         the `timestamp` field, if they do not already exist.
+        
+        All integer fields are SMALLINT to reduce the physical storage 
+        requirement. SMALLINT holds value from -32768 to +32767.
+        +32767 is 9 hours and 6 minutes
         """
         create_table_query = """
             CREATE TABLE IF NOT EXISTS activity_log (
                 id SERIAL PRIMARY KEY,
                 timestamp TIMESTAMPTZ NOT NULL,
-                day_of_week VARCHAR(10) NOT NULL,
-                month INTEGER NOT NULL,
-                year INTEGER NOT NULL,
-                duration INTEGER NOT NULL,
-                activity_pin INTEGER NOT NULL
+                day_of_week SMALLINT NOT NULL,
+                month SMALLINT NOT NULL,
+                year SMALLINT NOT NULL,
+                duration SMALLINT NOT NULL,
+                activity_pin SMALLINT NOT NULL
             );
         """
         create_index_query = """
@@ -167,3 +171,9 @@ class DB:
         instance.
         """
         self.close_connection()
+
+    def valid_smallint(value):
+        if -32768 <= value <= 32767:
+            return True
+        else:
+            raise ValueError
