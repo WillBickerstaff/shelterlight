@@ -1,3 +1,14 @@
+"""shelterlight.
+
+Copyright (c) 2025 Will Bickerstaff
+Licensed under the MIT License.
+See LICENSE file in the root directory of this project.
+
+Description: A self learning autonomous lighting system.
+Author: Will Bickerstaff
+Version: 0.1
+"""
+
 import argparse
 import logging
 import socket
@@ -18,6 +29,7 @@ def cleanup_resources(gps: SunTimes) -> None:
     GPIO.cleanup()  # Reset all GPIO pins
     logging.info("Resources cleaned up successfully.")
 
+
 def usb_listener(usb_manager, gps, host="localhost", port=9999):
     """Listen for USB insert events via socket and trigger config reload."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
@@ -35,7 +47,9 @@ def usb_listener(usb_manager, gps, host="localhost", port=9999):
                     cleanup_resources(gps)
                     raise  # Propagate to restart main loop in main program
 
+
 def main_loop():
+    """Continual Main loop entry point."""
     while True:
         try:
             main()
@@ -49,7 +63,9 @@ def main_loop():
             GPIO.cleanup()
             logging.info("Cleanup complete. Exiting.")
 
+
 def main():
+    """Program entry point."""
     # Argument parser setup
     parser = argparse.ArgumentParser(description="Lighting Control System")
     parser.add_argument('--log_level', type=str,
@@ -82,6 +98,7 @@ def main():
         pass  # Handle by restarting the loop in `main_loop()`
     finally:
         cleanup_resources(gps)
+
 
 if __name__ == "__main__":
     main_loop()

@@ -1,3 +1,14 @@
+"""lightlib.smartlight.
+
+Copyright (c) 2025 Will Bickerstaff
+Licensed under the MIT License.
+See LICENSE file in the root directory of this project.
+
+Description: Provides core components for setting up hardware and logging.
+Author: Will Bickerstaff
+Version: 0.1
+"""
+
 import logging
 import time
 import sys
@@ -7,31 +18,36 @@ from typing import Optional
 from RPi import GPIO
 from lightlib.config import ConfigLoader
 
+
 class GPIO_PIN_STATE(Enum):
-        ON = True
-        OFF = False
-        HIGH = True
-        LOW = False
+    """Enum, boolean status for IO pins."""
+
+    ON = True
+    OFF = False
+    HIGH = True
+    LOW = False
+
 
 class CANCEL_CONFIRM(Enum):
+    """Enum, boolean status for user input."""
+
     CANCEL = False
     CONFIRM = True
 
-import inspect
-import logging
 
 def get_caller_info():
-    """Get the names of the two previous calling functions and the arguments
-    of the most recent call, excluding `log_caller` if present.
+    """Get names of the 2 previous functions and the args for the most recent.
 
     This function uses the inspect module to analyze the call stack and
     extracts the names of the two functions preceding the current call.
     If `log_caller` is found in the stack, it will be excluded, and the
     next two functions will be considered. It formats these names as a
     '>>' separated string to indicate the call chain and retrieves the
-    local variables (arguments) of the most recent caller.
+    local variables (arguments) of the most recent caller. Excludes log_caller
+    if present.
 
-    Returns:
+    Returns
+    -------
         tuple: A tuple containing:
             - str: A '>>' string representing the names of the two
                    previous calling functions, excluding `log_caller`.
@@ -68,14 +84,18 @@ def get_caller_info():
 
     return caller_function, caller_locals
 
+
 def log_caller(loglevel: int = logging.ERROR, module: str = None) -> None:
     """Log information about the calling functions and their arguments.
 
-    Args:
-        loglevel (int): The logging level, such as logging.ERROR or logging.INFO.
-        module (str, optional): Additional module information to include in the log.
+    Args
+    ----
+        loglevel (int): The logging level, such as logging.ERROR or logging.
+        INFO. module (str, optional): Additional module information to
+        include in the log.
 
-    Returns:
+    Returns
+    -------
         None
     """
     # Get the stack message from get_caller_info
@@ -87,23 +107,25 @@ def log_caller(loglevel: int = logging.ERROR, module: str = None) -> None:
     logging.log(loglevel, f"{module}Called by:")
     logging.log(loglevel, f"{module}  {stack_message} with args:")
     for key, value in caller_args.items():
-        logging.log(loglevel,f"{module}    {key}: {value}")
+        logging.log(loglevel, f"{module}    {key}: {value}")
 
 
 def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
-                    wait_after: Optional[float] = None) -> None:
+                  wait_after: Optional[float] = None) -> None:
     """Set the GPIO power state by enabling or disabling the power pin.
 
-    Args:
+    Args
+    ----
         pin_number (int): The GPIO pin number to control.
         state (GPIO_PIN_STATE): Desired power state; GPIO_PIN_STATE.ON to
-                                power on, GPIO_PIN_STATE.OFF to power off.
+        power on, GPIO_PIN_STATE.OFF to power off.
         wait_after (Optional[float]): Optional delay after changing the
-                                        power state in seconds.
+        power state in seconds.
 
-    Raises:
+    Raises
+    ------
         RuntimeError: If GPIO interaction fails, possibly due to permission
-                        issues, incorrect setup, or conflicts.
+        issues, incorrect setup, or conflicts.
     """
     # Default the wait time to 0 if not provided
     wait_after = wait_after or 0
@@ -115,9 +137,9 @@ def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
         if GPIO.input(pin_number) != state.value:
             GPIO.output(pin_number, state.value)
             action = "powered ON" if state == GPIO_PIN_STATE.ON \
-                                    else "powered OFF"
+                else "powered OFF"
             logging.info("Pin %s %s, waiting %s seconds", pin_number,
-                            action, wait_after)
+                         action, wait_after)
             time.sleep(wait_after)
 
     except RuntimeError as e:
@@ -129,9 +151,9 @@ def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
             "Failed to %s pin %s due to GPIO error." % (action, pin_number)
         ) from e
 
+
 def init_log(log_level: Optional[str] = None):
-    """Initialize the logging configuration with specified or default
-        settings.
+    """Initialize the log config with specified or default settings.
 
     This method configures the logging system based on the provided log
     level. If `log_level` is not provided or is invalid, it falls back to
@@ -142,18 +164,21 @@ def init_log(log_level: Optional[str] = None):
     configuration. The log format includes the timestamp, log level name,
     and the log message.
 
-    Args:
+    Args
+    ----
         log_level (Optional[str]): Desired logging level as a string (e.g.,
                                 'DEBUG', 'INFO'). If not provided or
                                 invalid, it defaults to the configured
                                 level or 'INFO'.
 
-    Example:
+    Example
+    -------
         ```python
         SmartLightingControl.init_log("DEBUG")
         ```
 
-    Notes:
+    Notes
+    -----
         - This method does not raise an exception if `log_level` is invalid.
         Instead, it logs a warning message and falls back to 'INFO'.
         - This method only sets up logging if no existing logging
@@ -181,15 +206,17 @@ def init_log(log_level: Optional[str] = None):
         )
 
         logging.info("Logging initialized with level %s.",
-                        log_level.upper())
+                     log_level.upper())
+
 
 def warn_and_wait(message: str, wait_time: int = 5,
                   default_action: CANCEL_CONFIRM = CANCEL_CONFIRM.CONFIRM,
                   cancel_pin: Optional[int] = None,
                   confirm_pin: Optional[int] = None) -> CANCEL_CONFIRM:
-    """Warn the user with a countdown and allow for cancellation or confirmation.
+    """Warn with a countdown and allow for cancellation or confirmation.
 
-    Args:
+    Args
+    ----
         message (str): The warning message displayed to the user.
         wait_time (int): Time in seconds for the countdown.
         cancel_or_confirm (CANCEL_CONFIRM): The default return if no input
@@ -197,7 +224,8 @@ def warn_and_wait(message: str, wait_time: int = 5,
         cancel_pin (Optional[int]): GPIO pin for cancel input.
         confirm_pin (Optional[int]): GPIO pin for confirm input.
 
-    Returns:
+    Returns
+    -------
         CANCEL_CONFIRM: The result based on user input or the default
                         (`cancel_or_confirm`).
     """
@@ -233,5 +261,6 @@ def warn_and_wait(message: str, wait_time: int = 5,
 
     # Return the default based on `cancel_or_confirm` if no user input
     print("\nNo input received, proceeding.")
-    logging.info(f"{message} - proceeding with default: {default_action.name}.")
+    logging.info(
+        f"{message} - proceeding with default: {default_action.name}.")
     return default_action

@@ -1,3 +1,18 @@
+"""lightlib.USBManager.
+
+Copyright (c) 2025 Will Bickerstaff
+Licensed under the MIT License.
+See LICENSE file in the root directory of this project.
+
+Description: Manages actions for USB drive insertion & copying of config files
+Author: Will Bickerstaff
+Version: 0.1
+"""
+
+from lightlib.config import ConfigLoader
+from lightlib.smartlight import CANCEL_CONFIRM, warn_and_wait
+from lightlib.common import datetime_to_iso, ConfigReloaded
+
 import os
 import sys
 import logging
@@ -7,16 +22,15 @@ from typing import Optional
 
 # Add paths for imports from the project directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '..', '..')))
 
-# Local application/library-specific imports
-from lightlib.config import ConfigLoader
-from lightlib.smartlight import CANCEL_CONFIRM, warn_and_wait
-from lightlib.common import datetime_to_iso, ConfigReloaded
 
 class USBFileManager:
-    """Singleton for managing USB file operations, including backing up and
-    potentially overwriting onboard configuration with a validated USB config
+    """Singleton for managing USB file operations.
+
+    including backing up and potentially overwriting onboard configuration
+    with a validated USB config
     """
 
     _instance = None  # Singleton instance
@@ -30,9 +44,10 @@ class USBFileManager:
     def __init__(self, mount_point: Optional[str] = None):
         """Initialize USBFileManager with a mount point for USB drives.
 
-        Args:
+        Args
+        ----
             mount_point (Optional[str]): Path to the USB drive's mount point.
-                                       Defaults to config value if not provided.
+            Defaults to config value if not provided.
         """
         if not hasattr(self, "_initialized"):
             self.mount_point = mount_point or ConfigLoader().media_mount_point
@@ -54,7 +69,8 @@ class USBFileManager:
     def is_usb_inserted(self) -> bool:
         """Check if a USB drive is inserted at the mount point.
 
-        Returns:
+        Returns
+        -------
             bool: True if the USB drive is inserted, False otherwise.
         """
         if os.path.ismount(self.mount_point) and os.listdir(self.mount_point):
@@ -67,7 +83,8 @@ class USBFileManager:
     def backup_files_to_usb(self) -> None:
         """Back up the onboard config and log files to the USB drive.
 
-        Raises:
+        Raises
+        ------
             FileNotFoundError: If the USB drive is not mounted or accessible.
         """
         if self._backed_up:
@@ -78,7 +95,8 @@ class USBFileManager:
                 "USB drive not inserted or mount point inaccessible.")
 
         timestamp = datetime_to_iso(dt.datetime.now())
-        usb_backup_dir = os.path.join(self.mount_point, "smartlight", "configs")
+        usb_backup_dir = os.path.join(
+            self.mount_point, "smartlight", "configs")
         usb_log_dir = os.path.join(self.mount_point, "smartlight", "logs")
         os.makedirs(usb_backup_dir, exist_ok=True)
         os.makedirs(usb_log_dir, exist_ok=True)
@@ -98,20 +116,21 @@ class USBFileManager:
         self._backed_up = True  # Mark as backed up
 
     def replace_config_with_usb(
-        self, usb_config_filename: str = "smartlight_config.ini") -> bool:
-        """Replace the onboard config with a validated USB config if not
-           canceled.
+            self, usb_config_filename: str = "smartlight_config.ini") -> bool:
+        """Replace onboard config with a validated USB config if not canceled.
 
         This method checks for the specified configuration file on the USB
         drive, validates it, and if confirmed by the user, replaces the onboard
         configuration file with the one from the USB.
 
-        Args:
+        Args
+        ----
             usb_config_filename (str): Name of the config file on USB to
                                        validate and use.
                                        (default is "smartlight_config.ini").
 
-        Returns:
+        Returns
+        -------
             bool: True if the USB config file is successfully validated and
                   copied. False otherwise.
         """
@@ -135,7 +154,8 @@ class USBFileManager:
 
         # Prompt user for confirmation to overwrite onboard config
         user_choice = warn_and_wait(
-            message="About to overwrite onboard config. Press cancel to abort.",
+            message="About to overwrite onboard config. "
+            "Press cancel to abort.",
             wait_time=10,
             default_action=CANCEL_CONFIRM.CONFIRM)
 
@@ -143,7 +163,8 @@ class USBFileManager:
             # User confirmed, copy the validated USB config to replace onboard
             shutil.copy2(usb_config_path, "config.ini")
             logging.info(
-                "Onboard config successfully replaced with USB config from %s.",
+                "Onboard config successfully replaced with "
+                "USB config from %s.",
                 usb_config_path)
             self._config_copied = True  # Mark as copied to avoid re-copying
             return True

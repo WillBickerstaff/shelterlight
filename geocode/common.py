@@ -1,4 +1,7 @@
+"""Common geocode definitions."""
+
+
 class LocationInvalidError(Exception):
-    """Exception raised when the location in the config file is not valid
-    or not found in the goecode database"""
+    """Raised if location in config is not valid or not found in goecode db."""
+
     pass

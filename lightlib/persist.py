@@ -1,3 +1,19 @@
+"""lightlib.persist.
+
+Copyright (c) 2025 Will Bickerstaff
+Licensed under the MIT License.
+See LICENSE file in the root directory of this project.
+
+Description: Persistent data manager.
+
+Manages persistent data across power cycles. Allowing for location,
+and sunrise, sunset times to be known before a GPS fix is obtained should a
+power failure occur.
+
+Author: Will Bickerstaff
+Version: 0.1
+"""
+
 import json
 import datetime as dt
 from typing import Union, Optional, List
@@ -10,29 +26,33 @@ from lightlib.common import iso_to_datetime, datetime_to_iso, DATE_TODAY, \
 
 class DataStoreError(Exception):
     """Base class for exceptions in the GPSDataStore."""
+
     pass
 
 
 class DataStorageError(DataStoreError):
     """Raised when storing data in the JSON file fails."""
+
     pass
 
 
 class DataRetrievalError(DataStoreError):
     """Raised when retrieving data from the JSON file fails."""
+
     pass
 
 
 class PersistentData:
-    """Class for storing GPS and time data in JSON format to persist across
-       power cycles.
+    """Store GPS and time data in JSON format to persist across power cycles.
 
     Manages the storage and retrieval of GPS data, including latitude,
     longitude, maximum time to obtain a fix, and sunrise and sunset times for
     today and the next seven days.
     """
+
     _instance = None
     _lock = Lock()  # Thread-safe lock for instance creation
+
     def __new__(cls, *args, **kwargs):
         """Ensure only one instance of PersistentData is created.
 
@@ -40,7 +60,8 @@ class PersistentData:
         class, ensuring that only one instance of the class can exist at any
         time.
 
-        Returns:
+        Returns
+        -------
             GPS: A single instance of the `PersistentData` class.
         """
         if not cls._instance:
@@ -59,10 +80,12 @@ class PersistentData:
         data file does exist then the class properties will give direct access
         to all available values, returning `None` if they are not set.
 
-        Args:
+        Args
+        ----
             file_path (str): Path to the JSON file for data storage.
 
-        Raises:
+        Raises
+        ------
             DataStorageError: If the JSON file cannot be initialized.
         """
         if self.__initialized:
@@ -78,12 +101,12 @@ class PersistentData:
         self.__initialized = True
 
     def _initialize_file(self) -> None:
-        """Initialize the JSON file if it doesn't exist, creating an empty
-           data structure."""
+        """Init JSON file if doesn't exist, create an empty data structure."""
         try:
             # Create a basic structure if the JSON file does not exist
-            logging.debug("JSON: Attempting to initialize data storage file %s",
-                          ConfigLoader().persistent_data_json)
+            logging.debug(
+                "JSON: Attempting to initialize data storage file %s",
+                ConfigLoader().persistent_data_json)
             with open(ConfigLoader().persistent_data_json, 'a+') as file:
                 file.seek(0)
                 if file.read().strip() == "":
@@ -103,10 +126,10 @@ class PersistentData:
             raise DataStorageError("Failed to initialize JSON file.") from e
 
     def store_data(self) -> None:
-        """Store the latest GPS data in the JSON file, overwriting existing
-           data.
+        """Store the latest GPS data in the JSON file, overwrite existing.
 
-        Raises:
+        Raises
+        ------
             DataStorageError: If storing data in the JSON file fails.
         """
         try:
@@ -114,10 +137,10 @@ class PersistentData:
                 "latitude": self.current_latitude,
                 "longitude": self.current_longitude,
                 "altitude": self.current_altitude,
-                "sunrise_times": [datetime_to_iso(t) for \
-                                                t in self._sunrise_times],
-                "sunset_times": [datetime_to_iso(t) for \
-                                                t in self._sunset_times],
+                "sunrise_times": [datetime_to_iso(t) for
+                                  t in self._sunrise_times],
+                "sunset_times": [datetime_to_iso(t) for
+                                 t in self._sunset_times],
                 "last_updated": datetime_to_iso(dt.datetime.now())
             }
             with open(ConfigLoader().persistent_data_json, 'w') as file:
@@ -129,6 +152,7 @@ class PersistentData:
 
     @property
     def current_altitude(self) -> float:
+        """GPS altitude from persistent data."""
         return self._current_altitude
 
     @current_altitude.setter
@@ -137,15 +161,16 @@ class PersistentData:
 
     @property
     def current_latitude(self) -> float:
+        """GPS latitude from persistent data."""
         return self._current_latitude
 
     @current_latitude.setter
     def current_latitude(self, lat: float) -> None:
         self._current_latitude = lat
 
-
     @property
     def current_longitude(self) -> float:
+        """GPS Longitude from persistent data."""
         return self._current_longitude
 
     @current_longitude.setter
@@ -154,63 +179,61 @@ class PersistentData:
 
     @property
     def sunrise_times(self) -> List[dt.datetime]:
+        """Datetime object List of sunrise times from persistent data."""
         return self._sunrise_times
 
     @property
     def sunset_times(self) -> List[dt.datetime]:
+        """Datetime object list of sunset times from persistent data."""
         return self._sunrise_times
 
     @property
     def sunrise_today(self) -> Optional[dt.datetime]:
-        """Retrieve today's sunrise time from persistent data or handle
-        missing."""
+        """Today's sunrise time from persistent data."""
         try:
             return PersistentData._date_in_dates(check_date=DATE_TODAY(),
-                                                dates_list=self.sunrise_times)
+                                                 dates_list=self.sunrise_times)
         except DataRetrievalError:
             logging.error(f"{datetime_to_iso(DATE_TODAY())} not found in "
-                        "persistent data sunrise times")
+                          "persistent data sunrise times")
             return None
 
     @property
     def sunset_today(self) -> Optional[dt.datetime]:
-        """Retrieve today's sunset time from persistent data or handle
-        missing."""
+        """Today's sunset time from persistent data."""
         try:
             return PersistentData._date_in_dates(check_date=DATE_TODAY(),
-                                                dates_list=self.sunset_times)
+                                                 dates_list=self.sunset_times)
         except DataRetrievalError:
             logging.error(f"{datetime_to_iso(DATE_TODAY())} not found in "
-                        "persistent data sunset times")
+                          "persistent data sunset times")
             return None
 
     @property
     def sunrise_tomorrow(self) -> Optional[dt.datetime]:
-        """Retrieve tomorrows sunrise time from persistent data or handle
-        missing."""
+        """Tomorrows sunrise time from persistent."""
         try:
             return PersistentData._date_in_dates(check_date=DATE_TOMORROW(),
-                                                dates_list=self.sunrise_times)
+                                                 dates_list=self.sunrise_times)
         except DataRetrievalError:
             logging.error(f"{datetime_to_iso(DATE_TOMORROW())} not found in "
-                        "persistent data sunrise times")
+                          "persistent data sunrise times")
             return None
 
     @property
     def sunset_tomorrow(self) -> Optional[dt.datetime]:
-        """Retrieve tomorrows sunset time from persistent data or handle
-        missing."""
+        """Tomorrows sunset time from persistent data."""
         try:
             return PersistentData._date_in_dates(check_date=DATE_TOMORROW(),
-                                                dates_list=self.sunset_times)
+                                                 dates_list=self.sunset_times)
         except DataRetrievalError:
             logging.error(f"{datetime_to_iso(DATE_TOMORROW())} not found in "
-                        "persistent data sunset times")
+                          "persistent data sunset times")
             return None
 
     @staticmethod
     def _date_in_dates(check_date: dt.date,
-                    dates_list: List[dt.datetime]) -> dt.datetime:
+                       dates_list: List[dt.datetime]) -> dt.datetime:
         """Search for a datetime with a matching date in dates_list."""
         for d in dates_list:
             if d.date() == check_date:
@@ -227,30 +250,32 @@ class PersistentData:
             self._sunset_times.append(dt_obj)
 
     def add_sunrise_time(self, datetime_instance: dt.datetime) -> None:
-        self._add_date(dt_obj = datetime_instance, is_sunrise = True)
+        """Add a sunrise time to persistent data."""
+        self._add_date(dt_obj=datetime_instance, is_sunrise=True)
 
     def add_sunset_time(self, datetime_instance: dt.date) -> None:
-        self._add_date(dt_obj = datetime_instance,is_sunrise = False)
+        """Add a sunset time to persistent data."""
+        self._add_date(dt_obj=datetime_instance, is_sunrise=False)
 
     def _populate_times_from_local(self, iso_datetimes: List[str],
-                                   is_sunrise: bool = True ) -> None:
+                                   is_sunrise: bool = True) -> None:
         sr_ss_str = "sunrise" if is_sunrise else "sunset"
         logging.debug("JSON: Retrieved %s times: %s",
                       sr_ss_str, iso_datetimes)
         for srt in iso_datetimes:
-            self._add_date(dt_obj = iso_to_datetime(srt),
-                            is_sunrise = is_sunrise)
+            self._add_date(dt_obj=iso_to_datetime(srt),
+                           is_sunrise=is_sunrise)
         logging.debug("JSON: Converted %s times to date.datetimes: \n  %s",
-                        sr_ss_str, self._sunrise_times)
+                      sr_ss_str, self._sunrise_times)
 
     def _clear_past_times(self) -> None:
         """Remove any sunrise or sunset times that are in the past."""
         today = DATE_TODAY()
         # Filter out times from previous days
-        self._sunrise_times = [time for time in self._sunrise_times \
-            if time.date() >= today]
-        self._sunset_times = [time for time in self._sunset_times \
-            if time.date() >= today]
+        self._sunrise_times = [time for time in self._sunrise_times
+                               if time.date() >= today]
+        self._sunset_times = [time for time in self._sunset_times
+                              if time.date() >= today]
         logging.debug("Past sunrise and sunset times cleared.")
 
     def _populate_locals_from_file(self):
@@ -301,13 +326,16 @@ class PersistentData:
     def _fetch_data(self, key: str) -> Optional[Union[int, float]]:
         """Fetch a single data item from the JSON file.
 
-        Args:
+        Args
+        ----
             key (str): Key name to retrieve data for.
 
-        Returns:
-            Optional[Union[int, float]]: Value of the key, or None if not found.
+        Returns
+        -------
+            Optional[Union[int, float]]: Value of key, or None if not found.
 
-        Raises:
+        Raises
+        ------
             DataRetrievalError: If reading the JSON file or retrieving data
                                 fails.
         """
@@ -323,15 +351,18 @@ class PersistentData:
     def _fetch_datetime_list(self, key: str) -> Optional[List[dt.datetime]]:
         """Fetch a list of datetime values from the JSON file.
 
-        Args:
+        Args
+        ----
             key (str): Key name containing a list of ISO-format datetime
                        strings.
 
-        Returns:
+        Returns
+        -------
             Optional[List[dt.datetime]]: List of datetime objects, or None if
             parsing fails.
 
-        Raises:
+        Raises
+        ------
             DataRetrievalError: If reading the JSON file or parsing datetime
             values fails.
         """

@@ -1,16 +1,26 @@
+"""lightlib.db.
+
+Copyright (c) 2025 Will Bickerstaff
+Licensed under the MIT License.
+See LICENSE file in the root directory of this project.
+
+Description: Management and connection to the database
+Author: Will Bickerstaff
+Version: 0.1
+"""
+
 import logging
 import psycopg2
-from psycopg2 import sql
 from lightlib.config import ConfigLoader
 import time
 from typing import Optional, Tuple, List
 
-class DB:
-    """
-    DB is a class responsible for managing PostgreSQL database connections,
-    handling queries, and setting up database tables and indexes.
 
-    Attributes:
+class DB:
+    """Manage PostgreSQL database connections, set up db tables and indexes.
+
+    Attributes
+    ----------
         _db_host (str): Database host address.
         _db_port (int): Port number for database connection.
         _db_database (str): Database name.
@@ -25,7 +35,8 @@ class DB:
         """
         Initialize the DB instance with database configuration.
 
-        Args:
+        Args
+        ----
             config_section (str): The configuration section name for database
             settings.
         """
@@ -52,7 +63,8 @@ class DB:
         """
         Connection property to access the active database connection.
 
-        Returns:
+        Returns
+        -------
             psycopg2.extensions.connection: The PostgreSQL connection object.
         """
         return self._conn
@@ -61,10 +73,12 @@ class DB:
         """
         Establish a connection to the PostgreSQL database with retry logic.
 
-        Returns:
+        Returns
+        -------
             psycopg2.extensions.connection: Database connection object.
 
-        Raises:
+        Raises
+        ------
             psycopg2.DatabaseError: If connection fails after all retry
                 attempts.
         """
@@ -80,7 +94,8 @@ class DB:
                 logging.info("Connected to PostgreSQL database successfully.")
                 return connection
             except psycopg2.DatabaseError as e:
-                logging.error("Failed to connect to PostgreSQL database: %s", e)
+                logging.error(
+                    "Failed to connect to PostgreSQL database: %s", e)
                 if attempt < self._db_retry - 1:
                     time.sleep(self._db_retry_delay)
                     logging.info(
@@ -89,14 +104,12 @@ class DB:
                     raise
 
     def _setup_database(self) -> None:
-        """
-        Initialize the PostgreSQL database table and indexes for activity
-        logging.
+        """Initialize database table and indexes for activity logging.
 
-        Executes SQL commands to create the `activity_log` table and an index on
-        the `timestamp` field, if they do not already exist.
-        
-        All integer fields are SMALLINT to reduce the physical storage 
+        Executes SQL commands to create the `activity_log` table and an index
+        on the `timestamp` field, if they do not already exist.
+
+        All integer fields are SMALLINT to reduce the physical storage
         requirement. SMALLINT holds value from -32768 to +32767.
         +32767 is 9 hours and 6 minutes
         """
@@ -135,18 +148,20 @@ class DB:
     def query(self, query: str, params: Optional[Tuple] = None,
               fetch: bool = False) -> Optional[List[Tuple]]:
         """
-        Execute a SQL query with optional parameters, optionally fetching
-        results.
+        Execute SQL query with optional parameters, optionally fetch results.
 
-        Args:
+        Args
+        ----
             query (str): The SQL query to execute.
             params (tuple, optional): Parameters to safely pass into the query.
             fetch (bool, optional): Whether to fetch and return query results.
 
-        Returns:
+        Returns
+        -------
             list: Query results if fetch is True; otherwise, None.
 
-        Raises:
+        Raises
+        ------
             psycopg2.DatabaseError: If there is an error executing the query.
         """
         try:
@@ -166,13 +181,11 @@ class DB:
             raise
 
     def __del__(self):
-        """
-        Destructor to ensure connection is closed upon deletion of the DB
-        instance.
-        """
+        """Destructor to ensure connection is closed on deletion of the DB."""
         self.close_connection()
 
     def valid_smallint(value):
+        """Check a value can fit within smallint."""
         if -32768 <= value <= 32767:
             return True
         else:

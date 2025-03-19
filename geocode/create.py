@@ -1,12 +1,19 @@
-#------------------------------------------------------------------------------#
-# This script is used to convert the data in the GeoNames free Gazetteer Data  #
-# sets into an sqlite database.                                                #
-#                                                                              #
-# Data Used is the GeoNames Gazetteer cities5000.txt data dump                 #
-# Data set is freely available at https://www.geonames.org/ and licensed under #
-# a Creative Commons Attribution 4.0 License                                   #
-# (https://creativecommons.org/licenses/by/4.0/))                              #
-#------------------------------------------------------------------------------#
+"""geocode.create.
+
+Copyright (c) 2025 Will Bickerstaff
+Licensed under the MIT License.
+See LICENSE file in the root directory of this project.
+
+Description: Convert the data in the GeoNames free Gazetteer Data into
+    an sqlite db.
+Author: Will Bickerstaff
+Version: 0.
+
+Data Used is the GeoNames Gazetteer cities5000.txt data dump
+Data set is freely available at https://www.geonames.org/ and licensed under
+a Creative Commons Attribution 4.0 License
+(https://creativecommons.org/licenses/by/4.0/))
+"""
 
 import pandas as pd
 import sqlite3
