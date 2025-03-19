@@ -6,6 +6,8 @@ RPi/
 .vscode/
 persist.json
 cities*.txt
+# Notes
+*notes.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -45,13 +47,14 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit test / coverage reports & output
 htmlcov/
 .tox/
 .nox/
 .coverage
 .coverage.*
 .cache
+*.out
 nosetests.xml
 coverage.xml
 *.cover
