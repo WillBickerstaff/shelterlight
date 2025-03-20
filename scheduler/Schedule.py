@@ -535,43 +535,223 @@ class LightScheduler:
 
         return schedule
 
-    def get_schedule(self):
+    def get_schedule(self, target_date: dt.date) -> dict:
+        """Retrieve the light schedule for a given date.
 
+        Args
+        ----
+            target_date (dt.date): The date for which to retrieve the schedule.
+
+        Returns
+        -------
+            dict: A dictionary mapping interval numbers to light status
+                  (0 or 1). Returns an empty dict if no schedule is found.
+        """
+        # 1-Check if the schedule is already in cache
+        # 2️-If not in cache, attempt to retrieve it from the database
+        # 3️-If retrieved from the database, store it in cache
+        # 4️-Return the retrieved schedule (or an empty dict if none found)
         pass
 
-    def evaluate_previous_schedule(self, date):
+    def evaluate_previous_schedule(self, date: dt.date) -> None:
+        """Evaluate the accuracy of the previous day's schedule.
 
+        Args
+        ----
+            date (dt.date): The date of the schedule to evaluate.
+
+        This method:
+        -Retrieves the scheduled light intervals from `light_schedules`.
+        -Retrieves actual activity timestamps from `activity_log`.
+        -Compares each scheduled interval with actual activity.
+        -Determines if the schedule was correct, a false positive,
+         or a false negative.
+        -Updates the accuracy metrics in `light_schedules` using
+         `update_schedule_accuracy()`.
+        """
+        # 1️-Retrieve scheduled light intervals from `light_schedules`
+        # 2️-Retrieve actual activity timestamps from `activity_log`
+        # 3️-Compare scheduled intervals with actual activity
+        # 4️-Identify false positives (lights on, no activity detected)
+        # 5️-Identify false negatives (activity detected, lights not scheduled)
+        # 6️-Update the schedule accuracy in the database
         pass
 
-    def update_schedule_accuracy(self, date):
+    def update_schedule_accuracy(self, date: dt.date, interval_number: int,
+                                 was_correct: bool, false_positive: bool,
+                                 false_negative: bool) -> None:
+        """Update the accuracy metrics for a specific schedule interval.
 
+        Args
+        ----
+            date (dt.date): The schedule date.
+            interval_number (int): The interval number to update.
+            was_correct (bool): Whether the schedule was correct.
+            false_positive (bool): Whether the lights were on unnecessarily.
+            false_negative (bool): Whether lights were off when needed.
+
+        This method updates:
+        - `was_correct` → 1, the schedule matched actual activity, 0 otherwise.
+        - `false_positive` → 1, the schedule had unnecessary lights.
+        - `false_negative` → 1, activity was detected but no lights
+                                were scheduled.
+        """
+        # 1️-Construct and execute an SQL `UPDATE` statement to store accuracy
+        # 2️-Commit the changes to the database
+        # 3️-Handle potential exceptions (rollback on failure, log errors)
         pass
 
-    def update_daily_schedule(self):
+    def update_daily_schedule(self) -> Optional[dict]:
+        """Generate and store tomorrow's schedule.
 
+        This method:
+        -Evaluates the accuracy of yesterday's schedule.
+        -Trains the model with updated accuracy data.
+        -Generates a new schedule for tomorrow.
+        -Stores the new schedule in both the database and cache.
+        -Handles potential failures and logs errors.
+
+        Returns
+        -------
+            Optional[dict]: The generated schedule for tomorrow or None if an
+                            error occurs.
+        """
+        try:
+            # Make sure only one thread can try to update the schedule at
+            # any time
+            with self._lock:
+                # 1️-Evaluate yesterday's schedule accuracy
+                # 2️-Retrain the model using updated accuracy data
+                # 3️-Generate a new schedule for tomorrow
+                # 4️-Store the generated schedule in the database
+                # 5️-Update the in-memory schedule cache
+                # 6️-Log the successful update and return the new schedule
+
+                return None  # Replace with the actual new schedule
+        except Exception as e:
+            # 7️-Handle errors, log the issue, and return None
+            return None
+
+    def get_current_schedule(self) -> dict:
+        """Get the cached schedule or load it from the database if needed.
+
+        This method:
+        -Check if today's schedule is already in `self.schedule_cache`.
+        -If the cache is empty or outdated, load the schedule from the db.
+        -Update the cache with the retrieved schedule.
+        -Return the cached schedule.
+
+        Returns
+        -------
+            dict: The schedule for the current day
+                  (interval_number → light status).
+        """
+        # 1️-Get today's date
+        # 2️-Check if the schedule is already cached and up to date
+        # 3-If not in cache, retrieve from the database using `get_schedule()`
+        # 4️-Store the retrieved schedule in `self.schedule_cache`
+        # 5️-Return the cached schedule
         pass
 
-    def get_current_schedule(self):
+    def should_light_be_on(
+            self, current_time: Optional[dt.datetime] = None) -> bool:
+        """Determine if the lights should be on at a given moment.
 
+        Args
+        ----
+            current_time (Optional[dt.datetime]):
+                The time to check. Defaults to now if not provided.
+
+        Returns
+        -------
+            bool: True if lights should be ON, False otherwise.
+
+        This method:
+        -Uses the current time if no time is provided.
+        -Identifies the correct schedule (yesterday or today).
+        -Retrieves the relevant interval number for the given time.
+        -Checks if lights should be ON for that interval.
+        """
+        # 1️-Get the current time (use datetime.now() if None)
+        # 2️-Identify the relevant schedule date (yesterday or today)
+        # 3️-Retrieve the schedule for the identified date
+        # 4️-Determine the current interval number
+        # 5️-Check if lights should be ON for this interval
+        # 6️-Return True (ON) or False (OFF)
         pass
 
-    def should_light_be_on(self, current_time=None):
+    def set_interval_minutes(self, minutes: int) -> None:
+        """Adjust interval duration for scheduling and recalculate schedules.
 
+        Args
+        ----
+            minutes (int): The new interval duration in minutes.
+
+        This method:
+        -Validates the input to ensure it’s a positive integer.
+        -Updates `self.interval_minutes` with the new value.
+        -Logs the change for debugging.
+        -Triggers a recalc of the current schedule to use the new interval.
+        """
+        # 1️-Validate that `minutes` is a positive integer
+        # 2️-Update `self.interval_minutes`
+        # 3️-Recalculate schedules based on the new interval
         pass
 
-    def set_interval_minutes(self, minutes):
+    def set_confidence_threshold(self, threshold: float) -> None:
+        """Update the confidence threshold for predictions.
 
+        The confidence threshold determines how certain the model must be
+        before scheduling lights to turn on.
+
+        The LightGBM model outputs a probability (0.0 to 1.0) for light
+        activation. When generating a schedule, predictions will only activate
+        lights if confidence ≥ threshold.
+
+        Args
+        ----
+            threshold (float): The new confidence threshold (0.0 - 1.0).
+
+        This method:
+        -Validates the threshold value (must be between 0 and 1).
+        -Updates `self.min_confidence` with the new threshold.
+        -Logs the update.
+        -Triggers retraining or schedule recalculations.
+        """
+        # 1️-Validate that `threshold` is between 0.0 and 1.0
+        # 2️-Update `self.min_confidence`
+        # 3️-Log the threshold change
+        # 4️-Recalculate schedules or retrain the model if needed
         pass
 
-    def set_confidence_threshold(self, threshold):
+    def _create_prediction_features(
+            self, timestamp: dt.datetime) -> tuple[np.ndarray, pd.DataFrame]:
+        """Create a feature vector for a single timestamp.
 
-        pass
+        Args
+        ----
+            timestamp (dt.datetime): The timestamp to generate features for.
 
-    def _add_schedule_accuracy_features(self):
+        Returns
+        -------
+            tuple[np.ndarray, pd.DataFrame]:
+                - NumPy array of feature values for model inference.
+                - DataFrame with named columns for debugging or model training.
 
-        pass
-
-    def _create_prediction_features(self, timestamp):
-        """Create a feature vector for a single timestamp."""
-
+        This method:
+        -Extracts time-based features (hour, day of week, month).
+        -Converts these into cyclical features (`sin/cos` encoding).
+        -Determines whether the timestamp falls within darkness hours.
+        -Retrieves historical schedule accuracy features for this interval.
+        -Computes rolling activity features for short- and long-term trends.
+        -Returns both a structured DataFrame and a NumPy array.
+        """
+        # 1️-Extract time components
+        # 2️-Apply cyclical transformations (sin/cos encoding)
+        # 3️-Determine if the timestamp is within darkness hours
+        # 4️-Calculate interval number
+        # 5-Retrieve historical accuracy features (default fallback if missing)
+        # 6️-Compute rolling activity features
+        # 7️-Construct feature vector
+        # 8️-Create DataFrame for debugging & training
         pass
