@@ -10,6 +10,7 @@ Version: 0.1
 """
 
 from threading import Lock
+from shelterGPS.Helio import SunTimes
 import pandas as pd
 import numpy as np
 import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
@@ -216,6 +217,15 @@ class LightScheduler:
             ('1d', 1440 // self.interval_minutes)  # 1 day
         ]
 
+        # Add darkness information
+        SunActivity = SunTimes()
+        darkness_start = SunActivity.UTC_sunset_today
+        darkness_end = SunActivity.UTC_sunrise_tomorrow
+
+        df['is_dark'] = df['timestamp'].dt.time.apply(
+            lambda x: LightScheduler.is_dark(
+                x, darkness_start, darkness_end))
+
         # Create rolling averages of activity for different time windows.
         # Capture short-term and long-term trends in light usage.
         # For example, if lights were frequently on in the past hour, the model
@@ -229,6 +239,26 @@ class LightScheduler:
 
         logging.info("Activity data processed successfully")
         return df
+
+    def is_dark(time_obj, start_dark, end_dark):
+        """Determine if a given time falls within darkness hours.
+
+        Args
+        ----
+            time_obj (datetime.time): The time to check.
+            start (datetime.time): Darkness start time.
+            end (datetime.time): Darkness end time.
+
+        Returns
+        -------
+            int: 1 if within darkness hours, 0 otherwise.
+        """
+        if start_dark < end_dark:
+            # Darkness is within one day
+            return 1 if start_dark <= time_obj <= end_dark else 0
+        else:
+            # Darkness spans midnight
+            return 1 if (time_obj >= start_dark or time_obj <= end_dark) else 0
 
     def _add_schedule_accuracy_features(self):
         """Determine how acuurate previous schedules were."""
