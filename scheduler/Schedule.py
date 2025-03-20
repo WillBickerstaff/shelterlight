@@ -30,7 +30,7 @@ class LightScheduler:
         model (lightgbm.Booster): Trained LightGBM model
         interval_minutes (int): Time interval for schedule segments
             (default: 10)
-        min_confidence (float): Minimum prediction confidence threshold 
+        min_confidence (float): Minimum prediction confidence threshold
             (default: 0.6)
         schedule_cache (dict): Cache for current day's schedule
         db (DatabaseConnection): Database connection instance
@@ -46,7 +46,7 @@ class LightScheduler:
     def __new__(cls):
         """
         Ensures only one instance of LightScheduler exists (Singleton pattern).
-        
+
         Returns:
             LightScheduler: The single instance of the scheduler
         """
@@ -63,7 +63,7 @@ class LightScheduler:
         # Check if already initialized to prevent re-initialization
         if not hasattr(self, 'initialized'):
             self.initialized = True
-            
+
             # Core components
             self.model = None  # LightGBM model instance
             self.interval_minutes = 10  # Schedule interval in minutes
@@ -260,7 +260,7 @@ class LightScheduler:
             # Darkness spans midnight
             return 1 if (time_obj >= start_dark or time_obj <= end_dark) else 0
 
-    def _add_schedule_accuracy_features(self, df_schedules):
+    def _add_schedule_accuracy_features(self, df, df_schedules):
         """Enhance dataset with historical schedule accuracy metrics.
 
         Integrate past scheduling accuracy data into the activity dataset.
@@ -269,6 +269,7 @@ class LightScheduler:
 
         Args
         ----
+        df (pandas.DataFrame): The main activity dataset.
         df_schedules (pandas.DataFrame): The historical schedule
             accuracy dataset.
 
@@ -282,12 +283,28 @@ class LightScheduler:
             'false_negative': 'sum',    # Total false negatives
             'confidence': 'mean'        # Average confidence score
         }).reset_index()
-        # 2-Merge the aggregated schedule accuracy into the main database
-        
-        # 3-Handle missing values for intervals with no recorded schedule accuracy
 
-    def train_model(self):
+        # Merge the aggregated schedule accuracy into the main database
+        df = df.merge(
+            accuracy_metrics,
+            left_on='interval_number',  # Match intervals in activity data
+            right_on='interval_number',
+            how='left'                  # Preserve intervals in main dataset
+        )
 
+        # Handle missing values for intervals with no recorded accuracy
+        #   Default accuracy: Assume 50% accuracy for unseen intervals
+        df['historical_accuracy'] = df['was_correct'].fillna(0.5)
+        # - Default false positive & false negative counts: Assume zero
+        df['historical_false_positives'] = df['false_positive'].fillna(0)
+        df['historical_false_negatives'] = df['false_negative'].fillna(0)
+        # - Default confidence: Neutral confidence (0.5) for unseen intervals
+        df['historical_confidence'] = df['confidence'].fillna(0.5)
+
+    def train_model(self, days_history=30):
+        """Train the LightGBM model with recent historical data."""
+
+        """Predict the likelihood of activity for a given timestamp."""
         pass
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
@@ -333,13 +350,7 @@ class LightScheduler:
     def _add_schedule_accuracy_features(self):
 
         pass
-    
-    def train_model(self, days_history=30):
-        """Train the LightGBM model with recent historical data."""
 
-        """Predict the likelihood of activity for a given timestamp."""
-        pass
-    
     def _create_prediction_features(self, timestamp):
         """Create a feature vector for a single timestamp."""
 
