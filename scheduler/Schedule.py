@@ -13,6 +13,7 @@ from threading import Lock
 from lightlib.persist import PersistentData
 from lightlib.db import DB
 from typing import Optional
+import psycopg2
 import pandas as pd
 import numpy as np
 import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
@@ -105,12 +106,21 @@ class LightScheduler:
             logging.info("Database connection set via external instance.")
         else:
             # If no connection is provided, initialize a new DB connection
-            if not hasattr(self, 'db') or self.db is None:
-                self.db = DB()
-                logging.info("New database connection initialized.")
+            connection_invalid = (
+               not hasattr(self, "db") or
+               self.db is None or
+               self.db.conn.closed)
+            if connection_invalid:
+                logging.warning("Database connection is invalid or closed. "
+                                "Attempting reconnection...")
+                try:
+                    self.db = DB()  # Try to establish a new connection
+                    logging.info("Database reconnection successful.")
+                except psycopg2.DatabaseError as e:
+                    logging.error("Failed to reconnect to the database: %s", e)
+                    self.db = None  # Set to None to prevent further issues
             else:
-                logging.warning(
-                    "Database connection already set. No changes made.")
+                logging.info("Database connection is still active.")
 
     def _prepare_training_data(self, days_history=30) -> tuple[pd.DataFrame,
                                                                pd.DataFrame]:
@@ -483,9 +493,20 @@ class LightScheduler:
         self.schedule_cache[schedule_date] = schedule
 
         # Store in database
-        db = DB()  # Create database connection
+        # Check we have a database connection
+        if self.db is None or self.db.conn.closed:
+            logging.warning("Database connection unavailable."
+                            "Attempting reconnection...")
+            self.set_db_connection()  # Attempt to reconnect
+
+        if self.db is None:
+            logging.error("Database connection could not be established."
+                          "Skipping database storage.")
+            return schedule  # Return cache-only schedule if DB is down
+
+        # If we get here, database is healthy, Store in database
         try:
-            with db.conn.cursor() as cursor:
+            with self.db.conn.cursor() as cursor:
                 for interval, prediction in schedule.items():
                     start_time = (dt.datetime.combine(
                         schedule_date, dt.time(0, 0)) + dt.timedelta(
@@ -494,24 +515,25 @@ class LightScheduler:
                         schedule_date, dt.time(0, 0)) + dt.timedelta(
                             minutes=(interval + 1) *
                             self.interval_minutes)).time()
-    
-                    cursor.execute("""
-                        INSERT INTO light_schedules (date, interval_number, start_time, end_time, prediction)
-                        VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (date, interval_number) DO UPDATE 
-                        SET prediction = EXCLUDED.prediction;
-                    """, (schedule_date, interval, start_time, end_time, prediction))
-    
-            db.conn.commit()  # Commit transaction
-    
-            logging.info(f"Stored schedule for {schedule_date} in database.")
-    
-        except psycopg2.DatabaseError as e:
-            db.conn.rollback()  # Rollback on failure
-            logging.error(f"Failed to store schedule for {schedule_date}: {e}")
-    
-        return schedule
 
+                    cursor.execute("""
+                        INSERT INTO light_schedules (date, interval_number,
+                                                     start_time, end_time,
+                                                     prediction)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (date, interval_number) DO UPDATE
+                        SET prediction = EXCLUDED.prediction;
+                    """, (schedule_date, interval, start_time, end_time,
+                          prediction))
+
+            self.db.conn.commit()  # Commit transaction
+            logging.info(f"Stored schedule for {schedule_date} in database.")
+
+        except psycopg2.DatabaseError as e:
+            self.db.conn.rollback()  # Rollback on failure
+            logging.error(f"Failed to store schedule for {schedule_date}: {e}")
+
+        return schedule
 
     def get_schedule(self):
 
