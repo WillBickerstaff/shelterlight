@@ -164,6 +164,63 @@ class LightScheduler:
             raise
 
         # 3. Process the activity data
+        # Convert timestamp to datetime if not already
+        df_activity['timestamp'] = pd.to_datetime(df_activity['timestamp'])
+
+        # Create interval features
+        df_activity['hour'] = df_activity['timestamp'].dt.hour
+        df_activity['minute'] = df_activity['timestamp'].dt.minute
+        # Intervals of n interval_minutes
+        df_activity['interval_number'] = ((
+            df_activity['hour'] * 60 + df_activity['minute'])
+            // self.interval_minutes)
+
+        # Create cyclical time features
+        #    sin(2π * value/max_value)
+        #    cos(2π * value/max_value)
+        
+        # - Hours (24-hour cycle)
+        # - hour_sin, hour_cos (24-hour cycle)
+        df_activity['hour_sin'] = np.sin(
+            2 * np.pi * df_activity['hour']/24)
+        df_activity['hour_cos'] = np.cos(
+            2 * np.pi * df_activity['hour']/24)
+
+        # - Months (12-month cycle)
+        # - month_sin, month_cos (12-month cycle)
+        df_activity['month_sin'] = np.sin(
+            2 * np.pi * df_activity['month']/12)
+        df_activity['month_cos'] = np.cos(
+            2 * np.pi * df_activity['month']/12)
+
+        # - Days of week (7-day cycle)
+        # - day_sin, day_cos (7-day cycle)
+        df_activity['day_sin'] = np.sin(
+            2 * np.pi * df_activity['day_of_week']/7)
+        df_activity['day_cos'] = np.cos(
+            2 * np.pi * df_activity['day_of_week']/7)
+
+        # Create rolling activity features
+        df_activity.sort_values('timestamp', inplace=True)
+        windows = [
+            ('1h', 60 // self.interval_minutes),  # 1 hour
+            ('4h', 240 // self.interval_minutes), # 4 hours
+            ('1d', 1440 // self.interval_minutes) # 1 day
+        ]
+        
+        for name, window in windows:
+            df_activity[f'rolling_activity_{name}'] = (
+                df_activity.groupby('day_of_week')['activity_pin']
+                .transform(lambda x: x.rolling(window=window, 
+                                            min_periods=1).mean())
+            )
+        
+        logging.info("Activity data processed successfully")
+        return df_activity, df_schedules
+        
+    except Exception as e:
+        logging.error(f"Error processing training data: {str(e)}")
+        raise
 
         # 4. Add historical accuracy data
 
