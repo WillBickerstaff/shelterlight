@@ -10,6 +10,7 @@ Version: 0.1
 """
 
 from threading import Lock
+import pandas as pd
 import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
 from datetime import datetime, timedelta
 import logging
@@ -107,7 +108,7 @@ class LightScheduler:
         # 1. Define SQL queries
         # - Activity log query
         activity_query = """
-            SELECT 
+            SELECT
                 timestamp,
                 day_of_week,
                 month,
@@ -120,7 +121,7 @@ class LightScheduler:
         """
         # - Schedule accuracy query
         schedule_query = """
-            SELECT 
+            SELECT
                 date,
                 interval_number,
                 was_correct,
@@ -132,6 +133,35 @@ class LightScheduler:
         """
 
         # 2. Execute queries and load into pandas DataFrames
+        try:
+            # Execute activity log query
+            df_activity = pd.read_sql_query(
+                activity_query,
+                self.db.connection,
+                params=(days_history,)
+            )
+
+            # Execute schedule accuracy query
+            df_schedules = pd.read_sql_query(
+                schedule_query,
+                self.db.connection,
+                params=(days_history,)
+            )
+
+            # Verify we have data
+            if df_activity.empty:
+                logging.warning(
+                    "No activity data found for the specified period")
+                return None
+
+            logging.info(f"Retrieved {len(df_activity)} activity records and "
+                         f"{len(df_schedules)} schedule records")
+
+            return df_activity, df_schedules
+
+        except Exception as e:
+            logging.error(f"Error retrieving training data: {str(e)}")
+            raise
 
         # 3. Process the activity data
 
