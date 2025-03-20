@@ -8,6 +8,7 @@ persist.json
 cities*.txt
 # Notes
 *notes.md
+*notes.dns*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
