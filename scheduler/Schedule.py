@@ -300,11 +300,46 @@ class LightScheduler:
         df['historical_false_negatives'] = df['false_negative'].fillna(0)
         # - Default confidence: Neutral confidence (0.5) for unseen intervals
         df['historical_confidence'] = df['confidence'].fillna(0.5)
+        
+        return df
 
     def train_model(self, days_history=30):
-        """Train the LightGBM model with recent historical data."""
+        """Train the LightGBM model using recent historical data.
 
-        """Predict the likelihood of activity for a given timestamp."""
+        Retrieves historical data, selects relevant features, and trains a
+        LightGBM model to predict when lights should be turned on.
+
+        Args
+        ----
+            days_history (int): The number of days of historical data to use.
+
+        Returns
+        -------
+            None
+        """
+
+        # 1️-Retrieve & prepare training data
+        df = self._prepare_training_data(days_history)
+        # 2-Select features for training
+        feature_cols = self._get_feature_columns()
+        # 3-Define the target variable
+        y = self._prepare_target_variable(df)
+        # 4-Create the dataset
+        train_data = lgb.Dataset(df[feature_cols], label=y)
+        # 5-Train the model
+        self.model = lgb.train(
+            self.model_params,
+            train_data,
+            num_boost_round=100,
+            valid_sets=[train_data],
+            early_stopping_rounds=10
+        )
+        # 6-log feature importance
+        self._log_feature_importance(feature_cols)
+        pass
+
+    def _prepare_training_data(self, history_size: int) -> pd.DataFrame():
+
         pass
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
