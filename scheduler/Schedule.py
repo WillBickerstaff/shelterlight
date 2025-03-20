@@ -260,16 +260,28 @@ class LightScheduler:
             # Darkness spans midnight
             return 1 if (time_obj >= start_dark or time_obj <= end_dark) else 0
 
-    def _add_schedule_accuracy_features(self):
+    def _add_schedule_accuracy_features(self, df_schedules):
         """Enhance dataset with historical schedule accuracy metrics.
 
         Integrate past scheduling accuracy data into the activity dataset.
-        This helps the model learn from past mistakes by including false 
+        This helps the model learn from past mistakes by including false
         positives, false negatives, and confidence levels per time interval.
 
+        Args
+        ----
+        df_schedules (pandas.DataFrame): The historical schedule
+            accuracy dataset.
+
         """
-        # 1️-Aggregate historical accuracy per interval
-        
+        # Aggregate historical accuracy per interval
+        #   Calculate the mean accuracy (was_correct), Sum up false positives &
+        #   false negatives, Compute the average confidence level
+        accuracy_metrics = df_schedules.groupby(['interval_number']).agg({
+            'was_correct': 'mean',      # Average accuracy per interval
+            'false_positive': 'sum',    # Total false positives
+            'false_negative': 'sum',    # Total false negatives
+            'confidence': 'mean'        # Average confidence score
+        }).reset_index()
         # 2-Merge the aggregated schedule accuracy into the main database
         
         # 3-Handle missing values for intervals with no recorded schedule accuracy
