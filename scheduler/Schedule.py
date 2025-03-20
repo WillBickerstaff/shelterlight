@@ -85,8 +85,36 @@ class LightScheduler:
         self.db = db_connection
 
     def _prepare_training_data(self, days_history=30):
-        """Get data from the activity log and previous schedules accuracy."""
-        pass
+        """Get data from the activity log and previous schedules accuracy.
+
+        Retrieve historical data from both activity logs and schedule accuracy
+        records to prepare the training dataset.
+
+        Args
+        ----
+            days_history (int): Number of days of historical data to use
+                                (default: 30)
+
+        Returns
+        -------
+            pandas.DataFrame: Prepared dataset with features and activity data
+
+        Note
+        ----
+            Combines activity data with schedule accuracy metrics for model
+            training.
+        """
+        # 1. Define SQL queries
+        # - Activity log query
+        # - Schedule accuracy query
+
+        # 2. Execute queries and load into pandas DataFrames
+
+        # 3. Process the activity data
+
+        # 4. Add historical accuracy data
+
+        # 5. Return the complete dataset
 
     def _create_base_features(self):
         """Add training features.
