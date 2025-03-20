@@ -106,7 +106,30 @@ class LightScheduler:
         """
         # 1. Define SQL queries
         # - Activity log query
+        activity_query = """
+            SELECT 
+                timestamp,
+                day_of_week,
+                month,
+                year,
+                duration,
+                activity_pin,
+                EXTRACT(EPOCH FROM timestamp) as epoch_time
+            FROM activity_log
+            WHERE timestamp >= NOW() - INTERVAL '%s days'
+        """
         # - Schedule accuracy query
+        schedule_query = """
+            SELECT 
+                date,
+                interval_number,
+                was_correct,
+                false_positive,
+                false_negative,
+                confidence
+            FROM light_schedules
+            WHERE date >= NOW() - INTERVAL '%s days'
+        """
 
         # 2. Execute queries and load into pandas DataFrames
 
@@ -172,5 +195,20 @@ class LightScheduler:
         pass
 
     def set_confidence_threshold(self, threshold):
+
+        pass
+
+    def _add_schedule_accuracy_features(self):
+
+        pass
+    
+    def train_model(self, days_history=30):
+        """Train the LightGBM model with recent historical data."""
+
+        """Predict the likelihood of activity for a given timestamp."""
+        pass
+    
+    def _create_prediction_features(self, timestamp):
+        """Create a feature vector for a single timestamp."""
 
         pass
