@@ -261,8 +261,18 @@ class LightScheduler:
             return 1 if (time_obj >= start_dark or time_obj <= end_dark) else 0
 
     def _add_schedule_accuracy_features(self):
-        """Determine how acuurate previous schedules were."""
-        pass
+        """Enhance dataset with historical schedule accuracy metrics.
+
+        Integrate past scheduling accuracy data into the activity dataset.
+        This helps the model learn from past mistakes by including false 
+        positives, false negatives, and confidence levels per time interval.
+
+        """
+        # 1️-Aggregate historical accuracy per interval
+        
+        # 2-Merge the aggregated schedule accuracy into the main database
+        
+        # 3-Handle missing values for intervals with no recorded schedule accuracy
 
     def train_model(self):
 
