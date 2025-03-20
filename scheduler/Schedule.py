@@ -10,7 +10,7 @@ Version: 0.1
 """
 
 from threading import Lock
-from shelterGPS.Helio import SunTimes
+from lightlib.persist import PersistentData
 import pandas as pd
 import numpy as np
 import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
@@ -87,7 +87,8 @@ class LightScheduler:
     def set_db_connection(self, db_connection):
         self.db = db_connection
 
-    def _prepare_training_data(self, days_history=30):
+    def _prepare_training_data(self, days_history=30) -> tuple[pd.DataFrame,
+                                                               pd.DataFrame]:
         """Get data from the activity log and previous schedules accuracy.
 
         Retrieve historical data from both activity logs and schedule accuracy
@@ -170,7 +171,7 @@ class LightScheduler:
         # Return the complete dataset
         return df_activity, df_schedules
 
-    def _create_base_features(self, df):
+    def _create_base_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add training features.
 
         - Daily patterns (through hour encoding)
@@ -218,7 +219,7 @@ class LightScheduler:
         ]
 
         # Add darkness information
-        SunActivity = SunTimes()
+        self._SunActivity = SunTimes()
         darkness_start = SunActivity.UTC_sunset_today
         darkness_end = SunActivity.UTC_sunrise_tomorrow
 
@@ -240,27 +241,47 @@ class LightScheduler:
         logging.info("Activity data processed successfully")
         return df
 
-    def is_dark(time_obj, start_dark, end_dark):
+    @staticmethod
+    def is_dark(time_obj: dt.time) -> int:
         """Determine if a given time falls within darkness hours.
 
-        Args
-        ----
-            time_obj (datetime.time): The time to check.
-            start (datetime.time): Darkness start time.
-            end (datetime.time): Darkness end time.
+        Uses stored sunset and sunrise times from PersistentData
 
-        Returns
-        -------
+        Args:
+            time_obj (datetime.time): The time to check.
+
+        Returns:
             int: 1 if within darkness hours, 0 otherwise.
         """
-        if start_dark < end_dark:
-            # Darkness is within one day
-            return 1 if start_dark <= time_obj <= end_dark else 0
+        # Get sunset and sunrise times from PersistentData
+        persistent_data = PersistentData()
+        sunset_today = persistent_data.sunset_today
+        sunrise_tomorrow = persistent_data.sunrise_tomorrow
+
+        # Ensure we have valid data, otherwise log a warning and
+        # return default behavior
+        if not sunset_today or not sunrise_tomorrow:
+            logging.warning("Missing sunrise/sunset data, assuming default "
+                            "darkness period (18:00-06:00).")
+            sunset_today = dt.datetime.utcnow().replace(hour=18, minute=0)
+            sunrise_tomorrow = dt.datetime.utcnow().replace(hour=6, minute=0)
+
+        # Convert to time objects for comparison
+        sunset_time = sunset_today.time()
+        sunrise_time = sunrise_tomorrow.time()
+
+        # Determine if the time falls within darkness hours
+        if sunset_time < sunrise_time:
+            # Darkness within one day
+            return 1 if sunset_time <= time_obj <= sunrise_time else 0
         else:
             # Darkness spans midnight
-            return 1 if (time_obj >= start_dark or time_obj <= end_dark) else 0
+            return 1 if (
+                time_obj >= sunset_time or time_obj <= sunrise_time) else 0
 
-    def _add_schedule_accuracy_features(self, df, df_schedules):
+    def _add_schedule_accuracy_features(
+                                self, df: pd.DataFrame,
+                                df_schedules: pd.DataFrame) -> pd.DataFrame:
         """Enhance dataset with historical schedule accuracy metrics.
 
         Integrate past scheduling accuracy data into the activity dataset.
@@ -300,7 +321,7 @@ class LightScheduler:
         df['historical_false_negatives'] = df['false_negative'].fillna(0)
         # - Default confidence: Neutral confidence (0.5) for unseen intervals
         df['historical_confidence'] = df['confidence'].fillna(0.5)
-        
+
         return df
 
     def train_model(self, days_history=30):
@@ -322,10 +343,11 @@ class LightScheduler:
         df = self._prepare_training_data(days_history)
         # 2-Select features for training
         feature_cols = self._get_feature_columns()
+        x = df[feature_cols]
         # 3-Define the target variable
-        y = self._prepare_target_variable(df)
+        y = (df['activity_pin'] > 0).astype(int)
         # 4-Create the dataset
-        train_data = lgb.Dataset(df[feature_cols], label=y)
+        train_data = lgb.Dataset(x, label=y)
         # 5-Train the model
         self.model = lgb.train(
             self.model_params,
@@ -335,16 +357,77 @@ class LightScheduler:
             early_stopping_rounds=10
         )
         # 6-log feature importance
-        self._log_feature_importance(feature_cols)
-        pass
+        importance = pd.DataFrame({
+            'feature': feature_cols,
+            'importance': self.model.feature_importance()
+        }).sort_values('importance', ascending=False)
 
-    def _prepare_training_data(self, history_size: int) -> pd.DataFrame():
+        logging.info("Feature importance:\n%s", importance)
 
-        pass
+    def _get_feature_columns(self) -> list[str]:
+        """Return the list of feature columns used for training."""
+        return [
+            'hour_sin', 'hour_cos',  # Hour encoding
+            'month_sin', 'month_cos',  # Seasonal encoding
+            'day_sin', 'day_cos',  # Weekly pattern encoding
+            'is_dark',  # Whether it's nighttime
+            'rolling_activity_1h',  # Short-term activity trend
+            'rolling_activity_1d',  # Long-term activity trend
+            'interval_number',  # Time interval index
+            'historical_accuracy',  # Past scheduling success rate
+            'historical_false_positives',  # Past over-predictions
+            'historical_false_negatives',  # Past under-predictions
+            'historical_confidence'  # Average confidence in past schedules
+        ]
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
+        """Generate a light schedule for a date based on model predictions.
 
-        pass
+        Create a daily schedule of when lights should be turned on,
+        make sure predictions only fall within darkness hours.
+
+        Args
+        ----
+            date (str): The date for which the schedule is
+                        generated (YYYY-MM-DD).
+            darkness_start (str): Time when darkness starts (HH:MM).
+            darkness_end (str): Time when darkness ends (HH:MM).
+
+        Returns
+        -------
+            dict: A dictionary mapping time intervals to predicted light
+                  activation (True/False).
+        """
+
+        # Validate input parameters
+        try:
+            schedule_date = datetime.datetime.strptime(
+                date, "%Y-%m-%d").date()
+            darkness_start = datetime.datetime.strptime(
+                darkness_start, "%H:%M").time()
+            darkness_end = datetime.datetime.strptime(
+                darkness_end, "%H:%M").time()
+        except ValueError as e:
+            logging.error("Invalid date or time format: %s", e)
+        return {}
+
+        # Prepare prediction data
+        interval_times = [
+            (schedule_date, i) for i in range(
+                (24 * 60) // self.interval_minutes)
+        ]
+        df = pd.DataFrame(interval_times, columns=["date", "interval_number"])
+
+        # 3-Filter for darkness hours only
+        # - Apply `is_dark()` to remove non-darkness intervals
+
+        # 4-Make predictions using the trained model
+        # - Implement `_predict_schedule()` to generate predictions
+        # - Convert probabilities to binary (on/off) using `self.min_confidence`
+
+        # 5️-Store and return the generated schedule
+        # - Save the schedule in `self.schedule_cache`
+        # - Return the generated schedule dictionary
 
     def store_schedule(self):
 
