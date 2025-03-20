@@ -11,10 +11,12 @@ Version: 0.1
 
 from threading import Lock
 from lightlib.persist import PersistentData
+from lightlib.db import DB
+from typing import Optional
 import pandas as pd
 import numpy as np
 import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
-from datetime import datetime, timedelta
+import datetime as dt
 import logging
 
 
@@ -26,7 +28,8 @@ class LightScheduler:
     and generate optimal lighting schedules. It implements the Singleton
     to ensure only one instance manages the scheduling system.
 
-    Attributes:
+    Attributes
+    ----------
         model (lightgbm.Booster): Trained LightGBM model
         interval_minutes (int): Time interval for schedule segments
             (default: 10)
@@ -36,18 +39,21 @@ class LightScheduler:
         db (DatabaseConnection): Database connection instance
         model_params (dict): LightGBM model parameters
 
-    Note:
+    Note
+    ----
         The class uses threading.Lock for thread-safe singleton implementation
     """
+
     # Singleton instance and lock
     _instance = None
     _lock = Lock()
 
     def __new__(cls):
         """
-        Ensures only one instance of LightScheduler exists (Singleton pattern).
+        Ensure only one instance of LightScheduler exists (Singleton pattern).
 
-        Returns:
+        Returns
+        -------
             LightScheduler: The single instance of the scheduler
         """
         with cls._lock:  # Thread-safe instance creation
@@ -56,8 +62,8 @@ class LightScheduler:
             return cls._instance
 
     def __init__(self):
-        """
-        Initializes the LightScheduler with default values.
+        """Initialize the LightScheduler with default values.
+
         Only runs once due to Singleton pattern.
         """
         # Check if already initialized to prevent re-initialization
@@ -84,8 +90,27 @@ class LightScheduler:
                 'verbose': -1             # Suppress logging output
             }
 
-    def set_db_connection(self, db_connection):
-        self.db = db_connection
+    def set_db_connection(self, db_connection: Optional[DB] = None) -> None:
+        """Set or initialize the database connection.
+
+        Args
+        ----
+            db_connection (DB, optional): A pre-existing database connection.
+                                          If None, a new connection is created.
+        """
+        if db_connection:
+            # Use the provided database connection
+            # (for dependency injection/testing)
+            self.db = db_connection
+            logging.info("Database connection set via external instance.")
+        else:
+            # If no connection is provided, initialize a new DB connection
+            if not hasattr(self, 'db') or self.db is None:
+                self.db = DB()
+                logging.info("New database connection initialized.")
+            else:
+                logging.warning(
+                    "Database connection already set. No changes made.")
 
     def _prepare_training_data(self, days_history=30) -> tuple[pd.DataFrame,
                                                                pd.DataFrame]:
@@ -218,14 +243,13 @@ class LightScheduler:
             ('1d', 1440 // self.interval_minutes)  # 1 day
         ]
 
-        # Add darkness information
-        self._SunActivity = SunTimes()
-        darkness_start = SunActivity.UTC_sunset_today
-        darkness_end = SunActivity.UTC_sunrise_tomorrow
+        # Get darkness times from PersistentData
+        darkness_start, darkness_end = self._get_darkness_times()
 
+        # Add darkness information
         df['is_dark'] = df['timestamp'].dt.time.apply(
-            lambda x: LightScheduler.is_dark(
-                x, darkness_start, darkness_end))
+            lambda x: self.is_dark(x, darkness_start, darkness_end)
+        )
 
         # Create rolling averages of activity for different time windows.
         # Capture short-term and long-term trends in light usage.
@@ -241,43 +265,49 @@ class LightScheduler:
         logging.info("Activity data processed successfully")
         return df
 
+    def _get_darkness_times(self) -> tuple[dt.time, dt.time]:
+        """Retrieve stored sunset and sunrise times from PersistentData.
+
+        Returns
+        -------
+            tuple[dt.time, dt.time]: (darkness_start, darkness_end)
+        """
+        persistent_data = PersistentData()
+        darkness_start = persistent_data.sunset_today
+        darkness_end = persistent_data.sunrise_tomorrow
+
+        # Ensure we have valid data, otherwise use default fallback
+        if not darkness_start or not darkness_end:
+            logging.warning(
+                "Missing sunrise/sunset data, using default "
+                "darkness (18:00-06:00).")
+            darkness_start = dt.datetime.utcnow().replace(hour=18, minute=0)
+            darkness_end = dt.datetime.utcnow().replace(hour=6, minute=0)
+
+        return darkness_start.time(), darkness_end.time()
+
     @staticmethod
-    def is_dark(time_obj: dt.time) -> int:
+    def is_dark(time_obj: dt.time, darkness_start: dt.time,
+                darkness_end: dt.time) -> int:
         """Determine if a given time falls within darkness hours.
 
         Uses stored sunset and sunrise times from PersistentData
 
-        Args:
-            time_obj (datetime.time): The time to check.
+        Args
+        ----
+            time_obj (dt.time): The time to check.
 
-        Returns:
+        Returns
+        -------
             int: 1 if within darkness hours, 0 otherwise.
         """
-        # Get sunset and sunrise times from PersistentData
-        persistent_data = PersistentData()
-        sunset_today = persistent_data.sunset_today
-        sunrise_tomorrow = persistent_data.sunrise_tomorrow
-
-        # Ensure we have valid data, otherwise log a warning and
-        # return default behavior
-        if not sunset_today or not sunrise_tomorrow:
-            logging.warning("Missing sunrise/sunset data, assuming default "
-                            "darkness period (18:00-06:00).")
-            sunset_today = dt.datetime.utcnow().replace(hour=18, minute=0)
-            sunrise_tomorrow = dt.datetime.utcnow().replace(hour=6, minute=0)
-
-        # Convert to time objects for comparison
-        sunset_time = sunset_today.time()
-        sunrise_time = sunrise_tomorrow.time()
-
-        # Determine if the time falls within darkness hours
-        if sunset_time < sunrise_time:
-            # Darkness within one day
-            return 1 if sunset_time <= time_obj <= sunrise_time else 0
+        if darkness_start < darkness_end:
+            # Darkness is within a single day (e.g., 18:00 - 06:00)
+            return 1 if darkness_start <= time_obj <= darkness_end else 0
         else:
-            # Darkness spans midnight
-            return 1 if (
-                time_obj >= sunset_time or time_obj <= sunrise_time) else 0
+            # Darkness spans midnight (e.g., 21:00 - 05:00)
+            return 1 if (time_obj >= darkness_start or
+                         time_obj <= darkness_end) else 0
 
     def _add_schedule_accuracy_features(
                                 self, df: pd.DataFrame,
@@ -338,7 +368,6 @@ class LightScheduler:
         -------
             None
         """
-
         # 1️-Retrieve & prepare training data
         df = self._prepare_training_data(days_history)
         # 2-Select features for training
@@ -398,14 +427,13 @@ class LightScheduler:
             dict: A dictionary mapping time intervals to predicted light
                   activation (True/False).
         """
-
         # Validate input parameters
         try:
-            schedule_date = datetime.datetime.strptime(
+            schedule_date = dt.datetime.strptime(
                 date, "%Y-%m-%d").date()
-            darkness_start = datetime.datetime.strptime(
+            darkness_start = dt.datetime.strptime(
                 darkness_start, "%H:%M").time()
-            darkness_end = datetime.datetime.strptime(
+            darkness_end = dt.datetime.strptime(
                 darkness_end, "%H:%M").time()
         except ValueError as e:
             logging.error("Invalid date or time format: %s", e)
@@ -418,20 +446,72 @@ class LightScheduler:
         ]
         df = pd.DataFrame(interval_times, columns=["date", "interval_number"])
 
-        # 3-Filter for darkness hours only
-        # - Apply `is_dark()` to remove non-darkness intervals
+        # Compute necessary features for each interval
+        df = self._create_base_features(df)
 
-        # 4-Make predictions using the trained model
-        # - Implement `_predict_schedule()` to generate predictions
-        # - Convert probabilities to binary (on/off) using `self.min_confidence`
+        # Filter for darkness hours only
+        df["is_dark"] = df["timestamp"].dt.time.apply(self.is_dark)
+        df = df[df["is_dark"] == 1]  # Keep only dark intervals
 
-        # 5️-Store and return the generated schedule
-        # - Save the schedule in `self.schedule_cache`
-        # - Return the generated schedule dictionary
+        # Make predictions using the trained model
+        if self.model is None:
+            logging.error("No trained model found. Cannot generate schedule.")
+        return {}
 
-    def store_schedule(self):
+        predictions = self._predict_schedule(df)
 
-        pass
+        # Store and return the generated schedule
+        return self.store_schedule(schedule_date, df, predictions)
+
+    def store_schedule(self, schedule_date: dt.date,
+                       df: pd.DataFrame, predictions: list[int]) -> dict:
+        """Store the generated schedule in cache and database.
+
+        Args
+        ----
+            schedule_date (dt.date): The date of the schedule.
+            df (pandas.DataFrame): DataFrame containing intervals for the date.
+            predictions (list[int]): List of light activation predictions
+                                    (0 or 1).
+
+        Returns
+        -------
+            dict: The stored schedule mapping interval numbers to light status.
+        """
+        # Store in cache
+        schedule = dict(zip(df["interval_number"], predictions))
+        self.schedule_cache[schedule_date] = schedule
+
+        # Store in database
+        db = DB()  # Create database connection
+        try:
+            with db.conn.cursor() as cursor:
+                for interval, prediction in schedule.items():
+                    start_time = (dt.datetime.combine(
+                        schedule_date, dt.time(0, 0)) + dt.timedelta(
+                            minutes=interval * self.interval_minutes)).time()
+                    end_time = (dt.datetime.combine(
+                        schedule_date, dt.time(0, 0)) + dt.timedelta(
+                            minutes=(interval + 1) *
+                            self.interval_minutes)).time()
+    
+                    cursor.execute("""
+                        INSERT INTO light_schedules (date, interval_number, start_time, end_time, prediction)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (date, interval_number) DO UPDATE 
+                        SET prediction = EXCLUDED.prediction;
+                    """, (schedule_date, interval, start_time, end_time, prediction))
+    
+            db.conn.commit()  # Commit transaction
+    
+            logging.info(f"Stored schedule for {schedule_date} in database.")
+    
+        except psycopg2.DatabaseError as e:
+            db.conn.rollback()  # Rollback on failure
+            logging.error(f"Failed to store schedule for {schedule_date}: {e}")
+    
+        return schedule
+
 
     def get_schedule(self):
 
