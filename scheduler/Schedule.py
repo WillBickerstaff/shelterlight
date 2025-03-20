@@ -11,6 +11,7 @@ Version: 0.1
 
 from threading import Lock
 import pandas as pd
+import numpy as np
 import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
 from datetime import datetime, timedelta
 import logging
@@ -105,7 +106,7 @@ class LightScheduler:
             Combines activity data with schedule accuracy metrics for model
             training.
         """
-        # 1. Define SQL queries
+        # Define SQL queries
         # - Activity log query
         activity_query = """
             SELECT
@@ -132,7 +133,7 @@ class LightScheduler:
             WHERE date >= NOW() - INTERVAL '%s days'
         """
 
-        # 2. Execute queries and load into pandas DataFrames
+        # Execute queries and load into pandas DataFrames
         try:
             # Execute activity log query
             df_activity = pd.read_sql_query(
@@ -156,77 +157,19 @@ class LightScheduler:
 
             logging.info(f"Retrieved {len(df_activity)} activity records and "
                          f"{len(df_schedules)} schedule records")
-
-            return df_activity, df_schedules
+            # Enhanced feature engineering
+            df = self._create_base_features(df_activity)
+            # Add schedule accuracy features
+            df = self._add_schedule_accuracy_features(df, df_schedules)
 
         except Exception as e:
             logging.error(f"Error retrieving training data: {str(e)}")
             raise
 
-        # 3. Process the activity data
-        # Convert timestamp to datetime if not already
-        df_activity['timestamp'] = pd.to_datetime(df_activity['timestamp'])
-
-        # Create interval features
-        df_activity['hour'] = df_activity['timestamp'].dt.hour
-        df_activity['minute'] = df_activity['timestamp'].dt.minute
-        # Intervals of n interval_minutes
-        df_activity['interval_number'] = ((
-            df_activity['hour'] * 60 + df_activity['minute'])
-            // self.interval_minutes)
-
-        # Create cyclical time features
-        #    sin(2π * value/max_value)
-        #    cos(2π * value/max_value)
-        
-        # - Hours (24-hour cycle)
-        # - hour_sin, hour_cos (24-hour cycle)
-        df_activity['hour_sin'] = np.sin(
-            2 * np.pi * df_activity['hour']/24)
-        df_activity['hour_cos'] = np.cos(
-            2 * np.pi * df_activity['hour']/24)
-
-        # - Months (12-month cycle)
-        # - month_sin, month_cos (12-month cycle)
-        df_activity['month_sin'] = np.sin(
-            2 * np.pi * df_activity['month']/12)
-        df_activity['month_cos'] = np.cos(
-            2 * np.pi * df_activity['month']/12)
-
-        # - Days of week (7-day cycle)
-        # - day_sin, day_cos (7-day cycle)
-        df_activity['day_sin'] = np.sin(
-            2 * np.pi * df_activity['day_of_week']/7)
-        df_activity['day_cos'] = np.cos(
-            2 * np.pi * df_activity['day_of_week']/7)
-
-        # Create rolling activity features
-        df_activity.sort_values('timestamp', inplace=True)
-        windows = [
-            ('1h', 60 // self.interval_minutes),  # 1 hour
-            ('4h', 240 // self.interval_minutes), # 4 hours
-            ('1d', 1440 // self.interval_minutes) # 1 day
-        ]
-        
-        for name, window in windows:
-            df_activity[f'rolling_activity_{name}'] = (
-                df_activity.groupby('day_of_week')['activity_pin']
-                .transform(lambda x: x.rolling(window=window, 
-                                            min_periods=1).mean())
-            )
-        
-        logging.info("Activity data processed successfully")
+        # Return the complete dataset
         return df_activity, df_schedules
-        
-    except Exception as e:
-        logging.error(f"Error processing training data: {str(e)}")
-        raise
 
-        # 4. Add historical accuracy data
-
-        # 5. Return the complete dataset
-
-    def _create_base_features(self):
+    def _create_base_features(self, df):
         """Add training features.
 
         - Daily patterns (through hour encoding)
@@ -235,7 +178,57 @@ class LightScheduler:
         - Recent activity patterns (through rolling averages)
         - Environmental conditions (through darkness information)
         """
-        pass
+        # Process the activity data
+        # Convert timestamp to datetime if not already
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+        # Create interval features
+        df['hour'] = df['timestamp'].dt.hour
+        df['minute'] = df['timestamp'].dt.minute
+        # Group times into intervals of self.interval_minutes.
+        df['interval_number'] = ((df['hour'] * 60 + df['minute'])
+                                 // self.interval_minutes)
+
+        # Create cyclical time features
+        #    sin(2π * value/max_value)
+        #    cos(2π * value/max_value)
+
+        # - Hours (24-hour cycle)
+        # - hour_sin, hour_cos (24-hour cycle)
+        df['hour_sin'] = np.sin(2 * np.pi * df['hour']/24)
+        df['hour_cos'] = np.cos(2 * np.pi * df['hour']/24)
+
+        # - Months (12-month cycle)
+        # - month_sin, month_cos (12-month cycle)
+        df['month_sin'] = np.sin(2 * np.pi * df['month']/12)
+        df['month_cos'] = np.cos(2 * np.pi * df['month']/12)
+
+        # - Days of week (7-day cycle)
+        # - day_sin, day_cos (7-day cycle)
+        df['day_sin'] = np.sin(2 * np.pi * df['day_of_week']/7)
+        df['day_cos'] = np.cos(2 * np.pi * df['day_of_week']/7)
+
+        # Create rolling activity features
+        df.sort_values('timestamp', inplace=True)
+        windows = [
+            ('1h', 60 // self.interval_minutes),   # 1 hour
+            ('4h', 240 // self.interval_minutes),  # 4 hours
+            ('1d', 1440 // self.interval_minutes)  # 1 day
+        ]
+
+        # Create rolling averages of activity for different time windows.
+        # Capture short-term and long-term trends in light usage.
+        # For example, if lights were frequently on in the past hour, the model
+        # should learn to keep them on.
+        for name, window in windows:
+            df[f'rolling_activity_{name}'] = (
+                df.groupby('day_of_week')['activity_pin']
+                .transform(
+                    lambda x: x.rolling(window=window, min_periods=1).mean())
+            )
+
+        logging.info("Activity data processed successfully")
+        return df
 
     def _add_schedule_accuracy_features(self):
         """Determine how acuurate previous schedules were."""
