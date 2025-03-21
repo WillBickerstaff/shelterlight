@@ -591,6 +591,11 @@ class LightScheduler:
             for interval, start_time, end_time, prediction \
                     in scheduled_intervals:
 
+                # Skip evaluation if the interval hasn't ended yet
+                now = dt.datetime.utcnow()
+                if dt.datetime.combine(date, end_time) > now:
+                    continue
+
                 seen_intervals.add(interval)
 
                 # Skip intervals where prediction was off
@@ -770,11 +775,24 @@ class LightScheduler:
         # Identify the relevant schedule date (yesterday or today)
         # Get darkness times for today (could span two dates)
         darkness_start, darkness_end = self._get_darkness_times()
-        # 3️-Retrieve the schedule for the identified date
-        # 4️-Determine the current interval number
-        # 5️-Check if lights should be ON for this interval
-        # 6️-Return True (ON) or False (OFF)
-        pass
+
+        # Determine if this moment falls in today's or yesterday's schedule
+        if darkness_start < darkness_end:
+            # Darkness is within a single day (e.g. 18:00–06:00)
+            schedule_date = now.date()
+        else:
+            # Darkness spans midnight: decide based on whether time is after
+            # midnight but before sunrise
+            if now.time() <= darkness_end:
+                schedule_date = (now - dt.timedelta(days=1)).date()
+            else:
+                schedule_date = now.date()
+        # Retrieve the schedule for the identified date
+        schedule = self.get_schedule(schedule_date)
+        # Determine the current interval number
+        interval_number = (now.hour * 60 + now.minute) // self.interval_minutes
+        # return if lights should be ON for this interval
+        return schedule.get(interval_number, 0) == 1
 
     def set_interval_minutes(self, minutes: int) -> None:
         """Adjust interval duration for scheduling and recalculate schedules.
