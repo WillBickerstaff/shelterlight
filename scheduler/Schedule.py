@@ -4,7 +4,7 @@ Copyright (c) 2025 Will Bickerstaff
 Licensed under the MIT License.
 See LICENSE file in the root directory of this project.
 
-Description: Generate daily schedules
+Description: Generate daily schedules, train the learning model
 Author: Will Bickerstaff
 Version: 0.1
 """
@@ -554,22 +554,83 @@ class LightScheduler:
         ----
             date (dt.date): The date of the schedule to evaluate.
 
-        This method:
-        -Retrieves the scheduled light intervals from `light_schedules`.
-        -Retrieves actual activity timestamps from `activity_log`.
-        -Compares each scheduled interval with actual activity.
-        -Determines if the schedule was correct, a false positive,
+        -Retrieve the scheduled light intervals from `light_schedules`.
+        -Retrieve actual activity timestamps from `activity_log`.
+        -Compare each scheduled interval with actual activity.
+        -Determine if the schedule was correct, a false positive,
          or a false negative.
-        -Updates the accuracy metrics in `light_schedules` using
+        -Update the accuracy metrics in `light_schedules` using
          `update_schedule_accuracy()`.
         """
-        # 1️-Retrieve scheduled light intervals from `light_schedules`
-        # 2️-Retrieve actual activity timestamps from `activity_log`
-        # 3️-Compare scheduled intervals with actual activity
-        # 4️-Identify false positives (lights on, no activity detected)
-        # 5️-Identify false negatives (activity detected, lights not scheduled)
-        # 6️-Update the schedule accuracy in the database
-        pass
+        schedule_query = """
+            SELECT interval_number, start_time, end_time, prediction
+            FROM light_schedules
+            WHERE date = %s
+        """
+        activity_query = """
+            SELECT timestamp
+            FROM activity_log
+            WHERE DATE(timestamp) = %s
+        """
+        # Fetch actual activity data and the schedule for the date
+        try:
+            with self.db.conn.cursor() as cur:
+                # Fetch schedule entries for the date
+                cur.execute(schedule_query, (date,))
+                scheduled_intervals = cur.fetchall()
+
+                # Fetch all activity timestamps
+                cur.execute(activity_query, (date,))
+                activity_timestamps = [row[0] for row in cur.fetchall()]
+
+            # Build a set of activity times for fast lookup
+            activity_times = [ts.time() for ts in activity_timestamps]
+
+            seen_intervals = set()
+
+            for interval, start_time, end_time, prediction \
+                    in scheduled_intervals:
+
+                seen_intervals.add(interval)
+
+                # Skip intervals where prediction was off
+                if not prediction:
+                    continue
+
+                # Check if any activity happened during this interval
+                activity_occurred = any(
+                    start_time <= act_time <= end_time
+                    for act_time in activity_times
+                )
+
+                # Classify the outcome
+                was_correct = activity_occurred
+                false_positive = not activity_occurred
+                false_negative = False  # False negatives below
+
+                self.update_schedule_accuracy(
+                    date=date,
+                    interval_number=interval,
+                    was_correct=was_correct,
+                    false_positive=false_positive,
+                    false_negative=false_negative
+                )
+
+            # False negatives: activity without a scheduled light
+            for ts in activity_timestamps:
+                interval = (ts.hour * 60 + ts.minute) // self.interval_minutes
+                if interval not in seen_intervals:
+                    self.update_schedule_accuracy(
+                        date=date,
+                        interval_number=interval,
+                        was_correct=False,
+                        false_positive=False,
+                        false_negative=True
+                    )
+            logging.info(f"Schedule evaluation completed for {date}")
+
+        except Exception as e:
+            logging.error(f"Failed to evaluate schedule for {date}: {e}")
 
     def update_schedule_accuracy(self, date: dt.date, interval_number: int,
                                  was_correct: bool, false_positive: bool,
@@ -584,19 +645,44 @@ class LightScheduler:
             false_positive (bool): Whether the lights were on unnecessarily.
             false_negative (bool): Whether lights were off when needed.
 
-        This method updates:
-        - `was_correct` → 1, the schedule matched actual activity, 0 otherwise.
-        - `false_positive` → 1, the schedule had unnecessary lights.
-        - `false_negative` → 1, activity was detected but no lights
+        Updates:
+        - was_correct → 1, the schedule matched actual activity, 0 otherwise.
+        - false_positive → 1, the schedule had unnecessary lights.
+        - false_negative → 1, activity was detected but no lights
                                 were scheduled.
         """
-        # 1️-Construct and execute an SQL `UPDATE` statement to store accuracy
-        # 2️-Commit the changes to the database
-        # 3️-Handle potential exceptions (rollback on failure, log errors)
-        pass
+        update_query = """
+            UPDATE light_schedules
+            SET
+                was_correct = %s,
+                false_positive = %s,
+                false_negative = %s
+            WHERE date = %s AND interval_number = %s
+        """
+
+        try:
+            with self.db.conn.cursor() as cur:
+                cur.execute(update_query, (
+                    was_correct, false_positive, false_negative, date,
+                    interval_number
+                ))
+            self.db.conn.commit()
+            logging.debug(
+                f"Updated accuracy for {date} interval {interval_number}")
+
+        except Exception as e:
+            # Handle potential exceptions (rollback on failure, log errors)
+            self.db.conn.rollback()
+            logging.error(f"Failed to update accuracy for {date} interval "
+                          f"{interval_number}: {e}")
 
     def update_daily_schedule(self) -> Optional[dict]:
         """Generate and store tomorrow's schedule.
+
+        - Evaluate the accuracy of yesterday's schedule.
+        - Retrain the model with updated data.
+        - Generate a new schedule for tomorrow.
+        - Store it in the database and updates the in-memory cache.
 
         Returns
         -------
@@ -607,16 +693,30 @@ class LightScheduler:
             # Make sure only one thread can try to update the schedule at
             # any time
             with self._lock:
-                # 1️-Evaluate yesterday's schedule accuracy
-                # 2️-Retrain the model using updated accuracy data
-                # 3️-Generate a new schedule for tomorrow
-                # 4️-Store the generated schedule in the database
-                # 5️-Update the in-memory schedule cache
-                # 6️-Log the successful update and return the new schedule
+                # Evaluate yesterday's schedule accuracy
+                yesterday = dt.datetime.now().date() - dt.timedelta(days=1)
+                self.evaluate_previous_schedule(yesterday)
+                # Retrain the model using updated accuracy data
+                self.train_model()
+                # Get tomorrow's date and darkness period
+                tomorrow = dt.datetime.now().date() + dt.timedelta(days=1)
+                darkness_start, darkness_end = self._get_darkness_times()
+                # Generate a new schedule for tomorrow
+                new_schedule = self.generate_daily_schedule(
+                    tomorrow.strftime("%Y-%m-%d"),
+                    darkness_start.strftime("%H:%M"),
+                    darkness_end.strftime("%H:%M")
+                )
+                # Storage of the generated schedule in the database & cache
+                # is completed by `self.generate_daily_schedule' with its
+                # final call to `self.store_schedule'
 
-                return None  # Replace with the actual new schedule
+                # Log the successful update and return the new schedule
+                logging.info("Successfully updated schedule for %s", tomorrow)
+                return new_schedule
+
         except Exception as e:
-            # 7️-Handle errors, log the issue, and return None
+            logging.error("Failed to update daily schedule: %s", e)
             return None
 
     def get_current_schedule(self,
@@ -665,8 +765,11 @@ class LightScheduler:
         -Retrieves the relevant interval number for the given time.
         -Checks if lights should be ON for that interval.
         """
-        # 1️-Get the current time (use datetime.now() if None)
-        # 2️-Identify the relevant schedule date (yesterday or today)
+        # Get the current time (use datetime.now() if None)
+        now = current_time or dt.datetime.utcnow()
+        # Identify the relevant schedule date (yesterday or today)
+        # Get darkness times for today (could span two dates)
+        darkness_start, darkness_end = self._get_darkness_times()
         # 3️-Retrieve the schedule for the identified date
         # 4️-Determine the current interval number
         # 5️-Check if lights should be ON for this interval
@@ -831,7 +934,7 @@ class LightScheduler:
             "historical_confidence": historical_confidence
         }
 
-        # 🎯 Only return the features needed by the model.
+        # Only return the features needed by the model.
         # _get_feature_columns() lists the features the model uses.
         # This lets us:
         # - Control which features are used in one place
