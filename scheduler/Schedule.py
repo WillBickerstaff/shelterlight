@@ -215,62 +215,14 @@ class LightScheduler:
         - Recent activity patterns (through rolling averages)
         - Environmental conditions (through darkness information)
         """
-        # Process the activity data
-        # Convert timestamp to datetime if not already
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        # Apply the shared feature function to all timestamps
+        feature_dicts = df['timestamp'].apply(self._generate_features_dict)
 
-        # Create interval features
-        df['hour'] = df['timestamp'].dt.hour
-        df['minute'] = df['timestamp'].dt.minute
-        # Group times into intervals of self.interval_minutes.
-        df['interval_number'] = ((df['hour'] * 60 + df['minute'])
-                                 // self.interval_minutes)
+        # Convert the list of feature dictionaries into a DataFrame
+        features_df = pd.DataFrame(feature_dicts.tolist(), index=df.index)
 
-        # Create cyclical time features
-        #    sin(2π * value/max_value)
-        #    cos(2π * value/max_value)
-
-        # - Hours (24-hour cycle)
-        # - hour_sin, hour_cos (24-hour cycle)
-        df['hour_sin'] = np.sin(2 * np.pi * df['hour']/24)
-        df['hour_cos'] = np.cos(2 * np.pi * df['hour']/24)
-
-        # - Months (12-month cycle)
-        # - month_sin, month_cos (12-month cycle)
-        df['month_sin'] = np.sin(2 * np.pi * df['month']/12)
-        df['month_cos'] = np.cos(2 * np.pi * df['month']/12)
-
-        # - Days of week (7-day cycle)
-        # - day_sin, day_cos (7-day cycle)
-        df['day_sin'] = np.sin(2 * np.pi * df['day_of_week']/7)
-        df['day_cos'] = np.cos(2 * np.pi * df['day_of_week']/7)
-
-        # Create rolling activity features
-        df.sort_values('timestamp', inplace=True)
-        windows = [
-            ('1h', 60 // self.interval_minutes),   # 1 hour
-            ('4h', 240 // self.interval_minutes),  # 4 hours
-            ('1d', 1440 // self.interval_minutes)  # 1 day
-        ]
-
-        # Get darkness times from PersistentData
-        darkness_start, darkness_end = self._get_darkness_times()
-
-        # Add darkness information
-        df['is_dark'] = df['timestamp'].dt.time.apply(
-            lambda x: self.is_dark(x, darkness_start, darkness_end)
-        )
-
-        # Create rolling averages of activity for different time windows.
-        # Capture short-term and long-term trends in light usage.
-        # For example, if lights were frequently on in the past hour, the model
-        # should learn to keep them on.
-        for name, window in windows:
-            df[f'rolling_activity_{name}'] = (
-                df.groupby('day_of_week')['activity_pin']
-                .transform(
-                    lambda x: x.rolling(window=window, min_periods=1).mean())
-            )
+        # Merge the features back into the original dataset
+        df = pd.concat([df, features_df], axis=1)
 
         logging.info("Activity data processed successfully")
         return df
@@ -404,19 +356,28 @@ class LightScheduler:
         logging.info("Feature importance:\n%s", importance)
 
     def _get_feature_columns(self) -> list[str]:
-        """Return the list of feature columns used for training."""
+        """Return the list of features used by the model.
+
+        These are the columns the model uses when training and making
+        predictions. Any other features that are calculated will be ignored.
+
+        Returns
+        -------
+            list[str]: The names of the features the model expects.
+        """
         return [
-            'hour_sin', 'hour_cos',  # Hour encoding
-            'month_sin', 'month_cos',  # Seasonal encoding
-            'day_sin', 'day_cos',  # Weekly pattern encoding
-            'is_dark',  # Whether it's nighttime
-            'rolling_activity_1h',  # Short-term activity trend
-            'rolling_activity_1d',  # Long-term activity trend
-            'interval_number',  # Time interval index
-            'historical_accuracy',  # Past scheduling success rate
+            'hour_sin', 'hour_cos',        # Hour encoding
+            'month_sin', 'month_cos',      # Seasonal encoding
+            'day_sin', 'day_cos',          # Weekly pattern encoding
+            'is_dark',                     # Whether it's nighttime
+            'rolling_activity_1h',         # Short-term activity trend
+            'rolling_activity_1d',         # Long-term activity trend
+            'interval_number',             # Time interval index
+            'historical_accuracy',         # Past scheduling success rate
             'historical_false_positives',  # Past over-predictions
             'historical_false_negatives',  # Past under-predictions
-            'historical_confidence'  # Average confidence in past schedules
+            'historical_confidence'        # Average confidence in past
+                                           # schedules
         ]
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
@@ -547,11 +508,44 @@ class LightScheduler:
             dict: A dictionary mapping interval numbers to light status
                   (0 or 1). Returns an empty dict if no schedule is found.
         """
-        # 1-Check if the schedule is already in cache
-        # 2️-If not in cache, attempt to retrieve it from the database
-        # 3️-If retrieved from the database, store it in cache
-        # 4️-Return the retrieved schedule (or an empty dict if none found)
-        pass
+        # Check if the schedule is already in cache
+        if self.schedule_cache.get('date') == target_date:
+            return self.schedule_cache.get('schedule', {})
+        # If not in cache, attempt to retrieve it from the database
+        # Check DB connection
+        if self.db is None or self.db.conn.closed:
+            logging.warning("Database connection unavailable. "
+                            "Attempting reconnection...")
+            self.set_db_connection()
+            if self.db is None:
+                logging.error("Database connection could not be established.")
+                return {}
+
+        # Query the database
+        try:
+            with self.db.conn.cursor() as cur:
+                cur.execute("""
+                    SELECT interval_number, prediction
+                    FROM light_schedules
+                    WHERE date = %s
+                """, (target_date,))
+                rows = cur.fetchall()
+
+        # Convert results to a dictionary
+            schedule = {interval: prediction for interval, prediction in rows}
+
+        # If retrieved from the database, store it in cache
+            self.schedule_cache = {
+                'date': target_date,
+                'schedule': schedule
+            }
+
+            return schedule
+
+        except psycopg2.DatabaseError as e:
+            logging.error(
+                f"Failed to retrieve schedule for {target_date}: {e}")
+            return {}
 
     def evaluate_previous_schedule(self, date: dt.date) -> None:
         """Evaluate the accuracy of the previous day's schedule.
@@ -604,13 +598,6 @@ class LightScheduler:
     def update_daily_schedule(self) -> Optional[dict]:
         """Generate and store tomorrow's schedule.
 
-        This method:
-        -Evaluates the accuracy of yesterday's schedule.
-        -Trains the model with updated accuracy data.
-        -Generates a new schedule for tomorrow.
-        -Stores the new schedule in both the database and cache.
-        -Handles potential failures and logs errors.
-
         Returns
         -------
             Optional[dict]: The generated schedule for tomorrow or None if an
@@ -632,26 +619,32 @@ class LightScheduler:
             # 7️-Handle errors, log the issue, and return None
             return None
 
-    def get_current_schedule(self) -> dict:
+    def get_current_schedule(self,
+                             target_date: Optional[dt.date] = None) -> dict:
         """Get the cached schedule or load it from the database if needed.
-
-        This method:
-        -Check if today's schedule is already in `self.schedule_cache`.
-        -If the cache is empty or outdated, load the schedule from the db.
-        -Update the cache with the retrieved schedule.
-        -Return the cached schedule.
 
         Returns
         -------
-            dict: The schedule for the current day
-                  (interval_number → light status).
+            dict: (Optional[dt.date]): Date for the schedule.
+                                       Defaults to today.
         """
-        # 1️-Get today's date
-        # 2️-Check if the schedule is already cached and up to date
-        # 3-If not in cache, retrieve from the database using `get_schedule()`
-        # 4️-Store the retrieved schedule in `self.schedule_cache`
-        # 5️-Return the cached schedule
-        pass
+        # Get today's date if no date is given
+        if target_date is None:
+            target_date = dt.datetime.now().date()
+
+        # Check if the schedule is already cached and up to date
+        if (self.schedule_cache and
+                self.schedule_cache.get('date') == target_date):
+            return self.schedule_cache['schedule']
+
+        # Not in cache, retrieve from the database using `get_schedule()`
+        schedule = self.get_schedule(target_date)
+        # Store the retrieved schedule in `self.schedule_cache`
+        self.schedule_cache = {
+            'date': target_date,
+            'schedule': schedule
+        }
+        return schedule
 
     def should_light_be_on(
             self, current_time: Optional[dt.datetime] = None) -> bool:
@@ -737,24 +730,16 @@ class LightScheduler:
             tuple[np.ndarray, pd.DataFrame]:
                 - NumPy array of feature values for model inference.
                 - DataFrame with named columns for debugging or model training.
-
-        This method:
-        -Extracts time-based features (hour, day of week, month).
-        -Converts these into cyclical features (`sin/cos` encoding).
-        -Determines whether the timestamp falls within darkness hours.
-        -Retrieves historical schedule accuracy features for this interval.
-        -Computes rolling activity features for short- and long-term trends.
-        -Returns both a structured DataFrame and a NumPy array.
         """
-        # 1️-Extract time components
-        # 2️-Apply cyclical transformations (sin/cos encoding)
-        # 3️-Determine if the timestamp is within darkness hours
-        # 4️-Calculate interval number
-        # 5-Retrieve historical accuracy features (default fallback if missing)
-        # 6️-Compute rolling activity features
-        # 7️-Construct feature vector
-        # 8️-Create DataFrame for debugging & training
-        pass
+        feature_dict = self._generate_features_dict(timestamp)
+
+        # Convert dictionary to NumPy array (for prediction)
+        feature_values = np.array(list(feature_dict.values()))
+
+        # Convert dictionary to DataFrame (for debugging/training)
+        feature_df = pd.DataFrame([feature_dict])
+
+        return feature_values, feature_df
 
     def _generate_features_dict(self, timestamp: dt.datetime) -> dict:
         """Generate feature values for a timestamp.
@@ -763,44 +748,75 @@ class LightScheduler:
         ----
             timestamp (dt.datetime): The timestamp to generate features for.
 
+        This method:
+        -Extracts time-based features (hour, day of week, month).
+        -Converts these into cyclical features (`sin/cos` encoding).
+        -Determines whether the timestamp falls within darkness hours.
+        -Retrieves historical schedule accuracy features for this interval.
+        -Computes rolling activity features for short- and long-term trends.
+
         Returns
         -------
             dict: A dictionary of extracted feature values.
         """
-
         # Extract time components
         hour = timestamp.hour
         minute = timestamp.minute
         day_of_week = timestamp.weekday()
         month = timestamp.month
-    
-        # Apply cyclical transformations (sin/cos encoding)
+
+        # Create cyclical time features
+        #    sin(2π * value/max_value)
+        #    cos(2π * value/max_value)
+
+        # - Hours (24-hour cycle)
+        # - hour_sin, hour_cos (24-hour cycle)
         hour_sin = np.sin(2 * np.pi * hour / 24)
         hour_cos = np.cos(2 * np.pi * hour / 24)
+
+        # - Days of week (7-day cycle)
+        # - day_sin, day_cos (7-day cycle)
         day_sin = np.sin(2 * np.pi * day_of_week / 7)
         day_cos = np.cos(2 * np.pi * day_of_week / 7)
+
+        # - Months (12-month cycle)
+        # - month_sin, month_cos (12-month cycle)
         month_sin = np.sin(2 * np.pi * month / 12)
         month_cos = np.cos(2 * np.pi * month / 12)
 
         # Determine if the timestamp is within darkness hours
         is_dark = self.is_dark(timestamp.time())
-    
+
         # Calculate interval number
         interval_number = (hour * 60 + minute) // self.interval_minutes
 
         # Retrieve historical accuracy features (default if missing)
         history = self.get_schedule(timestamp.date()).get(interval_number, {})
-        historical_accuracy = history.get("historical_accuracy", 0.5)
-        historical_false_positives = history.get("historical_false_positives", 0)
-        historical_false_negatives = history.get("historical_false_negatives", 0)
-        historical_confidence = history.get("historical_confidence", 0.5)
-    
-        # Compute rolling activity features
-        past_activity = self._retrieve_past_activity(timestamp.date(), interval_number)
-        rolling_activity_1h = np.mean(past_activity[-6:]) if len(past_activity) >= 6 else 0  # Last hour
-        rolling_activity_1d = np.mean(past_activity) if past_activity else 0  # Last 24 hours
+        historical_accuracy = history.get(
+            "historical_accuracy", 0.5)
+        historical_false_positives = history.get(
+            "historical_false_positives", 0)
+        historical_false_negatives = history.get(
+            "historical_false_negatives", 0)
+        historical_confidence = history.get(
+            "historical_confidence", 0.5)
 
-        # Construct feature dictionary using `_get_feature_columns()`
+        # Compute rolling activity features
+        past_activity = self._retrieve_past_activity(
+            timestamp.date(), interval_number)
+
+        # Compute rolling activity features
+        if len(past_activity) >= 6:
+            rolling_activity_1h = np.mean(past_activity[-6:])  # Last hour
+        else:
+            rolling_activity_1h = 0
+
+        if past_activity:
+            rolling_activity_1d = np.mean(past_activity)       # Last 24 hours
+        else:
+            rolling_activity_1d = 0
+
+        # Construct full dictionary of all available features
         feature_values = {
             "hour_sin": hour_sin, "hour_cos": hour_cos,
             "day_sin": day_sin, "day_cos": day_cos,
@@ -815,5 +831,11 @@ class LightScheduler:
             "historical_confidence": historical_confidence
         }
 
-        # Ensure only the required features are included
-        return {key: feature_values[key] for key in self._get_feature_columns()}
+        # 🎯 Only return the features needed by the model.
+        # _get_feature_columns() lists the features the model uses.
+        # This lets us:
+        # - Control which features are used in one place
+        # - Try out new features here without affecting the model
+        # - Keep training and prediction using the same inputs
+        return {
+            key: feature_values[key] for key in self._get_feature_columns()}
