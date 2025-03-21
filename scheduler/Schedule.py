@@ -755,3 +755,65 @@ class LightScheduler:
         # 7️-Construct feature vector
         # 8️-Create DataFrame for debugging & training
         pass
+
+    def _generate_features_dict(self, timestamp: dt.datetime) -> dict:
+        """Generate feature values for a timestamp.
+
+        Args
+        ----
+            timestamp (dt.datetime): The timestamp to generate features for.
+
+        Returns
+        -------
+            dict: A dictionary of extracted feature values.
+        """
+
+        # Extract time components
+        hour = timestamp.hour
+        minute = timestamp.minute
+        day_of_week = timestamp.weekday()
+        month = timestamp.month
+    
+        # Apply cyclical transformations (sin/cos encoding)
+        hour_sin = np.sin(2 * np.pi * hour / 24)
+        hour_cos = np.cos(2 * np.pi * hour / 24)
+        day_sin = np.sin(2 * np.pi * day_of_week / 7)
+        day_cos = np.cos(2 * np.pi * day_of_week / 7)
+        month_sin = np.sin(2 * np.pi * month / 12)
+        month_cos = np.cos(2 * np.pi * month / 12)
+
+        # Determine if the timestamp is within darkness hours
+        is_dark = self.is_dark(timestamp.time())
+    
+        # Calculate interval number
+        interval_number = (hour * 60 + minute) // self.interval_minutes
+
+        # Retrieve historical accuracy features (default if missing)
+        history = self.get_schedule(timestamp.date()).get(interval_number, {})
+        historical_accuracy = history.get("historical_accuracy", 0.5)
+        historical_false_positives = history.get("historical_false_positives", 0)
+        historical_false_negatives = history.get("historical_false_negatives", 0)
+        historical_confidence = history.get("historical_confidence", 0.5)
+    
+        # Compute rolling activity features
+        past_activity = self._retrieve_past_activity(timestamp.date(), interval_number)
+        rolling_activity_1h = np.mean(past_activity[-6:]) if len(past_activity) >= 6 else 0  # Last hour
+        rolling_activity_1d = np.mean(past_activity) if past_activity else 0  # Last 24 hours
+
+        # Construct feature dictionary using `_get_feature_columns()`
+        feature_values = {
+            "hour_sin": hour_sin, "hour_cos": hour_cos,
+            "day_sin": day_sin, "day_cos": day_cos,
+            "month_sin": month_sin, "month_cos": month_cos,
+            "is_dark": is_dark,
+            "rolling_activity_1h": rolling_activity_1h,
+            "rolling_activity_1d": rolling_activity_1d,
+            "interval_number": interval_number,
+            "historical_accuracy": historical_accuracy,
+            "historical_false_positives": historical_false_positives,
+            "historical_false_negatives": historical_false_negatives,
+            "historical_confidence": historical_confidence
+        }
+
+        # Ensure only the required features are included
+        return {key: feature_values[key] for key in self._get_feature_columns()}
