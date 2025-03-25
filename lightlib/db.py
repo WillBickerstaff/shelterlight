@@ -42,19 +42,19 @@ class DB:
         """
         config_loader = ConfigLoader()
         self._db_host = config_loader.get_config_value(
-            config_section, "host")
+            config_loader.config, config_section, "host")
         self._db_port = int(config_loader.get_config_value(
-            config_section, "port"))
+            config_loader.config, config_section, "port"))
         self._db_database = config_loader.get_config_value(
-            config_section, "database")
+            config_loader.config, config_section, "database")
         self._db_user = config_loader.get_config_value(
-            config_section, "user")
+            config_loader.config, config_section, "user")
         self._db_password = config_loader.get_config_value(
-            config_section, "password")
+            config_loader.config, config_section, "password")
         self._db_retry = int(config_loader.get_config_value(
-            config_section, "connect_retry"))
+            config_loader.config, config_section, "connect_retry"))
         self._db_retry_delay = int(config_loader.get_config_value(
-            config_section, "connect_retry_delay"))
+            config_loader.config, config_section, "connect_retry_delay"))
         self._conn = self._connect_to_db()
         self._setup_database()
 

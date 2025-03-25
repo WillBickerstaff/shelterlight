@@ -10,7 +10,6 @@ Version: 0.1
 """
 
 from unittest.mock import MagicMock
-from geocode.local import Location
 
 import sys
 import os
@@ -22,6 +21,8 @@ sys.path.append(base_path)
 parent_path = os.path.abspath(os.path.join(base_path, '..'))
 sys.path.append(base_path)
 sys.path.append(parent_path)
+
+from geocode.local import Location
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()

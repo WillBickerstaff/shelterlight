@@ -738,8 +738,11 @@ class LightScheduler:
             target_date = dt.datetime.now().date()
 
         # Check if the schedule is already cached and up to date
+        logging.info(
+            f"Checking cache for date: {self.schedule_cache.get('date')}")
         if (self.schedule_cache and
                 self.schedule_cache.get('date') == target_date):
+            logging.info("Schedule retrieved from cache")
             return self.schedule_cache['schedule']
 
         # Not in cache, retrieve from the database using `get_schedule()`
@@ -749,6 +752,7 @@ class LightScheduler:
             'date': target_date,
             'schedule': schedule
         }
+        logging.info(f"Schedule loaded from DB: {schedule}")
         return schedule
 
     def should_light_be_on(
@@ -794,49 +798,73 @@ class LightScheduler:
         # return if lights should be ON for this interval
         return schedule.get(interval_number, 0) == 1
 
-    def set_interval_minutes(self, minutes: int) -> None:
+    def set_interval_minutes(self, minutes: int,
+                             retrain: Optional[int] = 1) -> None:
         """Adjust interval duration for scheduling and recalculate schedules.
+
+        Controls the granularity of the schedule. For example,
+        an interval of 10 means the model will make predictions in
+        10-minute segments.
 
         Args
         ----
             minutes (int): The new interval duration in minutes.
+            retrain Optional[int]: 1 or 0, retrain the model after changing.
+                                   Default is 1 (retrain)
 
-        This method:
-        -Validates the input to ensure it’s a positive integer.
-        -Updates `self.interval_minutes` with the new value.
-        -Logs the change for debugging.
-        -Triggers a recalc of the current schedule to use the new interval.
+        Raises
+        ------
+            ValueError: If the interval is not a positive integer.
         """
-        # 1️-Validate that `minutes` is a positive integer
-        # 2️-Update `self.interval_minutes`
-        # 3️-Recalculate schedules based on the new interval
-        pass
+        if not isinstance(minutes, int) or minutes <= 0:
+            raise ValueError("Interval must be a positive integer")
 
-    def set_confidence_threshold(self, threshold: float) -> None:
+        old_interval = self.interval_minutes
+        self.interval_minutes = minutes
+
+        logging.info(
+            "Updated interval duration from %d to %d minutes",
+            old_interval, self.interval_minutes
+        )
+
+        # Retrain the model, if needed.
+        if retrain == 1:
+            self.update_daily_schedule()
+
+    def set_confidence_threshold(self, threshold: float,
+                                 retrain: Optional[int] = 1) -> None:
         """Update the confidence threshold for predictions.
 
-        The confidence threshold determines how certain the model must be
-        before scheduling lights to turn on.
-
-        The LightGBM model outputs a probability (0.0 to 1.0) for light
-        activation. When generating a schedule, predictions will only activate
-        lights if confidence ≥ threshold.
+        Controls how certain the model must be before it
+        schedules lights to turn on. Predictions with a confidence
+        below this threshold will be ignored.
 
         Args
         ----
-            threshold (float): The new confidence threshold (0.0 - 1.0).
+            threshold (float): The new confidence threshold
+                               (must be between 0.0 and 1.0).
+            retrain Optional[int]: 1 or 0, retrain the model after changing.
+                                   Default is 1 (retrain)
 
-        This method:
-        -Validates the threshold value (must be between 0 and 1).
-        -Updates `self.min_confidence` with the new threshold.
-        -Logs the update.
-        -Triggers retraining or schedule recalculations.
+        Raises
+        ------
+            ValueError: If the threshold is out of the valid range.
         """
-        # 1️-Validate that `threshold` is between 0.0 and 1.0
-        # 2️-Update `self.min_confidence`
-        # 3️-Log the threshold change
-        # 4️-Recalculate schedules or retrain the model if needed
-        pass
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError(
+                "Confidence threshold must be between 0.0 and 1.0")
+
+        old_threshold = self.min_confidence
+        self.min_confidence = threshold
+
+        logging.info(
+            "Updated confidence threshold from %.2f to %.2f",
+            old_threshold, self.min_confidence
+        )
+
+        # Retrain the model, if needed.
+        if retrain == 1:
+            self.update_daily_schedule()
 
     def _create_prediction_features(
             self, timestamp: dt.datetime) -> tuple[np.ndarray, pd.DataFrame]:
@@ -854,11 +882,29 @@ class LightScheduler:
         """
         feature_dict = self._generate_features_dict(timestamp)
 
+        # Ensure expected features match the generated features
+        expected_features = set(self._get_feature_columns())
+        generated_features = set(feature_dict.keys())
+
+        if expected_features != generated_features:
+            missing = expected_features - generated_features
+            extra = generated_features - expected_features
+            raise ValueError(
+                f"Feature mismatch!\nMissing: {missing}\nExtra: {extra}"
+            )
+
         # Convert dictionary to NumPy array (for prediction)
-        feature_values = np.array(list(feature_dict.values()))
+        # Keep in order for testing
+        feature_values = np.array(
+            [feature_dict[f] for f in expected_features])
 
         # Convert dictionary to DataFrame (for debugging/training)
-        feature_df = pd.DataFrame([feature_dict])
+        # Keep in order for testing
+        feature_df = pd.DataFrame([feature_dict], columns=expected_features)
+
+        logging.info(f"Generated features: {feature_dict}")
+        logging.info(f"Feature array shape: {feature_values.shape}")
+        logging.info(f"Expected features: {self._get_feature_columns()}")
 
         return feature_values, feature_df
 
@@ -869,7 +915,6 @@ class LightScheduler:
         ----
             timestamp (dt.datetime): The timestamp to generate features for.
 
-        This method:
         -Extracts time-based features (hour, day of week, month).
         -Converts these into cyclical features (`sin/cos` encoding).
         -Determines whether the timestamp falls within darkness hours.

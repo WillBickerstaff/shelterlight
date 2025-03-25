@@ -9,7 +9,6 @@ Author: Will Bickerstaff
 Version: 0.1
 """
 
-from lightlib.persist import PersistentData
 from unittest.mock import MagicMock
 import unittest
 import datetime as dt
@@ -22,6 +21,8 @@ sys.path.append(base_path)
 parent_path = os.path.abspath(os.path.join(base_path, '..'))
 sys.path.append(base_path)
 sys.path.append(parent_path)
+
+from lightlib.persist import PersistentData
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()

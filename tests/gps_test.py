@@ -9,10 +9,6 @@ Author: Will Bickerstaff
 Version: 0.1
 """
 
-from shelterGPS.common import GPSInvalid, GPSOutOfBoundsError
-from shelterGPS.Position import GPS
-from shelterGPS.coord import Coordinate
-
 import unittest
 from unittest.mock import patch, MagicMock
 import sys
@@ -25,6 +21,10 @@ sys.path.append(base_path)
 parent_path = os.path.abspath(os.path.join(base_path, '..'))
 sys.path.append(base_path)
 sys.path.append(parent_path)
+
+from shelterGPS.common import GPSInvalid, GPSOutOfBoundsError
+from shelterGPS.Position import GPS
+from shelterGPS.coord import Coordinate
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
