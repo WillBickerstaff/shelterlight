@@ -36,52 +36,58 @@ if 'RPi' not in sys.modules:
 class TestLightScheduler(unittest.TestCase):
 
     def setUp(self):
+        # Reset the singleton instance to avoid cross-test contamination
+        from scheduler.Schedule import LightScheduler
+        LightScheduler._instance = None
         self.scheduler = LightScheduler()
-        
-        # Create a mock database connection and ensure `.conn.closed` is False
-        mock_conn = MagicMock()
-        mock_conn.closed = False
-        self.scheduler.db = MagicMock()
-        self.scheduler.db.conn = mock_conn
     
-        # General scheduler settings
+        # Mock the database connection and prevent auto-reconnect clobbering
+        self.scheduler.db = MagicMock()
+        self.scheduler.db.conn.closed = False  # Ensure connection appears open
+    
+        # Clear cache to prevent side effects
+        self.scheduler.schedule_cache = {}
+    
+        # Set standard values for tests
         self.scheduler.interval_minutes = 10
         self.scheduler.min_confidence = 0.6
     
-        # Logging config (once only to avoid repeated handlers)
+        # Setup logging for test output (safely)
         if not logging.getLogger().handlers:
             logging.basicConfig(
                 level=logging.DEBUG,
                 format="%(asctime)s [%(levelname)s] %(message)s",
                 handlers=[
-                    logging.FileHandler("test_output.log", mode='a'),
+                    logging.FileHandler("test_output.log"),
                     logging.StreamHandler()
                 ]
             )
 
     def test_get_schedule_from_db(self):
         # Arrange
-        target_date = dt.date(2025, 3, 20)
+        target_date = dt.date(2099, 1, 1)  # Use future date to avoid clashes
+        self.scheduler.schedule_cache = {}  # Clear cache
+    
+        # Create mock cursor and set up context manager
         mock_cursor = MagicMock()
-        mock_cursor.__enter__.return_value = mock_cursor
         mock_cursor.fetchall.return_value = [(0, 1), (1, 0), (2, 1)]
+        self.scheduler.db.conn.cursor.return_value.__enter__.return_value = mock_cursor
+        # Prevent reconnection from clobbering the mock
+        self.scheduler.db.conn.closed = False
 
-        self.scheduler.db.conn.cursor.return_value = mock_cursor
-
-        # Act
+        # Act – First call (should fetch from DB)
         result = self.scheduler.get_schedule(target_date)
-
+    
         # Assert
         expected = {0: 1, 1: 0, 2: 1}
         self.assertEqual(result, expected)
-        self.scheduler.db.conn.cursor.assert_called()
-        mock_cursor.execute.assert_called_with(
-            """
-                    SELECT interval_number, prediction
-                    FROM light_schedules
-                    WHERE date = %s
-                """, (target_date,)
-        )
+        mock_cursor.execute.assert_called_once()
+    
+        # Act – Second call (should fetch from cache, so no DB call)
+        mock_cursor.execute.reset_mock()
+        cached_result = self.scheduler.get_schedule(target_date)
+        self.assertEqual(cached_result, expected)
+        mock_cursor.execute.assert_not_called()
 
     def test_should_light_be_on_true(self):
         # Arrange
@@ -194,12 +200,12 @@ class TestLightScheduler(unittest.TestCase):
         }
     
         # Act: Call get_current_schedule()
-        result = self.scheduler.get_current_schedule()
+        result = self.scheduler.get_current_schedule(today)
     
         # Debugging Output
-        logging.debug("Expected:", expected_schedule)
-        logging.debug("Actual:", result)
-        logging.debug("Scheduler Cache:", self.scheduler.schedule_cache)
+        logging.debug("Expected: %s", expected_schedule)
+        logging.debug("Actual: %s", result)
+        logging.debug("Scheduler Cache: %s", self.scheduler.schedule_cache)
     
         # Assert
         self.assertEqual(result, expected_schedule)

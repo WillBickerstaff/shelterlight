@@ -530,7 +530,7 @@ class LightScheduler:
                     WHERE date = %s
                 """, (target_date,))
                 rows = cur.fetchall()
-
+                logging.debug("get_schedule fetched rows: %s", rows)
         # Convert results to a dictionary
             schedule = {interval: prediction for interval, prediction in rows}
 
