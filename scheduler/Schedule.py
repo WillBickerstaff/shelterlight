@@ -738,7 +738,7 @@ class LightScheduler:
             target_date = dt.datetime.now().date()
 
         # Check if the schedule is already cached and up to date
-        logging.info(
+        logging.debug(
             f"Checking cache for date: {self.schedule_cache.get('date')}")
         if (self.schedule_cache and
                 self.schedule_cache.get('date') == target_date):
@@ -900,11 +900,12 @@ class LightScheduler:
 
         # Convert dictionary to DataFrame (for debugging/training)
         # Keep in order for testing
-        feature_df = pd.DataFrame([feature_dict], columns=expected_features)
+        feature_df = pd.DataFrame([feature_dict],
+                                  columns=sorted(list(expected_features)))
 
-        logging.info(f"Generated features: {feature_dict}")
-        logging.info(f"Feature array shape: {feature_values.shape}")
-        logging.info(f"Expected features: {self._get_feature_columns()}")
+        logging.debug(f"Generated features: {feature_dict}")
+        logging.debug(f"Feature array shape: {feature_values.shape}")
+        logging.debug(f"Expected features: {self._get_feature_columns()}")
 
         return feature_values, feature_df
 
