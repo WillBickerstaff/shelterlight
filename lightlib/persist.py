@@ -191,44 +191,44 @@ class PersistentData:
     def sunrise_today(self) -> Optional[dt.datetime]:
         """Today's sunrise time from persistent data."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TODAY(),
+            return PersistentData._date_in_dates(check_date=DATE_TODAY,
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            logging.error(f"{datetime_to_iso(DATE_TODAY())} not found in "
-                          "persistent data sunrise times")
+            logging.error("%s not found in persistent data sunrise times",
+                          datetime_to_iso(DATE_TODAY))
             return None
 
     @property
     def sunset_today(self) -> Optional[dt.datetime]:
         """Today's sunset time from persistent data."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TODAY(),
+            return PersistentData._date_in_dates(check_date=DATE_TODAY,
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            logging.error(f"{datetime_to_iso(DATE_TODAY())} not found in "
-                          "persistent data sunset times")
+            logging.error("%s not found in persistent data sunset times",
+                          datetime_to_iso(DATE_TODAY))
             return None
 
     @property
     def sunrise_tomorrow(self) -> Optional[dt.datetime]:
         """Tomorrows sunrise time from persistent."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TOMORROW(),
+            return PersistentData._date_in_dates(check_date=DATE_TOMORROW,
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            logging.error(f"{datetime_to_iso(DATE_TOMORROW())} not found in "
-                          "persistent data sunrise times")
+            logging.error("%s not found in persistent data sunrise times",
+                          datetime_to_iso(DATE_TOMORROW))
             return None
 
     @property
     def sunset_tomorrow(self) -> Optional[dt.datetime]:
         """Tomorrows sunset time from persistent data."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TOMORROW(),
+            return PersistentData._date_in_dates(check_date=DATE_TOMORROW,
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            logging.error(f"{datetime_to_iso(DATE_TOMORROW())} not found in "
-                          "persistent data sunset times")
+            logging.error("%s not found in persistent data sunset times",
+                          datetime_to_iso(DATE_TOMORROW))
             return None
 
     @staticmethod
@@ -270,7 +270,7 @@ class PersistentData:
 
     def _clear_past_times(self) -> None:
         """Remove any sunrise or sunset times that are in the past."""
-        today = DATE_TODAY()
+        today = DATE_TODAY
         # Filter out times from previous days
         self._sunrise_times = [time for time in self._sunrise_times
                                if time.date() >= today]

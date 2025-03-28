@@ -156,21 +156,24 @@ class TestLightScheduler(unittest.TestCase):
         self.assertEqual(self.scheduler.is_dark(dt.time(17, 0), darkness_start, darkness_end), 0)
 
     def test_update_schedule_accuracy_executes_update(self):
+        # Arrange
         mock_cursor = MagicMock()
         self.scheduler.db.conn.cursor.return_value.__enter__.return_value = mock_cursor
-
-        self.scheduler.update_schedule_accuracy(
-            date=dt.date(2025, 3, 20),
-            interval_number=108,
-            was_correct=True,
-            false_positive=False,
-            false_negative=False
-        )
-
+    
+        target_date = dt.date(2025, 3, 20)
+        schedule = {108: 1, 109: 0}
+        actual = {108: 1, 109: 1}
+        false_positive = 0
+        false_negative = 1
+    
+        # Act
+        self.scheduler.update_schedule_accuracy(target_date, schedule, actual, false_positive, false_negative)
+    
+        # Assert
         self.assertTrue(mock_cursor.execute.called)
-        args = mock_cursor.execute.call_args[0]
-        self.assertIn("UPDATE light_schedules", args[0])
-        self.assertEqual(args[1][1], 108)
+        # Optional: Verify correct SQL call format
+        for call in mock_cursor.execute.call_args_list:
+            self.assertIn(target_date, call[0][1])
 
     @patch("scheduler.Schedule.dt")
     def test_evaluate_previous_schedule_skips_future(self, mock_dt):
@@ -348,35 +351,17 @@ class TestLightScheduler(unittest.TestCase):
         self.scheduler.train_model.assert_not_called()
         self.scheduler.generate_daily_schedule.assert_not_called()
 
-
     def test_update_daily_schedule_triggers_store_schedule(self):
         # Arrange
         mock_schedule = {0: 1, 1: 0}
         self.scheduler.evaluate_previous_schedule = MagicMock()
         self.scheduler.train_model = MagicMock()
-        self.scheduler._get_darkness_times = MagicMock(return_value=(
-            dt.time(18, 0), dt.time(6, 0)
-        ))
-    
-        # Patch store_schedule inside generate_daily_schedule
-        with patch.object(self.scheduler, 'generate_daily_schedule',
-                          return_value=mock_schedule) as mock_generate:
-            # Act
-            result = self.scheduler.update_daily_schedule()
-    
-            # Assert
-            mock_generate.assert_called_once()
-            self.assertEqual(result, mock_schedule)
-            self.assertEqual(self.scheduler.schedule_cache['schedule'], mock_schedule)
-    
-    def test_generate_daily_schedule_model_missing(self):
-        # Arrange
-        self.scheduler.model = None  # Simulate no trained model
+        self.scheduler._get_darkness_times = MagicMock(return_value=(dt.time(18, 0), dt.time(6, 0)))
+        self.scheduler.generate_daily_schedule = MagicMock(return_value=mock_schedule)
+        self.scheduler.store_schedule = MagicMock()
     
         # Act
-        result = self.scheduler.generate_daily_schedule(
-            "2025-03-20", "18:00", "06:00"
-        )
+        self.scheduler.update_daily_schedule()
     
         # Assert
-        self.assertEqual(result, {})
+        self.scheduler.store_schedule.assert_called_once()

@@ -243,8 +243,8 @@ class LightScheduler:
             logging.warning(
                 "Missing sunrise/sunset data, using default "
                 "darkness (18:00-06:00).")
-            darkness_start = dt.datetime.utcnow().replace(hour=18, minute=0)
-            darkness_end = dt.datetime.utcnow().replace(hour=6, minute=0)
+            darkness_start = dt.datetime.now(dt.UTC).replace(hour=18, minute=0)
+            darkness_end = dt.datetime.now(dt.UTC).replace(hour=6, minute=0)
 
         return darkness_start.time(), darkness_end.time()
 
@@ -382,17 +382,17 @@ class LightScheduler:
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
         """Generate a light schedule for a date based on model predictions.
-
+    
         Create a daily schedule of when lights should be turned on,
         make sure predictions only fall within darkness hours.
-
+    
         Args
         ----
             date (str): The date for which the schedule is
                         generated (YYYY-MM-DD).
             darkness_start (str): Time when darkness starts (HH:MM).
             darkness_end (str): Time when darkness ends (HH:MM).
-
+    
         Returns
         -------
             dict: A dictionary mapping time intervals to predicted light
@@ -400,39 +400,61 @@ class LightScheduler:
         """
         # Validate input parameters
         try:
-            schedule_date = dt.datetime.strptime(
-                date, "%Y-%m-%d").date()
-            darkness_start = dt.datetime.strptime(
-                darkness_start, "%H:%M").time()
-            darkness_end = dt.datetime.strptime(
-                darkness_end, "%H:%M").time()
+            schedule_date = dt.datetime.strptime(date, "%Y-%m-%d").date()
+            darkness_start = dt.datetime.strptime(darkness_start, "%H:%M").time()
+            darkness_end = dt.datetime.strptime(darkness_end, "%H:%M").time()
         except ValueError as e:
             logging.error("Invalid date or time format: %s", e)
-        return {}
-
+            return {}
+    
         # Prepare prediction data
         interval_times = [
-            (schedule_date, i) for i in range(
-                (24 * 60) // self.interval_minutes)
+            (schedule_date, i) for i in range((24 * 60) // self.interval_minutes)
         ]
         df = pd.DataFrame(interval_times, columns=["date", "interval_number"])
-
+    
+        # Add a timestamp column
+        df["timestamp"] = df.apply(
+            lambda row: dt.datetime.combine(
+                row["date"],
+                dt.time(
+                    hour=(row["interval_number"] * self.interval_minutes) // 60,
+                    minute=(row["interval_number"] * self.interval_minutes) % 60,
+                ),
+            ),
+            axis=1,
+        )
+    
         # Compute necessary features for each interval
         df = self._create_base_features(df)
-
-        # Filter for darkness hours only
-        df["is_dark"] = df["timestamp"].dt.time.apply(self.is_dark)
-        df = df[df["is_dark"] == 1]  # Keep only dark intervals
-
+    
+        # Pass darkness_start and darkness_end to is_dark()
+        df["is_dark"] = df["timestamp"].dt.time.apply(
+            lambda t: self.is_dark(t, darkness_start, darkness_end)
+        )
+    
+        # Keep only dark intervals
+        df = df[df["is_dark"] == 1]
+    
+        logging.debug("Prediction DataFrame: \n%s", df.head())
+    
         # Make predictions using the trained model
         if self.model is None:
             logging.error("No trained model found. Cannot generate schedule.")
-        return {}
-
+            return {}
+    
         predictions = self._predict_schedule(df)
-
+        logging.debug("Predictions: %s", predictions)
+    
         # Store and return the generated schedule
+        logging.debug(
+            "Calling store_schedule with schedule_date: %s, df: %s, predictions: %s",
+            schedule_date,
+            df,
+            predictions,
+        )
         return self.store_schedule(schedule_date, df, predictions)
+
 
     def store_schedule(self, schedule_date: dt.date,
                        df: pd.DataFrame, predictions: list[int]) -> dict:
@@ -592,7 +614,7 @@ class LightScheduler:
                     in scheduled_intervals:
 
                 # Skip evaluation if the interval hasn't ended yet
-                now = dt.datetime.utcnow()
+                now = dt.datetime.now(dt.UTC)
                 if dt.datetime.combine(date, end_time) > now:
                     continue
 
@@ -775,7 +797,7 @@ class LightScheduler:
         -Checks if lights should be ON for that interval.
         """
         # Get the current time (use datetime.now() if None)
-        now = current_time or dt.datetime.utcnow()
+        now = current_time or dt.datetime.now(dt.UTC)
         # Identify the relevant schedule date (yesterday or today)
         # Get darkness times for today (could span two dates)
         darkness_start, darkness_end = self._get_darkness_times()
@@ -952,7 +974,8 @@ class LightScheduler:
         month_cos = np.cos(2 * np.pi * month / 12)
 
         # Determine if the timestamp is within darkness hours
-        is_dark = self.is_dark(timestamp.time())
+        darkness_start, darkness_end = self._get_darkness_times()
+        is_dark = self.is_dark(timestamp.time(), darkness_start, darkness_end)
 
         # Calculate interval number
         interval_number = (hour * 60 + minute) // self.interval_minutes
@@ -1006,3 +1029,51 @@ class LightScheduler:
         # - Keep training and prediction using the same inputs
         return {
             key: feature_values[key] for key in self._get_feature_columns()}
+
+    def _retrieve_past_activity(self, date: dt.date, interval_number: int,
+                                history_days: int = 1) -> list[int]:
+        """Retrieve activity for a specific interval over previous days.
+
+        Args
+        ----
+            date (dt.date): The date for which to retrieve past activity.
+            interval_number (int): The interval number on that date.
+            history_days (int): How many previous days to include.
+
+        Returns
+        -------
+            list[int]: A list of activity values (0 or 1) for the interval over
+                       the past `history_days`.
+        """
+        if self.db is None or self.db.conn.closed:
+            self.set_db_connection()
+            if self.db is None:
+                logging.error("No DB connection for _retrieve_past_activity")
+                return []
+
+        try:
+            # Get start and end timestamps for each historical interval
+            results = []
+            for days_ago in range(1, history_days + 1):
+                historical_date = date - dt.timedelta(days=days_ago)
+                start_time = dt.datetime.combine(
+                    historical_date, dt.time(0, 0)
+                ) + dt.timedelta(
+                    minutes=interval_number * self.interval_minutes)
+                end_time = start_time + dt.timedelta(
+                    minutes=self.interval_minutes)
+
+                with self.db.conn.cursor() as cursor:
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM activity_log
+                        WHERE timestamp >= %s AND timestamp < %s
+                    """, (start_time, end_time))
+
+                    count = cursor.fetchone()[0]
+                    results.append(1 if count > 0 else 0)
+
+            return results
+
+        except Exception as e:
+            logging.error("Failed to retrieve past activity: %s", e)
+            return []
