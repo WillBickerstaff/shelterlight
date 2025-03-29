@@ -30,6 +30,10 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
+    
+from shelterGPS.common import GPSInvalid, GPSOutOfBoundsError
+from shelterGPS.Position import GPS
+from shelterGPS.coord import Coordinate
 
 
 class TestGPS(unittest.TestCase):
@@ -65,7 +69,7 @@ class TestGPS(unittest.TestCase):
         mock_pwr_off.assert_called_once()
         logging.getLogger().setLevel(self.default_loglevel)
 
-    @patch('serial.Serial')
+    @patch('shelterGPS.Position.serial.Serial')
     def test_coordinate_extraction(self, mock_serial):
         """Testing coordinate extraction from NMEA messages."""
         logging.getLogger().setLevel(self.default_loglevel)
