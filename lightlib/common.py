@@ -22,7 +22,7 @@ def get_today():
 
 def get_tomorrow():
     """Return tomorrows date."""
-    return DATE_TODAY() + dt.timedelta(days=1)
+    return DATE_TODAY + dt.timedelta(days=1)
 
 
 DATE_TODAY = get_today()

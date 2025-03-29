@@ -9,9 +9,6 @@ Author: Will Bickerstaff
 Version: 0.1
 """
 
-import gps_test_vals as test_vals
-from shelterGPS.Position import GPS
-from shelterGPS.Helio import SunTimes
 import unittest
 from unittest.mock import patch, MagicMock
 import datetime as dt
@@ -24,6 +21,10 @@ sys.path.append(base_path)
 parent_path = os.path.abspath(os.path.join(base_path, '..'))
 sys.path.append(base_path)
 sys.path.append(parent_path)
+
+import gps_test_vals as test_vals
+from shelterGPS.Position import GPS
+from shelterGPS.Helio import SunTimes
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()

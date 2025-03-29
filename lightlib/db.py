@@ -42,19 +42,19 @@ class DB:
         """
         config_loader = ConfigLoader()
         self._db_host = config_loader.get_config_value(
-            config_section, "host")
+            config_loader.config, config_section, "host")
         self._db_port = int(config_loader.get_config_value(
-            config_section, "port"))
+            config_loader.config, config_section, "port"))
         self._db_database = config_loader.get_config_value(
-            config_section, "database")
+            config_loader.config, config_section, "database")
         self._db_user = config_loader.get_config_value(
-            config_section, "user")
+            config_loader.config, config_section, "user")
         self._db_password = config_loader.get_config_value(
-            config_section, "password")
+            config_loader.config, config_section, "password")
         self._db_retry = int(config_loader.get_config_value(
-            config_section, "connect_retry"))
+            config_loader.config, config_section, "connect_retry"))
         self._db_retry_delay = int(config_loader.get_config_value(
-            config_section, "connect_retry_delay"))
+            config_loader.config, config_section, "connect_retry_delay"))
         self._conn = self._connect_to_db()
         self._setup_database()
 
@@ -103,37 +103,92 @@ class DB:
                 else:
                     raise
 
-    def _setup_database(self) -> None:
-        """Initialize database table and indexes for activity logging.
+def _setup_database(self) -> None:
+    """Initialize database tables and indexes for activity logging and light scheduling.
 
-        Executes SQL commands to create the `activity_log` table and an index
-        on the `timestamp` field, if they do not already exist.
-
-        All integer fields are SMALLINT to reduce the physical storage
-        requirement. SMALLINT holds value from -32768 to +32767.
-        +32767 is 9 hours and 6 minutes
-        """
-        create_table_query = """
-            CREATE TABLE IF NOT EXISTS activity_log (
-                id SERIAL PRIMARY KEY,
-                timestamp TIMESTAMPTZ NOT NULL,
-                day_of_week SMALLINT NOT NULL,
-                month SMALLINT NOT NULL,
-                year SMALLINT NOT NULL,
-                duration SMALLINT NOT NULL,
-                activity_pin SMALLINT NOT NULL
-            );
-        """
-        create_index_query = """
-            CREATE INDEX IF NOT EXISTS idx_activity_timestamp
-            ON activity_log (timestamp);
-        """
-        # Execute setup queries within a cursor context
-        with self._conn.cursor() as cursor:
-            cursor.execute(create_table_query)
-            cursor.execute(create_index_query)
-            self._conn.commit()
-        logging.info("Activity database and indexes initialized successfully.")
+    Executes SQL commands to create:
+    1. `activity_log` table with timestamp index
+    2. `light_schedules` table with date and interval indexes
+    3. Update trigger for light_schedules
+    
+    All integer fields in activity_log are SMALLINT to reduce storage.
+    SMALLINT holds value from -32768 to +32767 (+32767 is 9 hours and 6 minutes)
+    """
+    # Activity Log table
+    create_activity_table = """
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id SERIAL PRIMARY KEY,
+            timestamp TIMESTAMPTZ NOT NULL,
+            day_of_week SMALLINT NOT NULL,
+            month SMALLINT NOT NULL,
+            year SMALLINT NOT NULL,
+            duration SMALLINT NOT NULL,
+            activity_pin SMALLINT NOT NULL
+        );
+    """
+    create_activity_index = """
+        CREATE INDEX IF NOT EXISTS idx_activity_timestamp
+        ON activity_log (timestamp);
+    """
+    
+    # Light Schedules table
+    create_schedules_table = """
+        CREATE TABLE IF NOT EXISTS light_schedules (
+            id SERIAL PRIMARY KEY,
+            date DATE NOT NULL,
+            interval_number SMALLINT NOT NULL,
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            prediction BOOLEAN NOT NULL,
+            was_correct BOOLEAN,
+            false_positive BOOLEAN DEFAULT FALSE,
+            false_negative BOOLEAN DEFAULT FALSE,
+            confidence DECIMAL(5,4),
+            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            
+            CONSTRAINT valid_interval CHECK (interval_number >= 0 AND interval_number <= 47),
+            CONSTRAINT valid_confidence CHECK (confidence >= 0 AND confidence <= 1),
+            CONSTRAINT unique_schedule_interval UNIQUE (date, interval_number)
+        );
+    """
+    create_schedules_indexes = """
+        CREATE INDEX IF NOT EXISTS idx_light_schedules_date 
+        ON light_schedules(date);
+        CREATE INDEX IF NOT EXISTS idx_light_schedules_interval 
+        ON light_schedules(interval_number);
+    """
+    
+    # Update trigger for light_schedules
+    create_update_trigger_func = """
+        CREATE OR REPLACE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = CURRENT_TIMESTAMP;
+            RETURN NEW;
+        END;
+        $$ language 'plpgsql';
+    """
+    
+    create_trigger = """
+        DROP TRIGGER IF EXISTS update_light_schedules_updated_at ON light_schedules;
+        CREATE TRIGGER update_light_schedules_updated_at
+            BEFORE UPDATE ON light_schedules
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    """
+    
+    # Execute all setup queries within a cursor context
+    with self._conn.cursor() as cursor:
+        cursor.execute(create_activity_table)
+        cursor.execute(create_activity_index)
+        cursor.execute(create_schedules_table)
+        cursor.execute(create_schedules_indexes)
+        cursor.execute(create_update_trigger_func)
+        cursor.execute(create_trigger)
+        self._conn.commit()
+    
+    logging.info("Activity and Light Schedules databases and indexes initialized successfully.")
 
     def close_connection(self) -> None:
         """

@@ -621,7 +621,8 @@ class ConfigLoader:
 
         try:
             # Retrieve the raw value from the config, or use the fallback
-            raw_value = config.get(section, option, fallback=default_value)
+            raw_value = self.config.get(
+                section, option, fallback=default_value)
             # Convert the raw value to the correct type
             logging.info("CONFIG: Option %s.%s set with value from config "
                          "file, type is [%s], value is %s, (%s accept lists)",

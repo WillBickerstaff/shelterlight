@@ -14,13 +14,15 @@ import os
 import unittest
 import logging
 from unittest.mock import patch
-from lightlib.USBManager import USBFileManager, ConfigReloaded
+
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 parent_path = os.path.abspath(os.path.join(base_path, '..'))
 sys.path.append(base_path)
 sys.path.append(parent_path)
+
+from lightlib.USBManager import USBFileManager, ConfigReloaded
 
 
 class TestUSBManager(unittest.TestCase):
