@@ -176,3 +176,4 @@ cython_debug/
 scheduler/scheduler.ipynb
 scheduler/Untitled.ipynb
 .vs/slnx-FR-30306.sqlite
+tests/schedule_test_com.py

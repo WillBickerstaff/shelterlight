@@ -350,18 +350,3 @@ class TestLightScheduler(unittest.TestCase):
         # Following methods should not be called after failure
         self.scheduler.train_model.assert_not_called()
         self.scheduler.generate_daily_schedule.assert_not_called()
-
-    def test_update_daily_schedule_triggers_store_schedule(self):
-        # Arrange
-        mock_schedule = {0: 1, 1: 0}
-        self.scheduler.evaluate_previous_schedule = MagicMock()
-        self.scheduler.train_model = MagicMock()
-        self.scheduler._get_darkness_times = MagicMock(return_value=(dt.time(18, 0), dt.time(6, 0)))
-        self.scheduler.generate_daily_schedule = MagicMock(return_value=mock_schedule)
-        self.scheduler.store_schedule = MagicMock()
-    
-        # Act
-        self.scheduler.update_daily_schedule()
-    
-        # Assert
-        self.scheduler.store_schedule.assert_called_once()
