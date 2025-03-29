@@ -83,47 +83,63 @@ class TestLightScheduler(unittest.TestCase):
         data is processed into the expected format.
         """
         # Arrange
-        target_date = dt.date(2099, 1, 1)  # Use future date to avoid clashes
+        # Use future date to avoid clashes (today + 10 years)
+        target_date = dt.date.today() + dt.timedelta(days=365 * 10)
         self.scheduler.schedule_cache = {}  # Clear cache
 
         # Create mock cursor and set up context manager
         mock_cursor = MagicMock()
+        # Simulate 3 schedule records being fetched: [(interval, status), ...]
         mock_cursor.fetchall.return_value = [(0, 1), (1, 0), (2, 1)]
+        # Mock the database connection to use the mock cursor
         self.scheduler.db.conn.cursor.return_value.__enter__.return_value = \
             mock_cursor
         # Prevent reconnection from clobbering the mock
         self.scheduler.db.conn.closed = False
 
-        # Act – First call (should fetch from DB)
+        # Act & Assert -- 1st call
+        # Should fetch from DB
         result = self.scheduler.get_schedule(target_date)
 
-        # Assert
+        # Confirm the fetched schedule is correctly processed into a dictionary
         expected = {0: 1, 1: 0, 2: 1}
         self.assertEqual(result, expected)
+        # Verify that the database cursor's execute method was called
         mock_cursor.execute.assert_called_once()
 
-        # Act – Second call (should fetch from cache, so no DB call)
+        # Act & Assert -- 2nd call
+        # Should fetch from cache, so no DB call
         mock_cursor.execute.reset_mock()
+        # Fetch schedule again (should return from cache)
         cached_result = self.scheduler.get_schedule(target_date)
         self.assertEqual(cached_result, expected)
+        # Check that no database query was made
         mock_cursor.execute.assert_not_called()
 
     def test_should_light_be_on_true(self):
         """Test True returned if current time matches a scheduled on time."""
         # Arrange
+        # Set the test time
         now = dt.datetime(2025, 3, 20, 18, 10)  # 18:10 UTC
+        # Configure scheduler with a 10 minute interval
         self.scheduler.interval_minutes = 10
+        # Configure the darkness period
         self.scheduler._get_darkness_times = MagicMock(return_value=(
             dt.time(18, 0), dt.time(6, 0)
         ))
+        # Mock schedule to mark interval 109 (18:10 UTC) as active (1)
+        # interval_number = (hour * 60 + minute) // interval_minutes
+        # For 18:10 UTC → (18 * 60 + 10) // 10 = 109
         self.scheduler.get_schedule = MagicMock(return_value={
-            109: 1  # 18:10 falls into interval 109
+            109: 1
         })
 
         # Act
+        # Get the schedulers opinion on the current light status
         result = self.scheduler.should_light_be_on(current_time=now)
 
         # Assert
+        # Confirm the scheduler required the light on
         self.assertTrue(result)
 
     def test_store_schedule(self):
@@ -135,25 +151,34 @@ class TestLightScheduler(unittest.TestCase):
         # Arrange
         self.scheduler.interval_minutes = 10
 
+        # Create a mock database cursor and patch it into the scheduler
         mock_cursor = MagicMock()
         self.scheduler.db.conn.cursor.return_value.__enter__.return_value = \
             mock_cursor
 
+        # Define a test schedule date
         schedule_date = dt.date(2025, 3, 20)
+        # Create mock DataFrame representing prediction intervals
         df = pd.DataFrame({'interval_number': [0, 1, 2]})
+        # Predicted light status for each interval
         predictions = [1, 0, 1]
 
         # Act
         result = self.scheduler.store_schedule(schedule_date, df, predictions)
 
         # Assert
+        # Verify the returned schedule dictionary matches expectations
         expected_schedule = {0: 1, 1: 0, 2: 1}
         self.assertEqual(result, expected_schedule)
+        # Verify that the schedule cache is updated correctly
         self.assertEqual(
             self.scheduler.schedule_cache[schedule_date], expected_schedule)
+        # Verify that a separate insert query was executed for each interval
         self.assertEqual(mock_cursor.execute.call_count, 3)
 
-        # Check individual SQL calls
+        # Verify the SQL insert query was called with the correct parameters
+        # for each interval (date, interval number, start/end times,
+        # and light status)
         mock_cursor.execute.assert_any_call(
             unittest.mock.ANY,
             (schedule_date, 0, dt.time(0, 0), dt.time(0, 10), 1)
@@ -173,27 +198,43 @@ class TestLightScheduler(unittest.TestCase):
         Verifies that the method correctly identifies if a given time is
         within the darkness period in this scenario.
         """
+        # Define some darkness times
         darkness_start = dt.time(18, 0)
-        darkness_end = dt.time(23, 59)
+        darkness_end = dt.time(23, 30)
 
+        # Time 19:00 is within darkness period, expect result = 1 (True)
         self.assertEqual(self.scheduler.is_dark(
             dt.time(19, 0), darkness_start, darkness_end), 1)
+        # Time 17:00 is before darkness period, expect result = 0 (False)
         self.assertEqual(self.scheduler.is_dark(
             dt.time(17, 0), darkness_start, darkness_end), 0)
+        # Time 23:45 is after darkness period, expect result = 0 (False)
+        self.assertEqual(self.scheduler.is_dark(
+            dt.time(23, 45), darkness_start, darkness_end), 0)
 
     def test_is_dark_across_midnight(self):
-        """Test for a darkness period spanning midnight (over two days).
+        """Test for a darkness period that spans midnight.
 
         Verifies that the method correctly identifies if a given time is
-        within the darkness period in this scenario.
+        within the darkness period when it starts in the evening and ends
+        the next morning.
         """
+        # Darkness period: starts at 18:00, ends at 06:00 (next day)
         darkness_start = dt.time(18, 0)
         darkness_end = dt.time(6, 0)
 
+        # Time 05:00 is within darkness period, expect 1 (True)
         self.assertEqual(self.scheduler.is_dark(
             dt.time(5, 0), darkness_start, darkness_end), 1)
+        # Time 17:00 is before darkness period, expect 0 (False)
         self.assertEqual(self.scheduler.is_dark(
             dt.time(17, 0), darkness_start, darkness_end), 0)
+        # Time 19:00 is within darkness period, expect 1 (True)
+        self.assertEqual(self.scheduler.is_dark(
+            dt.time(19, 0), darkness_start, darkness_end), 1)
+        # Time 07:00 is after darkness period, expect 0 (False)
+        self.assertEqual(self.scheduler.is_dark(
+            dt.time(7, 0), darkness_start, darkness_end), 0)
 
     def test_update_schedule_accuracy_executes_update(self):
         """Check for db update containing the correct schedule ID and accuracy.
@@ -203,14 +244,15 @@ class TestLightScheduler(unittest.TestCase):
         value. This Verifies that the database execute method is called with
         the expected SQL query and parameters.
         """
-        # Arrange
+        # Arrange: Mock DB cursor
         mock_cursor = MagicMock()
         self.scheduler.db.conn.cursor.return_value.__enter__.return_value = \
             mock_cursor
 
+        # Create example schedule data
         target_date = dt.date(2025, 3, 20)
-        schedule = {108: 1, 109: 0}
-        actual = {108: 1, 109: 1}
+        schedule = {108: 1, 109: 0}  # Predicted schedule
+        actual = {108: 1, 109: 1}    # Actual observed activity
         false_positive = 0
         false_negative = 1
 
@@ -218,9 +260,9 @@ class TestLightScheduler(unittest.TestCase):
         self.scheduler.update_schedule_accuracy(
             target_date, schedule, actual, false_positive, false_negative)
 
-        # Assert
+        # Assert: Check that an UPDATE query was executed
         self.assertTrue(mock_cursor.execute.called)
-        # Optional: Verify correct SQL call format
+        # Verify that the correct schedule date was passed in query parameters
         for call in mock_cursor.execute.call_args_list:
             self.assertIn(target_date, call[0][1])
 
@@ -228,23 +270,33 @@ class TestLightScheduler(unittest.TestCase):
     def test_evaluate_previous_schedule_skips_future(self, mock_dt):
         """Test that evaluation is skipped for future schedules.
 
-        evaluate_previous_schedule() skips evaluation when the
-        schedule date is in the future. Verify that no database update
-        is performed if the schedule date is later than the current date.
+        Verifies that evaluate_previous_schedule() performs no evaluation or
+        database update when the schedule date is in the future.
         """
-        now = dt.datetime(2025, 3, 20, 12, 0)
+        # Arrange
+        now = dt.datetime.utcnow()
         mock_dt.datetime.utcnow = MagicMock(return_value=now)
 
+        # Create a future date 10 days from now
+        future_date = now + dt.timedelta(days=10)
+
+        # Mock DB cursor to return scheduled and actual data in the future.
+        # Note: In reality, actual activity cannot occur in the future.
+        # This test only verifies evaluation is skipped for any future date.
         cursor = (
             self.scheduler.db.conn.cursor.return_value.__enter__.return_value)
         cursor.fetchall.side_effect = [
-            [(dt.datetime(2025, 3, 26, 18, 0), True)],
-            [(dt.datetime(2025, 3, 26, 18, 15), False)]
+            [(future_date.replace(hour=18, minute=0), True)],   # Future pred
+            [(future_date.replace(hour=18, minute=15), False)]  # Future actual
         ]
 
+        # Mock update_schedule_accuracy to verify it's not called
         self.scheduler.update_schedule_accuracy = MagicMock()
 
+        # Act:
         self.scheduler.evaluate_previous_schedule(now.date())
+
+        # Assert: Verify update_schedule_accuracy() was not triggered
         self.scheduler.update_schedule_accuracy.assert_not_called()
 
     def test_get_current_schedule_returns_cached(self):
@@ -252,13 +304,18 @@ class TestLightScheduler(unittest.TestCase):
         today = dt.date(2025, 3, 20)
         expected_schedule = {0: 1, 1: 0}  # Expected cache
 
-        # Ensure the cache has the correct structure
+        # Populate cache with today's date and expected schedule
         self.scheduler.schedule_cache = {
             'date': today,   # Ensure correct date
             'schedule': expected_schedule
         }
 
-        # Act: Call get_current_schedule()
+        # Mock db.get_schedule() to raise if called
+        self.scheduler.get_schedule = MagicMock(
+            side_effect=Exception(
+                "Database should not be called when cache exists"))
+
+        # Act: Retrieve the schedule
         result = self.scheduler.get_current_schedule(today)
 
         # Debugging Output
@@ -268,6 +325,7 @@ class TestLightScheduler(unittest.TestCase):
 
         # Assert
         self.assertEqual(result, expected_schedule)
+        self.scheduler.get_schedule.assert_not_called()
 
     def test_get_current_schedule_falls_back_to_db(self):
         """Retrieve a schedule from the db if a cached copy does not exist.
@@ -276,7 +334,8 @@ class TestLightScheduler(unittest.TestCase):
         the schedule is not in the cache.
         """
         today = dt.date(2025, 3, 20)
-        self.scheduler.schedule_cache = {}
+        self.scheduler.schedule_cache = {}  # Make sure cache is empty
+        # Mock get_schedule() to return a known schedule
         self.scheduler.get_schedule = MagicMock(return_value={200: 1})
 
         result = self.scheduler.get_current_schedule(today)
@@ -286,7 +345,7 @@ class TestLightScheduler(unittest.TestCase):
     @patch("scheduler.Schedule.lgb")
     def test_train_model_calls_lgb_train(self, mock_lgb):
         """Test LightGBM train is called with training data."""
-        # Mock training dataset
+        # Mock training dataset with expected feature columns
         mock_df = pd.DataFrame({
             'activity_pin': [1, 0, 1],
             **{col: [0.1, 0.2, 0.3] for
@@ -311,6 +370,7 @@ class TestLightScheduler(unittest.TestCase):
         """Test expected feature arrays are returned."""
         timestamp = dt.datetime(2025, 3, 20, 18, 0)
 
+        # Mock the features dictionary
         self.scheduler._generate_features_dict = MagicMock(return_value={
             'hour_sin': 0.0,
             'hour_cos': 1.0,
@@ -331,10 +391,12 @@ class TestLightScheduler(unittest.TestCase):
         features_array, features_df = \
             self.scheduler._create_prediction_features(timestamp)
 
+        # Check returned types
         self.assertIsInstance(features_array, np.ndarray)
+        self.assertIsInstance(features_df, pd.DataFrame)
+        # Check array shape matches expected number of feature columns
         self.assertEqual(features_array.shape[0], len(
             self.scheduler._get_feature_columns()))
-        self.assertIsInstance(features_df, pd.DataFrame)
         # Ensure all expected feature columns exist in the DataFrame
         # (order-is not important)
         expected_columns = set(self.scheduler._get_feature_columns())
@@ -347,33 +409,58 @@ class TestLightScheduler(unittest.TestCase):
         """Test confidence threshold is updated when given a valid float."""
         self.scheduler.update_daily_schedule = MagicMock()
         self.scheduler.set_confidence_threshold(0.75)
+        # Check confidence threshold is updated
         self.assertEqual(self.scheduler.min_confidence, 0.75)
+        # Check that update_daily_schedule() was triggered
         self.scheduler.update_daily_schedule.assert_called_once()
 
     def test_set_confidence_threshold_invalid(self):
         """Test confidence threshold errors when given an invalid float."""
+        # Threshold > 1.0 is invalid, expect a ValueError
         with self.assertRaises(ValueError):
             self.scheduler.set_confidence_threshold(1.5)
 
     def test_set_interval_minutes_valid(self):
-        """Test interval minutes is updated when given a valid int."""
+        """Test interval minutes is updated when given a valid int.
+
+        Verifies that:
+            - A valid interval under 1 hour is accepted.
+            - A valid interval over 1 hour is accepted.
+            - update_daily_schedule() is triggered only once on first
+            valid change.
+        """
+        # Arrange
         self.scheduler.update_daily_schedule = MagicMock()
-        self.scheduler.set_interval_minutes(15)
+        # Act 1st
+        self.scheduler.set_interval_minutes(15)  # Under 1 hour
+        # Assert 1st
         self.assertEqual(self.scheduler.interval_minutes, 15)
+        # Just verify called this time
         self.scheduler.update_daily_schedule.assert_called_once()
+        # Act 2nd
+        self.scheduler.set_interval_minutes(75)  # Over 1 hour, still valid
+        # Assert 2nd
+        self.assertEqual(self.scheduler.interval_minutes, 75)
+        # scheduler updated daily schedule already verified
 
     def test_set_interval_minutes_invalid(self):
         """Test interval minutes errors when given an invalid int."""
+        # -minutes are invalid, expect a ValueError
         with self.assertRaises(ValueError):
             self.scheduler.set_interval_minutes(-5)
 
     def test_get_current_schedule_cached(self):
         """Test that the cached schedule is returned if it exists."""
+        # Arrange
         today = dt.date.today()
         cached_schedule = {0: 1, 1: 0}
+        # Pre-populate the cache with today's schedule
         self.scheduler.schedule_cache = {
             'date': today, 'schedule': cached_schedule}
+        # Act
         result = self.scheduler.get_current_schedule()
+        # Assert
+        # Should return cached schedule
         self.assertEqual(result, cached_schedule)
 
     def test_update_daily_schedule_success(self):
@@ -385,6 +472,7 @@ class TestLightScheduler(unittest.TestCase):
         - Today's schedule is generated.
         """
         # Arrange
+        # Mock dependent methods to isolate test
         self.scheduler.evaluate_previous_schedule = MagicMock()
         self.scheduler.train_model = MagicMock()
         self.scheduler._get_darkness_times = MagicMock(return_value=(
@@ -398,7 +486,9 @@ class TestLightScheduler(unittest.TestCase):
         result = self.scheduler.update_daily_schedule()
 
         # Assert
+        # Should return the generated schedule
         self.assertEqual(result, mock_schedule)
+        # Check dependent methods were called
         self.scheduler.evaluate_previous_schedule.assert_called_once()
         self.scheduler.train_model.assert_called_once()
         self.scheduler.generate_daily_schedule.assert_called_once()
@@ -412,6 +502,7 @@ class TestLightScheduler(unittest.TestCase):
         reactive mode.
         """
         # Arrange
+        # Force evaluate_previous_schedule() to raise an Exception
         self.scheduler.evaluate_previous_schedule = MagicMock(
             side_effect=Exception("DB failure")
         )
@@ -422,6 +513,7 @@ class TestLightScheduler(unittest.TestCase):
         result = self.scheduler.update_daily_schedule()
 
         # Assert
+        # Should return None if exception occurs
         self.assertIsNone(result)
         self.scheduler.evaluate_previous_schedule.assert_called_once()
         # Following methods should not be called after failure
