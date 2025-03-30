@@ -7,25 +7,24 @@
 When a USB device is inserted and mounted at `media_mount_point`, the following will occur:
 
 1. **Configuration Validity Check:**
-    - If a valid `config.ini` is found on the USB device, it will be validated.
 
-2. **Backup Existing Config:**
-    - If valid, the system will copy the current system configuration to the USB device as `config.previous.ini`.
+   - If a `config.ini` is found on the USB device, it will be validated.
 
-3. **Copy Log Files:**
-    - All system log files will be copied to the USB device.
+2. **Backup Existing Config & Logs:**
 
-4. **Apply New Configuration:**
-    - The validated `config.ini` from the USB will be copied to the system.
+   - Regardless of whether the USB contains a valid `config.ini`, the system will back up the current system configuration and logs to the USB device.
 
-5. **Restart System Loop:**
-    - The main loop will be restarted to reload and apply the new configuration.
+3. **Apply New Configuration (if valid):**
 
-If the `config.ini` on the USB is **invalid**, the system will log a warning and continue using the current configuration.
+   - If the USB `config.ini` is valid, it will be copied to the system.
 
-see [config.readme.md](./config.readme.md) for details of the 
-configuration options
-available 
+4. **Restart (if valid):**
+
+   - If a valid configuration is found and applied, the main loop will restart to load the new configuration.
+
+If the `config.ini` on the USB is **invalid or missing**, the system will still back up existing configuration and logs, but continue using the current configuration.
+
+#### For a detailed description of backup operation, configuration options and behaviour see [config.readme.md](./config.readme.md)
 
 ---
 
