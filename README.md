@@ -14,7 +14,155 @@ The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Pyt
 
 ---
 
-## 📂 Python Environment Setup
+## 🍓 Minimal Raspberry Pi Installation
+
+The Shelter Light Control System is designed to run efficiently on a **Raspberry Pi Zero** (or similar) with a minimal, headless configuration.
+
+### 🔥 Recommended OS
+
+- **Raspberry Pi OS Lite (32-bit)**  
+  *(Debian Bookworm based, headless, no desktop)*  
+  Example: `2025-02-16-raspios-bookworm-armhf-lite.img`
+
+### ⚙️ Minimal Setup Steps
+
+1. **Flash OS Image**
+   - Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd` to write the OS image to your microSD card.
+
+2. **Enable SSH (optional but recommended)**
+   - Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
+
+3. **Disable Unnecessary Services**
+
+   Certain system services are not required and should be disabled to improve boot time and reduce resource usage.
+
+   See the section **Disabling Unnecessary Services** later in this document for recommended services to disable.
+
+4. **Install System Packages**
+
+   ```bash
+   sudo apt update
+   sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql
+   ```
+
+5. **Optional Configuration Tweaks**
+   - Disable HDMI output to save power:
+     ```bash
+     /usr/bin/tvservice -o
+     ```
+
+---
+
+## 🗄️ Initial Database Setup
+
+The Shelter Light Control System uses a **local PostgreSQL database** to store historical activity logs and generated light schedules.
+
+### 📌 Database Configuration
+
+Database connection settings are defined in `config.ini` under the `[ACTIVITY_DB]` section.
+
+**Example configuration:**
+
+```ini
+[ACTIVITY_DB]
+host = localhost
+port = 5432
+database = smartlight
+user = pi
+password = changeme
+connect_retry = 3
+connect_retry_delay = 5
+```
+
+### 🐃 Create Database & User
+
+Run the following commands:
+
+```bash
+sudo -u postgres psql
+```
+
+Inside the `psql` shell:
+
+```sql
+CREATE DATABASE smartlight;
+CREATE USER pi WITH ENCRYPTED PASSWORD 'changeme';
+GRANT ALL PRIVILEGES ON DATABASE smartlight TO pi;
+\q
+```
+
+### 🏐️ Create Tables
+
+The system will automatically create the required tables (`activity_log` and `light_schedules`) when it first runs.
+
+**Alternatively, to create manually:**
+
+Connect to the database
+```bash
+psql -U pi -d smartlight
+```
+Paste the table creation SQL statements 
+```sql
+-- Create activity_log table
+CREATE TABLE IF NOT EXISTS activity_log (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMPTZ NOT NULL,
+    day_of_week SMALLINT NOT NULL,
+    month SMALLINT NOT NULL,
+    year SMALLINT NOT NULL,
+    duration SMALLINT NOT NULL,
+    activity_pin SMALLINT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_timestamp
+ON activity_log (timestamp);
+
+-- Create light_schedules table
+CREATE TABLE IF NOT EXISTS light_schedules (
+    id SERIAL PRIMARY KEY,
+    date DATE NOT NULL,
+    interval_number SMALLINT NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    prediction BOOLEAN NOT NULL,
+    was_correct BOOLEAN,
+    false_positive BOOLEAN DEFAULT FALSE,
+    false_negative BOOLEAN DEFAULT FALSE,
+    confidence DECIMAL(5,4),
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT valid_interval CHECK (interval_number >= 0 AND interval_number <= 47),
+    CONSTRAINT valid_confidence CHECK (confidence >= 0 AND confidence <= 1),
+    CONSTRAINT unique_schedule_interval UNIQUE (date, interval_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_light_schedules_date 
+ON light_schedules(date);
+CREATE INDEX IF NOT EXISTS idx_light_schedules_interval 
+ON light_schedules(interval_number);
+
+-- Create update trigger for updated_at column
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+DROP TRIGGER IF EXISTS update_light_schedules_updated_at ON light_schedules;
+CREATE TRIGGER update_light_schedules_updated_at
+    BEFORE UPDATE ON light_schedules
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+\q
+
+```
+
+---
+
+## 🔋 Python Environment Setup
 
 This system is written in **Python 3.13.2** and is intended to run on Raspberry Pi Zero (or similar).
 
@@ -107,16 +255,16 @@ sudo systemctl status shelterlight.service
 
 ---
 
-### 🔄 Auto-Restart Behaviour
+### ⟳ Auto-Restart Behaviour
 
-The service is configured with:
+With the service configured:
 
 ```ini
 Restart=on-failure
 RestartSec=5
 ```
 
-This means the service will automatically restart **5 seconds** after any unexpected failure.
+The service will automatically restart **5 seconds** after any unexpected failure.
 
 ---
 
@@ -179,6 +327,7 @@ Setting system time requires **sudo** privileges.
     sudo timedatectl set-ntp false
     ```
 
+---
 ### ℹ️ Why this is necessary
 
 The Raspberry Pi Zero does not have a battery-backed RTC. This system operates offline and uses GPS as the only reliable time source.
@@ -333,6 +482,7 @@ sudo systemctl disable networking.service
 sudo systemctl disable network-manager.service
 sudo systemctl disable ssh.service
 ```
+---
 
 ## ⚙️ Configuration Overview
 
