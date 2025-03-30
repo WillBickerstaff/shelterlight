@@ -13,6 +13,7 @@ import datetime as dt
 import logging
 import re
 import serial
+import subprocess
 from threading import Lock
 from typing import Union, Optional
 import RPi.GPIO as GPIO
@@ -572,6 +573,7 @@ class GPS:
                     logging.info(
                         "GPS: Date and time obtained: %s", self._dt)
                     self._datetime_established = True
+                    self._sync_system_time()
                 except (KeyError, ValueError) as e:
                     logging.error("GPS: Error processing datetime: %s", e)
                     raise GPSInvalid("Failed to retrieve datetime.")
@@ -631,3 +633,15 @@ class GPS:
                           date_str, e)
             log_caller(module="GPS")
             raise ValueError(f"Invalid date format: {date_str}") from e
+
+    def _sync_system_time(self) -> None:
+        """Set system time to UTC datetime from GPS fix."""
+        if self._datetime_established:
+            iso_time = self._dt.isoformat()
+            try:
+                subprocess.run(["sudo", "date", "-s", iso_time], check=True)
+                logging.info(f"System time synced to GPS time: {iso_time}")
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Failed to sync system time: {e}")
+        else:
+            logging.warning("System time sync skipped. No valid datetime fix.")
