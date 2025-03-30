@@ -47,3 +47,15 @@ class NegativeValueError(ValueError):
     """Raised when the GPS coordinate value is negative."""
 
     pass
+
+
+class NoSolarEventError(Exception):
+    """Raised when sunrise or sunset can't be determined (polar day/night)."""
+
+    pass
+
+
+class InvalidObserverError(Exception):
+    """Raised when observer is invalid (bad location, date, or corrupt)."""
+
+    pass
