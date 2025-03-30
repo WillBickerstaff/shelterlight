@@ -2,25 +2,15 @@
 
 ---
 
-## ✨ USB Configuration Behaviour
+## 🚲 Project Overview
 
-When a USB device is inserted and mounted at `media_mount_point`, the following will occur:
+**Shelter Light Control System** is a standalone, autonomous lighting controller designed for bicycle shelters and similar outdoor environments.
+It uses a GPS module and activity detection inputs to intelligently schedule lighting during hours of darkness, based on historical activity patterns and sunrise/sunset times.
 
-1. **Configuration Validity Check:**
-   - If a `config.ini` is found on the USB device, it will be validated.
+The system is designed to operate completely **offline and headless** (no display, no network), learning and adapting over time without external input.
+Configuration updates and system logs can be managed via **USB device insertion**.
 
-2. **Backup Existing Config & Logs:**
-   - **All configuration and log files, including rotated logs, will be backed up to the USB device regardless of whether the USB contains a valid `config.ini`.**
-
-3. **Apply New Configuration (if valid):**
-   - If the USB `config.ini` is valid, it will be copied to the system.
-
-4. **Restart (if valid):**
-   - If a valid configuration is applied, the main loop will restart to load the new configuration.
-
-If the `config.ini` on the USB is **invalid or missing**, the system will still back up existing configuration and logs, but continue using the current configuration.
-
-**For a detailed description of backup operation, configuration options and behaviour, see [config.readme.md](./config.readme.md).**
+The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Python 3.13.2** with minimal external dependencies.
 
 ---
 
@@ -140,7 +130,7 @@ journalctl -u shelterlight.service -f
 
 ---
 
-### ⛔️ Stopping & Disabling
+### ❌ Stopping & Disabling
 
 ```bash
 sudo systemctl stop shelterlight.service
@@ -229,7 +219,7 @@ Example content:
 
 **Explanation:**
 
-| Option         | Description                                                      |
+| Option |Description                                                      |
 |--------------|---------------------------------------------------------------|
 | `daily`      | Rotate the log file daily.                                     |
 | `rotate 7`  | Keep the last 7 rotated log files.                             |
@@ -270,7 +260,7 @@ This includes:
 
 The backup files will be renamed to include an ISO-formatted timestamp:
 
-```
+```bash
 /media/usb/smartlight/logs/shelterlight.log_backup_2025-03-31T14:23:07
 /media/usb/smartlight/logs/shelterlight.log.1_backup_2025-03-31T14:23:07
 /media/usb/smartlight/logs/shelterlight.log.2.gz_backup_2025-03-31T14:23:07
@@ -281,9 +271,71 @@ If the USB is removed and re-inserted, a fresh backup will be created.
 
 ---
 
+## 🚫 Disabling Unnecessary Services
+
+To improve system performance, reduce boot time, and lower power consumption, certain default Raspberry Pi OS services can be safely disabled for this headless, offline application.
+
+The following services are not required for the Shelter Light Control System and can be disabled:
+
+### ⚙️ Recommended Services to Disable
+
+| Service | Reason |
+|---|---|
+| bluetooth.service	| Bluetooth hardware is not used. |
+| hciuart.service | Bluetooth UART service, not needed. |
+| avahi-daemon.service | mDNS/DNS-SD service (Bonjour/ZeroConf), not used. |
+| triggerhappy.service | Listens for keyboard/mouse button events (special & media keys). Not needed in headless use. |
+| wpa_supplicant.service | Wi-Fi service. System runs offline with no network requirement. |
+| dhcpcd.service | DHCP client service. No network required. |
+| nfs-common.service | Network filesystem client. Not used. |
+| rpcbind.service | RPC service for NFS, not required. |
+| cups.service | Printing service, not required. |
+
+---
+
+### 🛠️ Disable Services
+
+Disable these services with:
+
+```bash
+sudo systemctl disable bluetooth.service
+sudo systemctl disable hciuart.service
+sudo systemctl disable avahi-daemon.service
+sudo systemctl disable triggerhappy.service
+sudo systemctl disable wpa_supplicant.service
+sudo systemctl disable dhcpcd.service
+sudo systemctl disable nfs-common.service
+sudo systemctl disable rpcbind.service
+sudo systemctl disable cups.service
+```
+
+If Wi-Fi or networking is required later (e.g., for debugging), to re-enable:
+
+```bash
+sudo systemctl enable wpa_supplicant.service
+sudo systemctl enable dhcpcd.service
+```
+
+---
+
+### ⚠️ Other Services to consider
+
+| Service | Function |
+|---|---|
+| networking.service | Configures network interfaces (mainly ethernet & static IPs). Not needed unless you plan to connect to a network regularly and want easy control. |
+| network-manager.service | A tool for managing network connections (wired, WiFi, VPN, etc.). It handles dynamic networks, roaming, user-managed connections, etc. Not needed unless you plan to connect to a network regularly and want easy control. |
+| ssh.service | the SSH server (OpenSSH) allows you to remotely log in to the Pi from another machine. Disable SSH for security and simplicity. But if you want to maintain or debug the system remotely without physically accessing it, leave it enabled. |
+
+Each of these can be disabled with:
+
+```bash
+sudo systemctl disable networking.service
+sudo systemctl disable network-manager.service
+sudo systemctl disable ssh.service
+```
+
 ## ⚙️ Configuration Overview
 
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
 
-Full configuration documentation is provided in [config.readme.md](./config.readme.md).
-
+Full configuration documentation is provided in **[config.readme.md](./config.readme.md)**
