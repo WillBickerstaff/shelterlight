@@ -639,7 +639,8 @@ class GPS:
         if self._datetime_established:
             iso_time = self._dt.isoformat()
             try:
-                subprocess.run(["sudo", "date", "-s", iso_time], check=True)
+                subprocess.run(["sudo", "/bin/date", "-s", iso_time],
+                               check=True)
                 logging.info(f"System time synced to GPS time: {iso_time}")
             except subprocess.CalledProcessError as e:
                 logging.error(f"Failed to sync system time: {e}")

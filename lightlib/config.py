@@ -54,7 +54,11 @@ class ConfigLoader:
             "confirm_input":            {"value": 6,
                                          "type": int,
                                          "is_pin": True,
-                                         "accepts_list": False}
+                                         "accepts_list": False},
+            "sync_system_time":         {"value": True,
+                                         "type": bool,
+                                         "is_pin": False,
+                                         "accepts_list": False},
         },
         # ------------------------------------------------------------#
         "LOCATION": {
@@ -427,6 +431,13 @@ class ConfigLoader:
                                      section="LOCATION",
                                      option="place_name")
 
+    @property
+    def sync_system_time(self) -> bool:
+        """bool: Whether to sync system time after a valid GPS fix."""
+        return self.get_config_value(config=self.config,
+                                     section="GENERAL",
+                                     option="sync_system_time")
+
     def load_config(self) -> None:
         """Load and validate configuration values or fall back to defaults.
 
@@ -550,6 +561,8 @@ class ConfigLoader:
             if str_val.startswith('"') and str_val.endswith('"'):
                 return str(raw_value[1:-1])
             return str_val
+        elif specified_type == bool:
+            return str(raw_value).lower() in ("true", "1", "yes", "on")
 
         return raw_value
 
