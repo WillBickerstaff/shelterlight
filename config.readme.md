@@ -4,7 +4,7 @@ This document describes the configuration options used by the Bike Shelter Light
 
 ---
 
-## USB Configuration Behaviour
+## ✨ USB Configuration Behaviour
 
 If a USB device is inserted and mounted at `media_mount_point`, the following will occur:
 
@@ -14,7 +14,7 @@ If a USB device is inserted and mounted at `media_mount_point`, the following wi
 
 2. **Backup Existing Config & Logs:**
 
-   - Regardless of whether the USB contains a valid `config.ini`, the system will back up the current system configuration and logs to the USB device.
+   - Regardless of whether the USB contains a valid `config.ini`, the system will back up the current system configuration and all log files, including rotated logs, to the USB device.
 
 3. **Apply New Configuration (if valid):**
 
@@ -36,9 +36,9 @@ When a USB device is inserted, the system will **always back up the current conf
 
 The backups will be stored in the following directories on the USB device:
 
-- Configuration backups:\
+- Configuration backups:
   `/media/<usb_device>/smartlight/configs/`
-- Log file backups:\
+- Log file backups:
   `/media/<usb_device>/smartlight/logs/`
 
 > ⚠️ The actual mount point is defined by the `media_mount_point` option in `[DATA_STORE]`.
@@ -47,30 +47,35 @@ The backups will be stored in the following directories on the USB device:
 
 Backups will include an ISO-formatted timestamp to ensure uniqueness:
 
-- **Config File:**\
+- **Config File:**
   `config_backup_<timestamp>.ini`
 
-- **Log File:**\
-  `log_backup_<timestamp>.log`
+- **Log Files:**
+  `shelterlight.log_backup_<timestamp>`
+  `shelterlight.log.1_backup_<timestamp>`
+  `shelterlight.log.2.gz_backup_<timestamp>`
+  *(all rotated and compressed logs are backed up)*
 
-Example:
+**Example:**
 
-```
+```text
 /media/usb/smartlight/configs/config_backup_2025-03-31T14:23:07.ini
-/media/usb/smartlight/logs/log_backup_2025-03-31T14:23:07.log
+/media/usb/smartlight/logs/shelterlight.log_backup_2025-03-31T14:23:07
+/media/usb/smartlight/logs/shelterlight.log.1_backup_2025-03-31T14:23:07
+/media/usb/smartlight/logs/shelterlight.log.2.gz_backup_2025-03-31T14:23:07
 ```
 
-The backup operation is only performed **once per USB insertion event.**\
+The backup operation is only performed **once per USB insertion event.**
 If the USB device is removed and re-inserted, the backup will occur again.
 
 ---
 
 ## 🟢 Default Values & Missing Options
 
-If any configuration options are **omitted** from `config.ini`, the system will automatically use **default values** defined internally.\
+If any configuration options are **omitted** from `config.ini`, the system will automatically use **default values** defined internally.
 This ensures the system can continue to run safely even if the configuration file is incomplete.
 
-All default values are documented in the tables below.\
+All default values are documented in the tables below.
 These defaults are hard-coded in the system source and will be used unless explicitly overridden in `config.ini`.
 
 ⚠️ If an option is incorrectly formatted, the default value will also be used and a warning will be logged.
@@ -147,7 +152,7 @@ crit_fault_out = 14
 
 ---
 
-## [FIX\_WINDOW]
+## [FIX_WINDOW]
 
 Determines when the system will attempt to obtain a GPS fix. The default behaviour is to attempt GPS fixes during daylight hours (when lighting control is not needed) and avoid slow GPS fixes impacting light control.
 
@@ -181,7 +186,7 @@ Currently unused. Reserved for future logging or debug flag options.
 
 ---
 
-## [DATA\_STORE]
+## [DATA_STORE]
 
 Persistent data store configuration.
 
@@ -206,7 +211,7 @@ persistent_data_JSON = "persist.json"
 
 ---
 
-## [ACTIVITY\_DB]
+## [ACTIVITY_DB]
 
 PostgreSQL database connection settings for storing historical activity data.
 
@@ -232,3 +237,28 @@ password = "pi"
 connect_retry = 5
 connect_retry_delay = 2
 ```
+
+---
+
+## 💾 USB Backup of Rotated Logs
+
+When a USB device is inserted, **all log files, including rotated and compressed logs, will be backed up to the USB drive.**
+
+This includes files such as:
+
+- `shelterlight.log`
+- `shelterlight.log.1`
+- `shelterlight.log.2.gz`
+
+The backup files will be renamed to include an ISO-formatted timestamp:
+
+```
+/media/usb/smartlight/logs/shelterlight.log_backup_2025-03-31T14:23:07
+/media/usb/smartlight/logs/shelterlight.log.1_backup_2025-03-31T14:23:07
+/media/usb/smartlight/logs/shelterlight.log.2.gz_backup_2025-03-31T14:23:07
+```
+
+The backup operation is performed **once per USB insertion event.**
+If the USB device is removed and re-inserted, a new backup will be created.
+
+---

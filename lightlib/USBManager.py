@@ -109,9 +109,17 @@ class USBFileManager:
         logging.info("Config file backed up to USB: %s", config_backup)
 
         log_file = ConfigLoader().log_file
-        log_backup = os.path.join(usb_log_dir, f"log_backup_{timestamp}.log")
-        shutil.copy2(log_file, log_backup)
-        logging.info("Log file backed up to USB: %s", log_backup)
+        log_dir = os.path.dirname(log_file)
+        log_base = os.path.basename(log_file)
+
+        # Copy current log file and rotated logs
+        for filename in os.listdir(log_dir):
+            if filename.startswith(log_base):
+                source_path = os.path.join(log_dir, filename)
+                backup_name = f"{filename}_backup_{timestamp}"
+                dest_path = os.path.join(usb_log_dir, backup_name)
+                shutil.copy2(source_path, dest_path)
+                logging.info("Log file backed up to USB: %s", dest_path)
 
         self._backed_up = True  # Mark as backed up
 
