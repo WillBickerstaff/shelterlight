@@ -483,7 +483,56 @@ sudo systemctl disable network-manager.service
 sudo systemctl disable ssh.service
 ```
 ---
+## 🛠️ Maintenance & Monitoring
 
+The Shelter Light Control System is designed to run unattended. However, minimal periodic maintenance is recommended to ensure long-term reliability.
+
+| Task | Frequency | Reason | Commands / Actions |
+|---|---|---|---|
+| USB Backup Retrieval | Monthly or after unusual weather | Back up logs & configuration, and check for errors | Insert USB and check ```/media/usb/smartlight/logs/``` |
+| Log File Storage Check | Quarterly | Ensure log rotation is working and storage space is healthy | ```sudo du -sh /home/pi/shelterlight/*.log```<br>```sudo df -h /``` |
+| Database Health Check | Every 6 months | Verify database integrity and storage | ```sudo -u postgres psql -c "\l"```<br>```psql -U pi -d smartlight -c "\dt"```<br>```du -sh /var/lib/postgresql/14/main``` |
+| Hardware Inspection | Annually / after severe weather | Ensure cables, sensors & hardware are intact | Visual check |
+| SD Card Health | Annually |	SD cards wear out over time | ```sudo smartctl -a /dev/mmcblk0```<br> (Requires smartmontools)<br>Consider cloning the SD card |
+
+---
+## 🧹 Database Cleanup
+
+
+Over time, the database may accumulate old activity and schedule data. It is recommended to periodically remove older records to prevent excessive disk usage.
+
+### 🔐 Passwordless Database Access for Automation
+
+Since the system is configured with password access, you can securely automate cleanup tasks by creating a .pgpass file:
+
+```bash
+nano /home/pi/.pgpass
+```
+
+Add the following line (match your config.ini credentials):
+
+```
+localhost:5432:smartlight:pi:changeme
+```
+
+Set the correct file permissions:
+```bash
+chmod 600 /home/pi/.pgpass
+```
+
+### ⏰ Automate the cleanup task using cron.
+
+Edit the crontab for user pi:
+```bash
+crontab -e
+```
+Add the following line to remove old data monthly:
+```bash
+0 12 1 * * psql -U pi -d smartlight -c "DELETE FROM activity_log WHERE timestamp < NOW() - INTERVAL '90 days'; DELETE FROM light_schedules WHERE date < NOW() - INTERVAL '180 days';"
+```
+Activity data over 90 days old and schedules over 180 days old will be cleared out on the 1st of every month at midday.
+
+---
 ## ⚙️ Configuration Overview
 
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
