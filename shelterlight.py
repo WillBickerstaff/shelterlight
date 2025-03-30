@@ -63,6 +63,7 @@ def daily_schedule_generation(stop_event, scheduler, solar_times):
 
             # Calculate the time to wait until schedule generation
             sleep_duration = (generation_time - now).total_seconds()
+
             if sleep_duration > 0:
                 logging.info(
                     f"Waiting {sleep_duration / 3600:.2f} hours"
@@ -82,8 +83,7 @@ def daily_schedule_generation(stop_event, scheduler, solar_times):
             if sleep_duration > 0:
                 stop_event.wait(timeout=sleep_duration)
         else:
-            logging.warning(
-                "Solar sunrise time not set. Retrying in one hour.")
+            logging.warning("Sunrise time not available. Retrying in 1 hour.")
             stop_event.wait(timeout=3600)
 
 
@@ -98,9 +98,13 @@ def main_loop():
         except ConfigReloaded:
             logging.info("Configuration reloaded; restarting main loop.")
             continue  # Restart the main loop
+        except Exception as e:
+            logging.error(f"Fatal error: {e}")
+            break
         finally:
+            # Let systemd handle restarting to avoid zombie process
             GPIO.cleanup()
-            logging.info("Cleanup complete. Exiting.")
+            logging.info("GPIO cleanup complete. Exiting.")
 
 
 def main():
@@ -117,10 +121,14 @@ def main():
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
     init_log(args.log_level)
-    config_loader = ConfigLoader()  # Initialize the singleton config loader
+    config = ConfigLoader()  # Initialize the singleton config loader
     gps = SunTimes()  # Initialize GPS/SunTimes instance
     scheduler = LightScheduler()
     scheduler.set_db_connection()
+
+    # GPIO setup for light output
+    light_pin = config.light_output_pin
+    GPIO.setup(light_pin, GPIO.OUT)
 
     # Start USB listener in a separate thread to handle USB insert signals
     usb_thread = threading.Thread(target=usb_listener,
@@ -139,8 +147,13 @@ def main():
             if not gps.fixed_today and gps.in_fix_window:
                 gps.start_gps_fix_process()
 
+            # Light state control
+            light_on = scheduler.should_light_be_on()
+            GPIO.output(light_pin, GPIO.HIGH if light_on else GPIO.LOW)
+            logging.debug(f"Light {'ON' if light_on else 'OFF'}")
+
             # Control CPU usage in main loop
-            time.sleep(config_loader.cycle_time)
+            time.sleep(config.cycle_time)
 
     except ConfigReloaded:
         pass  # Handle by restarting the loop in `main_loop()`
