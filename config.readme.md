@@ -43,31 +43,6 @@ The backups will be stored in the following directories on the USB device:
 
 > ⚠️ The actual mount point is defined by the `media_mount_point` option in `[DATA_STORE]`.
 
-### 📜 Backup File Names
-
-Backups will include an ISO-formatted timestamp to ensure uniqueness:
-
-- **Config File:**
-  `config_backup_<timestamp>.ini`
-
-- **Log Files:**
-  `shelterlight.log_backup_<timestamp>`
-  `shelterlight.log.1_backup_<timestamp>`
-  `shelterlight.log.2.gz_backup_<timestamp>`
-  *(all rotated and compressed logs are backed up)*
-
-**Example:**
-
-```text
-/media/usb/smartlight/configs/config_backup_2025-03-31T14:23:07.ini
-/media/usb/smartlight/logs/shelterlight.log_backup_2025-03-31T14:23:07
-/media/usb/smartlight/logs/shelterlight.log.1_backup_2025-03-31T14:23:07
-/media/usb/smartlight/logs/shelterlight.log.2.gz_backup_2025-03-31T14:23:07
-```
-
-The backup operation is only performed **once per USB insertion event.**
-If the USB device is removed and re-inserted, the backup will occur again.
-
 ---
 
 ## 🟢 Default Values & Missing Options

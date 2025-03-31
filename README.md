@@ -20,32 +20,31 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
 ### 🔥 Recommended OS
 
-- **Raspberry Pi OS Lite (32-bit)**  
-  *(Debian Bookworm based, headless, no desktop)*  
+- **Raspberry Pi OS Lite (32-bit)**
+  *(Debian Bookworm based, headless, no desktop)*
   Example: `2025-02-16-raspios-bookworm-armhf-lite.img`
 
 ### ⚙️ Minimal Setup Steps
 
 1. **Flash OS Image**
+
    - Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd` to write the OS image to your microSD card.
-
 2. **Enable SSH (optional but recommended)**
-   - Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
 
+   - Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
 3. **Disable Unnecessary Services**
 
    Certain system services are not required and should be disabled to improve boot time and reduce resource usage.
 
    See the section **Disabling Unnecessary Services** later in this document for recommended services to disable.
-
 4. **Install System Packages**
 
    ```bash
    sudo apt update
    sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql
    ```
-
 5. **Optional Configuration Tweaks**
+
    - Disable HDMI output to save power:
      ```bash
      /usr/bin/tvservice -o
@@ -98,10 +97,13 @@ The system will automatically create the required tables (`activity_log` and `li
 **Alternatively, to create manually:**
 
 Connect to the database
+
 ```bash
 psql -U pi -d smartlight
 ```
-Paste the table creation SQL statements 
+
+Paste the table creation SQL statements
+
 ```sql
 -- Create activity_log table
 CREATE TABLE IF NOT EXISTS activity_log (
@@ -178,15 +180,6 @@ The following Python packages are required:
 - `numpy` — Numerical operations
 
 A complete list is provided in `req_modules.txt`:
-
-```
-RPi.GPIO
-pyserial
-lightgbm
-psycopg2
-pandas
-numpy
-```
 
 ---
 
@@ -314,20 +307,24 @@ This will synchronise the Raspberry Pi system time to UTC.
 Setting system time requires **sudo** privileges.
 
 1. **Create a sudoers rule:**
-    ```bash
-    sudo visudo -f /etc/sudoers.d/shelterlight
-    ```
-    Add:
-    ```
-    pi ALL=(ALL) NOPASSWD: /bin/date
-    ```
 
+   ```bash
+   sudo visudo -f /etc/sudoers.d/shelterlight
+   ```
+
+   Add:
+
+   ```
+   pi ALL=(ALL) NOPASSWD: /bin/date
+   ```
 2. **Disable NTP (Optional)**
-    ```bash
-    sudo timedatectl set-ntp false
-    ```
+
+   ```bash
+   sudo timedatectl set-ntp false
+   ```
 
 ---
+
 ### ℹ️ Why this is necessary
 
 The Raspberry Pi Zero does not have a battery-backed RTC. This system operates offline and uses GPS as the only reliable time source.
@@ -368,15 +365,15 @@ Example content:
 
 **Explanation:**
 
-| Option |Description                                                      |
-|--------------|---------------------------------------------------------------|
-| `daily`      | Rotate the log file daily.                                     |
-| `rotate 7`  | Keep the last 7 rotated log files.                             |
-| `compress`  | Compress old log files to save space.                          |
-| `missingok` | Do not raise an error if the log file is missing.              |
-| `notifempty`| Do not rotate if the log file is empty.                        |
-| `delaycompress` | Compress the previous log file, not the current one.           |
-| `copytruncate`| Truncate the original log file after creating a copy.         |
+| Option            | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `daily`         | Rotate the log file daily.                            |
+| `rotate 7`      | Keep the last 7 rotated log files.                    |
+| `compress`      | Compress old log files to save space.                 |
+| `missingok`     | Do not raise an error if the log file is missing.     |
+| `notifempty`    | Do not rotate if the log file is empty.               |
+| `delaycompress` | Compress the previous log file, not the current one.  |
+| `copytruncate`  | Truncate the original log file after creating a copy. |
 
 ---
 
@@ -428,17 +425,17 @@ The following services are not required for the Shelter Light Control System and
 
 ### ⚙️ Recommended Services to Disable
 
-| Service | Reason |
-|---|---|
-| bluetooth.service	| Bluetooth hardware is not used. |
-| hciuart.service | Bluetooth UART service, not needed. |
-| avahi-daemon.service | mDNS/DNS-SD service (Bonjour/ZeroConf), not used. |
-| triggerhappy.service | Listens for keyboard/mouse button events (special & media keys). Not needed in headless use. |
-| wpa_supplicant.service | Wi-Fi service. System runs offline with no network requirement. |
-| dhcpcd.service | DHCP client service. No network required. |
-| nfs-common.service | Network filesystem client. Not used. |
-| rpcbind.service | RPC service for NFS, not required. |
-| cups.service | Printing service, not required. |
+| Service                | Reason                                                                                       |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| bluetooth.service      | Bluetooth hardware is not used.                                                              |
+| hciuart.service        | Bluetooth UART service, not needed.                                                          |
+| avahi-daemon.service   | mDNS/DNS-SD service (Bonjour/ZeroConf), not used.                                            |
+| triggerhappy.service   | Listens for keyboard/mouse button events (special & media keys). Not needed in headless use. |
+| wpa_supplicant.service | Wi-Fi service. System runs offline with no network requirement.                              |
+| dhcpcd.service         | DHCP client service. No network required.                                                    |
+| nfs-common.service     | Network filesystem client. Not used.                                                         |
+| rpcbind.service        | RPC service for NFS, not required.                                                           |
+| cups.service           | Printing service, not required.                                                              |
 
 ---
 
@@ -469,11 +466,11 @@ sudo systemctl enable dhcpcd.service
 
 ### ⚠️ Other Services to consider
 
-| Service | Function |
-|---|---|
-| networking.service | Configures network interfaces (mainly ethernet & static IPs). Not needed unless you plan to connect to a network regularly and want easy control. |
-| network-manager.service | A tool for managing network connections (wired, WiFi, VPN, etc.). It handles dynamic networks, roaming, user-managed connections, etc. Not needed unless you plan to connect to a network regularly and want easy control. |
-| ssh.service | the SSH server (OpenSSH) allows you to remotely log in to the Pi from another machine. Disable SSH for security and simplicity. But if you want to maintain or debug the system remotely without physically accessing it, leave it enabled. |
+| Service                 | Function                                                                                                                                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| networking.service      | Configures network interfaces (mainly ethernet & static IPs). Not needed unless you plan to connect to a network regularly and want easy control.                                                                                           |
+| network-manager.service | A tool for managing network connections (wired, WiFi, VPN, etc.). It handles dynamic networks, roaming, user-managed connections, etc. Not needed unless you plan to connect to a network regularly and want easy control.                  |
+| ssh.service             | the SSH server (OpenSSH) allows you to remotely log in to the Pi from another machine. Disable SSH for security and simplicity. But if you want to maintain or debug the system remotely without physically accessing it, leave it enabled. |
 
 Each of these can be disabled with:
 
@@ -482,22 +479,24 @@ sudo systemctl disable networking.service
 sudo systemctl disable network-manager.service
 sudo systemctl disable ssh.service
 ```
+
 ---
+
 ## 🛠️ Maintenance & Monitoring
 
 The Shelter Light Control System is designed to run unattended. However, minimal periodic maintenance is recommended to ensure long-term reliability.
 
-| Task | Frequency | Reason | Commands / Actions |
-|---|---|---|---|
-| USB Backup Retrieval | Monthly or after unusual weather | Back up logs & configuration, and check for errors | Insert USB and check ```/media/usb/smartlight/logs/``` |
-| Log File Storage Check | Quarterly | Ensure log rotation is working and storage space is healthy | ```sudo du -sh /home/pi/shelterlight/*.log```<br>```sudo df -h /``` |
-| Database Health Check | Every 6 months | Verify database integrity and storage | ```sudo -u postgres psql -c "\l"```<br>```psql -U pi -d smartlight -c "\dt"```<br>```du -sh /var/lib/postgresql/14/main``` |
-| Hardware Inspection | Annually / after severe weather | Ensure cables, sensors & hardware are intact | Visual check |
-| SD Card Health | Annually |	SD cards wear out over time | ```sudo smartctl -a /dev/mmcblk0```<br> (Requires smartmontools)<br>Consider cloning the SD card |
+| Task                   | Frequency                        | Reason                                                      | Commands / Actions                                                                                                           |
+| ---------------------- | -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| USB Backup Retrieval   | Monthly or after unusual weather | Back up logs & configuration, and check for errors          | Insert USB and check ``/media/usb/smartlight/logs/``                                                                         |
+| Log File Storage Check | Quarterly                        | Ensure log rotation is working and storage space is healthy | ``sudo du -sh /home/pi/shelterlight/*.log```<br>```sudo df -h /``                                                          |
+| Database Health Check  | Every 6 months                   | Verify database integrity and storage                       | ``sudo -u postgres psql -c "\l"```<br>```psql -U pi -d smartlight -c "\dt"```<br>```du -sh /var/lib/postgresql/14/main`` |
+| Hardware Inspection    | Annually / after severe weather  | Ensure cables, sensors & hardware are intact                | Visual check                                                                                                                 |
+| SD Card Health         | Annually                         | SD cards wear out over time                                 | ``sudo smartctl -a /dev/mmcblk0```<br>` (Requires smartmontools)`<br>`Consider cloning the SD card                       |
 
 ---
-## 🧹 Database Cleanup
 
+## 🧹 Database Cleanup
 
 Over time, the database may accumulate old activity and schedule data. It is recommended to periodically remove older records to prevent excessive disk usage.
 
@@ -516,6 +515,7 @@ localhost:5432:smartlight:pi:changeme
 ```
 
 Set the correct file permissions:
+
 ```bash
 chmod 600 /home/pi/.pgpass
 ```
@@ -523,16 +523,70 @@ chmod 600 /home/pi/.pgpass
 ### ⏰ Automate the cleanup task using cron.
 
 Edit the crontab for user pi:
+
 ```bash
 crontab -e
 ```
+
 Add the following line to remove old data monthly:
+
 ```bash
 0 12 1 * * psql -U pi -d smartlight -c "DELETE FROM activity_log WHERE timestamp < NOW() - INTERVAL '90 days'; DELETE FROM light_schedules WHERE date < NOW() - INTERVAL '180 days';"
 ```
+
 Activity data over 90 days old and schedules over 180 days old will be cleared out on the 1st of every month at midday.
 
+PostgreSQL does not immediately free disk space when records are deleted. Instead, deleted rows are marked as "dead" and remain in the table until a VACUUM operation is performed.
+
+If you want to physically reclaim disk space after cleanup:
+
+```bash
+psql -U pi -d smartlight -c "VACUUM FULL;"
+```
+
+**Note:**
+
+Regular auto-vacuum is usually enabled by default and will handle cleanup over time.
+
+VACUUM FULL will lock the tables until it completes, so it should only be run during maintenance periods when the service can tolerate downtime.
+
+### 🧹 To check auto-vacuum status
+
+Log into PostgreSQL:
+
+```bash
+psql -U pi -d smartlight
+```
+
+Then run:
+
+```sql
+SHOW autovacuum;
+```
+
+Expected result:
+
+```markdown
+ autovacuum
+-------------
+ on
+(1 row)
+```
+
+If it says off, then autovacuum is disabled (which is rare on modern PostgreSQL). To enable, edit your postgresql.conf file (usually in /etc/postgresql/14/main/postgresql.conf or similar):
+
+```ini
+autovacuum = on
+```
+
+Then restart PostgreSQL:
+
+```bash
+sudo systemctl restart postgresql
+```
+
 ---
+
 ## ⚙️ Configuration Overview
 
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
