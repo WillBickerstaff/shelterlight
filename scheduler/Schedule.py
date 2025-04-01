@@ -382,17 +382,17 @@ class LightScheduler:
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
         """Generate a light schedule for a date based on model predictions.
-    
+
         Create a daily schedule of when lights should be turned on,
         make sure predictions only fall within darkness hours.
-    
+
         Args
         ----
             date (str): The date for which the schedule is
                         generated (YYYY-MM-DD).
             darkness_start (str): Time when darkness starts (HH:MM).
             darkness_end (str): Time when darkness ends (HH:MM).
-    
+
         Returns
         -------
             dict: A dictionary mapping time intervals to predicted light
@@ -401,60 +401,63 @@ class LightScheduler:
         # Validate input parameters
         try:
             schedule_date = dt.datetime.strptime(date, "%Y-%m-%d").date()
-            darkness_start = dt.datetime.strptime(darkness_start, "%H:%M").time()
+            darkness_start = dt.datetime.strptime(
+                darkness_start, "%H:%M").time()
             darkness_end = dt.datetime.strptime(darkness_end, "%H:%M").time()
         except ValueError as e:
             logging.error("Invalid date or time format: %s", e)
             return {}
-    
+
         # Prepare prediction data
         interval_times = [
-            (schedule_date, i) for i in range((24 * 60) // self.interval_minutes)
-        ]
+            (schedule_date, i) for
+            i in range((24 * 60) // self.interval_minutes)]
         df = pd.DataFrame(interval_times, columns=["date", "interval_number"])
-    
+
         # Add a timestamp column
         df["timestamp"] = df.apply(
             lambda row: dt.datetime.combine(
                 row["date"],
                 dt.time(
-                    hour=(row["interval_number"] * self.interval_minutes) // 60,
-                    minute=(row["interval_number"] * self.interval_minutes) % 60,
+                    hour=(row["interval_number"] *
+                          self.interval_minutes) // 60,
+                    minute=(row["interval_number"] *
+                            self.interval_minutes) % 60,
                 ),
             ),
             axis=1,
         )
-    
+
         # Compute necessary features for each interval
         df = self._create_base_features(df)
-    
+
         # Pass darkness_start and darkness_end to is_dark()
         df["is_dark"] = df["timestamp"].dt.time.apply(
             lambda t: self.is_dark(t, darkness_start, darkness_end)
         )
-    
+
         # Keep only dark intervals
         df = df[df["is_dark"] == 1]
-    
+
         logging.debug("Prediction DataFrame: \n%s", df.head())
-    
+
         # Make predictions using the trained model
         if self.model is None:
             logging.error("No trained model found. Cannot generate schedule.")
             return {}
-    
+
         predictions = self._predict_schedule(df)
         logging.debug("Predictions: %s", predictions)
-    
+
         # Store and return the generated schedule
         logging.debug(
-            "Calling store_schedule with schedule_date: %s, df: %s, predictions: %s",
+            "Calling store_schedule with schedule_date: "
+            "%s, df: %s, predictions: %s",
             schedule_date,
             df,
             predictions,
         )
         return self.store_schedule(schedule_date, df, predictions)
-
 
     def store_schedule(self, schedule_date: dt.date,
                        df: pd.DataFrame, predictions: list[int]) -> dict:
