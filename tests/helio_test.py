@@ -37,7 +37,7 @@ class test_SolarEvent(unittest.TestCase):
 
     def setUp(self):
         """Begin setup for each test."""
-        self.default_loglevel = logging.INFO
+        self.default_loglevel = logging.DEBUG
         logging.basicConfig(level=self.default_loglevel)
 
     # Doesn't test, just debug.logs all of the calculations for review

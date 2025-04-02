@@ -627,6 +627,10 @@ class SunTimes:
             NoSolarEventError: If no sunset can be determined (polar day).
             InvalidObserverError: If observer data is invalid.
         """
+        logging.debug("Calculate solar events for location %s, %s on date %s",
+                      round(observer.latitude, 2),
+                      round(observer.longitude, 2),
+                      date.isoformat())
         try:
             # Attempt to calculate sunrise
             try:
