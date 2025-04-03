@@ -32,7 +32,11 @@ class TestUSBManager(unittest.TestCase):
         """Begin setup for each test."""
         # Set up USBFileManager instance with a mock mount point for each test.
         self.default_loglevel = logging.DEBUG
-        logging.basicConfig(level=self.default_loglevel)
+        logfilename = 'usb_tests.log'
+        with open(logfilename, 'w'):
+            pass
+        logging.basicConfig(level=self.default_loglevel,
+                            filename=os.path.join('tests', logfilename))
         self.usb_manager = USBFileManager(mount_point='/mock/mount/point')
 
     def test_usb_check_triggers_config_reload(self):

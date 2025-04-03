@@ -103,16 +103,17 @@ class DB:
                 else:
                     raise
 
+
 def _setup_database(self) -> None:
-    """Initialize database tables and indexes for activity logging and light scheduling.
+    """Initialize db tables & indexes for activity logging & light scheduling.
 
     Executes SQL commands to create:
     1. `activity_log` table with timestamp index
     2. `light_schedules` table with date and interval indexes
     3. Update trigger for light_schedules
-    
+
     All integer fields in activity_log are SMALLINT to reduce storage.
-    SMALLINT holds value from -32768 to +32767 (+32767 is 9 hours and 6 minutes)
+    SMALLINT holds value from -32768 to +32767 (+32767 is 9 hours, 6 minutes)
     """
     # Activity Log table
     create_activity_table = """
@@ -130,7 +131,7 @@ def _setup_database(self) -> None:
         CREATE INDEX IF NOT EXISTS idx_activity_timestamp
         ON activity_log (timestamp);
     """
-    
+
     # Light Schedules table
     create_schedules_table = """
         CREATE TABLE IF NOT EXISTS light_schedules (
@@ -146,19 +147,21 @@ def _setup_database(self) -> None:
             confidence DECIMAL(5,4),
             created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            
-            CONSTRAINT valid_interval CHECK (interval_number >= 0 AND interval_number <= 47),
-            CONSTRAINT valid_confidence CHECK (confidence >= 0 AND confidence <= 1),
+
+            CONSTRAINT valid_interval CHECK (interval_number >= 0 AND
+                                             interval_number <= 47),
+            CONSTRAINT valid_confidence CHECK (confidence >= 0 AND
+                                               confidence <= 1),
             CONSTRAINT unique_schedule_interval UNIQUE (date, interval_number)
         );
     """
     create_schedules_indexes = """
-        CREATE INDEX IF NOT EXISTS idx_light_schedules_date 
+        CREATE INDEX IF NOT EXISTS idx_light_schedules_date
         ON light_schedules(date);
-        CREATE INDEX IF NOT EXISTS idx_light_schedules_interval 
+        CREATE INDEX IF NOT EXISTS idx_light_schedules_interval
         ON light_schedules(interval_number);
     """
-    
+
     # Update trigger for light_schedules
     create_update_trigger_func = """
         CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -169,15 +172,16 @@ def _setup_database(self) -> None:
         END;
         $$ language 'plpgsql';
     """
-    
+
     create_trigger = """
-        DROP TRIGGER IF EXISTS update_light_schedules_updated_at ON light_schedules;
+        DROP TRIGGER IF EXISTS update_light_schedules_updated_at ON
+            light_schedules;
         CREATE TRIGGER update_light_schedules_updated_at
             BEFORE UPDATE ON light_schedules
             FOR EACH ROW
             EXECUTE FUNCTION update_updated_at_column();
     """
-    
+
     # Execute all setup queries within a cursor context
     with self._conn.cursor() as cursor:
         cursor.execute(create_activity_table)
@@ -187,8 +191,9 @@ def _setup_database(self) -> None:
         cursor.execute(create_update_trigger_func)
         cursor.execute(create_trigger)
         self._conn.commit()
-    
-    logging.info("Activity and Light Schedules databases and indexes initialized successfully.")
+
+    logging.info("Activity and Light Schedules databases and indexes "
+                 "initialized successfully.")
 
     def close_connection(self) -> None:
         """

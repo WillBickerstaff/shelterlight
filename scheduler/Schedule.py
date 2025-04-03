@@ -330,7 +330,7 @@ class LightScheduler:
         -------
             None
         """
-        # 1️-Retrieve & prepare training data
+        #   1-Retrieve & prepare training data
         df = self._prepare_training_data(days_history)
         # 2-Select features for training
         feature_cols = self._get_feature_columns()
@@ -958,8 +958,8 @@ class LightScheduler:
         month = timestamp.month
 
         # Create cyclical time features
-        #    sin(2π * value/max_value)
-        #    cos(2π * value/max_value)
+        #    sin(2pi * value/max_value)
+        #    cos(2pi * value/max_value)
 
         # - Hours (24-hour cycle)
         # - hour_sin, hour_cos (24-hour cycle)

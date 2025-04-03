@@ -35,8 +35,12 @@ class test_geocode(unittest.TestCase):
 
     def setUp(self):
         """Log level setup."""
-        self.default_loglevel = logging.INFO
-        logging.basicConfig(level=self.default_loglevel)
+        self.default_loglevel = logging.DEBUG
+        logfilename = 'geocode_tests.log'
+        with open(logfilename, 'w'):
+            pass
+        logging.basicConfig(level=self.default_loglevel,
+                            filename=os.path.join('tests', logfilename))
 
     def test_retrieval(self):
         """Test retrievel of locations."""

@@ -35,8 +35,12 @@ class TestPersist(unittest.TestCase):
 
     def setUp(self):
         """Begin setup for each test."""
-        self.default_loglevel = logging.WARN
-        logging.basicConfig(level=self.default_loglevel)
+        self.default_loglevel = logging.DEBUG
+        logfilename = 'persist_tests.log'
+        with open(logfilename, 'w'):
+            pass
+        logging.basicConfig(level=self.default_loglevel,
+                            filename=os.path.join('tests', logfilename))
 
     def test_singleton_behaviour(self):
         """Confirm class behaves as a singleton."""

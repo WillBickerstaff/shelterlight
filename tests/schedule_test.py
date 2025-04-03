@@ -50,8 +50,12 @@ class TestLightScheduler(unittest.TestCase):
         This runs before each individual test.
         """
         # Setup logging for test output (safely)
-        self.default_loglevel = logging.INFO
-        logging.basicConfig(level=self.default_loglevel)
+        self.default_loglevel = logging.DEBUG
+        logfilename = 'schedule_tests.log'
+        with open(logfilename, 'w'):
+            pass
+        logging.basicConfig(level=self.default_loglevel,
+                            filename=os.path.join('tests', logfilename))
 
         # Reset the singleton instance to avoid cross-test contamination
         LightScheduler._instance = None

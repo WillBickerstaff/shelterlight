@@ -38,7 +38,11 @@ class test_SolarEvent(unittest.TestCase):
     def setUp(self):
         """Begin setup for each test."""
         self.default_loglevel = logging.DEBUG
-        logging.basicConfig(level=self.default_loglevel)
+        logfilename = 'helio_tests.log'
+        with open(logfilename, 'w'):
+            pass
+        logging.basicConfig(level=self.default_loglevel,
+                            filename=os.path.join('tests', logfilename))
 
     # Doesn't test, just debug.logs all of the calculations for review
     @patch('serial.Serial')

@@ -38,8 +38,12 @@ class TestGPS(unittest.TestCase):
     def setUp(self):
         """Begin Setup for each test, ensuring singleton reset for GPS."""
         GPS._instance = None  # Reset singleton instance
-        self.default_loglevel = logging.INFO
-        logging.basicConfig(level=self.default_loglevel)
+        self.default_loglevel = logging.DEBUG
+        logfilename = 'gps_tests.log'
+        with open(logfilename, 'w'):
+            pass
+        logging.basicConfig(level=self.default_loglevel,
+                            filename=os.path.join('tests', logfilename))
 
     def test_singleton_behavior(self):
         """Test that only one instance of GPS can exist."""
