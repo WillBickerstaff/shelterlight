@@ -9,7 +9,6 @@ Author: Will Bickerstaff
 Version: 0.1
 """
 
-from scheduler.Schedule import LightScheduler
 import unittest
 from unittest.mock import MagicMock, patch
 import datetime as dt
@@ -18,18 +17,22 @@ import numpy as np
 import os
 import sys
 import logging
+import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-parent_path = os.path.abspath(os.path.join(base_path, '..'))
-sys.path.append(parent_path)
 
+from scheduler.Schedule import LightScheduler
 
 # Mock GPIO/serial for Raspberry Pi compatibility (import safety)
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
+
+
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
 
 
 class TestLightScheduler(unittest.TestCase):
@@ -49,14 +52,6 @@ class TestLightScheduler(unittest.TestCase):
         external dependencies such as the actual database and model training.
         This runs before each individual test.
         """
-        # Setup logging for test output (safely)
-        self.default_loglevel = logging.DEBUG
-        logfilename = 'schedule_tests.log'
-        with open(logfilename, 'w'):
-            pass
-        logging.basicConfig(level=self.default_loglevel,
-                            filename=os.path.join('tests', logfilename))
-
         # Reset the singleton instance to avoid cross-test contamination
         LightScheduler._instance = None
         self.scheduler = LightScheduler()
@@ -78,8 +73,6 @@ class TestLightScheduler(unittest.TestCase):
         Verifies that the database cursor is used correctly and the fetched
         data is processed into the expected format.
         """
-        logging.info("\n%s\n\t\t   Checking schedule retrieval from DB\n%s",
-                     "="*79, "-"*79)
         # Arrange
         # Use future date to avoid clashes (today + 10 years)
         target_date = dt.date.today() + dt.timedelta(days=365 * 10)
@@ -116,8 +109,6 @@ class TestLightScheduler(unittest.TestCase):
 
     def test_should_light_be_on_true(self):
         """Test True returned if current time matches a scheduled on time."""
-        logging.info("\n%s\n\t\t   Checking Light `ON' Decision\n%s",
-                     "="*79, "-"*79)
         # Arrange
         # Set the test time
         now = dt.datetime(2025, 3, 20, 18, 10)  # 18:10 UTC
@@ -148,8 +139,6 @@ class TestLightScheduler(unittest.TestCase):
         Verifies that the database insert query is executed with the expected
         parameters.
         """
-        logging.info("\n%s\n\t\t   Checking correct storage of schedule\n%s",
-                     "="*79, "-"*79)
         # Arrange
         self.scheduler.interval_minutes = 10
 
@@ -200,8 +189,6 @@ class TestLightScheduler(unittest.TestCase):
         Verifies that the method correctly identifies if a given time is
         within the darkness period in this scenario.
         """
-        logging.info("\n%s\n\t\t   Checking darkness period all in 1 day\n%s",
-                     "="*79, "-"*79)
         # Define some darkness times
         darkness_start = dt.time(18, 0)
         darkness_end = dt.time(23, 30)
@@ -223,8 +210,6 @@ class TestLightScheduler(unittest.TestCase):
         within the darkness period when it starts in the evening and ends
         the next morning.
         """
-        logging.info("\n%s\n\t\t   Checking darkness spans midnight\n%s",
-                     "="*79, "-"*79)
         # Darkness period: starts at 18:00, ends at 06:00 (next day)
         darkness_start = dt.time(18, 0)
         darkness_end = dt.time(6, 0)
@@ -250,8 +235,6 @@ class TestLightScheduler(unittest.TestCase):
         value. This Verifies that the database execute method is called with
         the expected SQL query and parameters.
         """
-        logging.info("\n%s\n\t\t   Checking accuracy change updates data\n%s",
-                     "="*79, "-"*79)
         # Arrange: Mock DB cursor
         mock_cursor = MagicMock()
         self.scheduler.db.conn.cursor.return_value.__enter__.return_value = \
@@ -281,8 +264,6 @@ class TestLightScheduler(unittest.TestCase):
         Verifies that evaluate_previous_schedule() performs no evaluation or
         database update when the schedule date is in the future.
         """
-        logging.info("\n%s\n\t\t   Checking only past schedules evaluated\n%s",
-                     "="*79, "-"*79)
         # Arrange
         now = dt.datetime.utcnow()
         mock_dt.datetime.utcnow = MagicMock(return_value=now)
@@ -311,8 +292,6 @@ class TestLightScheduler(unittest.TestCase):
 
     def test_get_current_schedule_returns_cached(self):
         """Ensure get_current_schedule() returns the cached schedule."""
-        logging.info("\n%s\n\t\t   Checking schedule returned from cache\n%s",
-                     "="*79, "-"*79)
         today = dt.date(2025, 3, 20)
         expected_schedule = {0: 1, 1: 0}  # Expected cache
 
@@ -345,8 +324,6 @@ class TestLightScheduler(unittest.TestCase):
         Check the cache is populated with the schedule from the database if
         the schedule is not in the cache.
         """
-        logging.info("\n%s\n\t\t   Checking db fallback (no cache)\n%s",
-                     "="*79, "-"*79)
         today = dt.date(2025, 3, 20)
         self.scheduler.schedule_cache = {}  # Make sure cache is empty
         # Mock get_schedule() to return a known schedule
@@ -358,9 +335,7 @@ class TestLightScheduler(unittest.TestCase):
 
     @patch("scheduler.Schedule.lgb")
     def test_train_model_calls_lgb_train(self, mock_lgb):
-        logging.info("\n%s\n\t\t   Checking model train called\n%s",
-                     "="*79, "-"*79)
-        """Test LightGBM train is called with training data."""
+        """Check that lgb.train is called with training data."""
         # Mock training dataset with expected feature columns
         mock_df = pd.DataFrame({
             'activity_pin': [1, 0, 1],
@@ -384,8 +359,6 @@ class TestLightScheduler(unittest.TestCase):
 
     def test_create_prediction_features_output_shape(self):
         """Test expected feature arrays are returned."""
-        logging.info("\n%s\n\t\t   Checking feature generation\n%s",
-                     "="*79, "-"*79)
         timestamp = dt.datetime(2025, 3, 20, 18, 0)
 
         # Mock the features dictionary
@@ -425,8 +398,6 @@ class TestLightScheduler(unittest.TestCase):
 
     def test_set_confidence_threshold_valid(self):
         """Test confidence threshold is updated when given a valid float."""
-        logging.info("\n%s\n\t\t   Checking Confidence threshold (valid)\n%s",
-                     "="*79, "-"*79)
         self.scheduler.update_daily_schedule = MagicMock()
         self.scheduler.set_confidence_threshold(0.75)
         # Check confidence threshold is updated
@@ -436,8 +407,6 @@ class TestLightScheduler(unittest.TestCase):
 
     def test_set_confidence_threshold_invalid(self):
         """Test confidence threshold errors when given an invalid float."""
-        logging.info("\n%s\n\t\t  Checking Confidence threshold (invalid)\n%s",
-                     "="*79, "-"*79)
         # Threshold > 1.0 is invalid, expect a ValueError
         with self.assertRaises(ValueError):
             self.scheduler.set_confidence_threshold(1.5)
@@ -451,8 +420,6 @@ class TestLightScheduler(unittest.TestCase):
             - update_daily_schedule() is triggered only once on first
             valid change.
         """
-        logging.info("\n%s\n\t\t   Checking interval minutes (valid)\n%s",
-                     "="*79, "-"*79)
         # Arrange
         self.scheduler.update_daily_schedule = MagicMock()
         # Act 1st
@@ -469,16 +436,12 @@ class TestLightScheduler(unittest.TestCase):
 
     def test_set_interval_minutes_invalid(self):
         """Test interval minutes errors when given an invalid int."""
-        logging.info("\n%s\n\t\t   Checking interval minutes (invalid)\n%s",
-                     "="*79, "-"*79)
         # -minutes are invalid, expect a ValueError
         with self.assertRaises(ValueError):
             self.scheduler.set_interval_minutes(-5)
 
     def test_get_current_schedule_cached(self):
         """Test that the cached schedule is returned if it exists."""
-        logging.info("\n%s\n\t\t   Checking Cached schedule returned\n%s",
-                     "="*79, "-"*79)
         # Arrange
         today = dt.date.today()
         cached_schedule = {0: 1, 1: 0}
@@ -499,8 +462,6 @@ class TestLightScheduler(unittest.TestCase):
         - The model is trained.
         - Today's schedule is generated.
         """
-        logging.info("\n%s\n\t\t   Checking daily update\n%s",
-                     "="*79, "-"*79)
         # Arrange
         # Mock dependent methods to isolate test
         self.scheduler.evaluate_previous_schedule = MagicMock()
@@ -531,8 +492,6 @@ class TestLightScheduler(unittest.TestCase):
         model or generate today's schedule, leaving the system running in
         reactive mode.
         """
-        logging.info("\n%s\n\t\t   Checking error handling (daily update)\n%s",
-                     "="*79, "-"*79)
         # Arrange
         # Force evaluate_previous_schedule() to raise an Exception
         self.scheduler.evaluate_previous_schedule = MagicMock(
@@ -551,3 +510,13 @@ class TestLightScheduler(unittest.TestCase):
         # Following methods should not be called after failure
         self.scheduler.train_model.assert_not_called()
         self.scheduler.generate_daily_schedule.assert_not_called()
+
+
+if __name__ == '__main__':
+    """Verbosity:
+
+        0	One . per test	CI logs, super compact view
+        1	Test name + result	(Default)
+        2	Test + docstring + result	Debugging, test review, clarity
+    """
+    unittest.main(testRunner=util.LoggingTestRunner(verbosity=2))

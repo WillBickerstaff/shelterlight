@@ -11,16 +11,14 @@ Version: 0.1
 
 import unittest
 from unittest.mock import patch, MagicMock
-from . import gps_test_vals as test_vals
+import gps_test_vals as test_vals
 import sys
 import os
 import logging
+import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-parent_path = os.path.abspath(os.path.join(base_path, '..'))
-sys.path.append(base_path)
-sys.path.append(parent_path)
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
@@ -32,48 +30,37 @@ from shelterGPS.Position import GPS
 from shelterGPS.coord import Coordinate
 
 
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
+
 class TestGPS(unittest.TestCase):
     """Class for GPS testing."""
 
     def setUp(self):
         """Begin Setup for each test, ensuring singleton reset for GPS."""
         GPS._instance = None  # Reset singleton instance
-        self.default_loglevel = logging.DEBUG
-        logfilename = 'gps_tests.log'
-        with open(logfilename, 'w'):
-            pass
-        logging.basicConfig(level=self.default_loglevel,
-                            filename=os.path.join('tests', logfilename))
 
     def test_singleton_behavior(self):
         """Test that only one instance of GPS can exist."""
-        logging.info("\n%s\n\t\t   Checking GPS behaves as Singleton\n%s",
-                     "="*79, "-"*79)
         gps1 = GPS()
         gps2 = GPS()
         self.assertIs(
             gps1, gps2, "GPS class is not respecting singleton pattern.")
-        logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('shelterGPS.Position.GPS.pwr_on')
     @patch('shelterGPS.Position.GPS.pwr_off')
     def test_power_control(self, mock_pwr_off, mock_pwr_on):
         """Test that GPS correctly handles power on and off."""
-        logging.info("\n%s\n\t\t   Commencing GPS Power tests\n%s",
-                     "="*79, "-"*79)
         gps = GPS()
         gps.pwr_on()
         mock_pwr_on.assert_called_once()
 
         gps.pwr_off()
         mock_pwr_off.assert_called_once()
-        logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('shelterGPS.Position.serial.Serial')
     def test_coordinate_extraction(self, mock_serial):
         """Testing coordinate extraction from NMEA messages."""
-        logging.getLogger().setLevel(self.default_loglevel)
-
         # Create a mock serial instance
         mock_instance = mock_serial.return_value
 
@@ -95,14 +82,8 @@ class TestGPS(unittest.TestCase):
             self.assertAlmostEqual(gps.longitude, tv['lon'], places=4)
             self.assertAlmostEqual(gps.altitude, tv['alt'], places=1)
 
-        # Reset the logging level
-        logging.getLogger().setLevel(self.default_loglevel)
-
     def test_Coordinate_valid(self):
         """Testing correct extraction of valid coordinates."""
-        logging.getLogger().setLevel(self.default_loglevel)
-        logging.info("\n%s\n\t\t   Commencing coordinate conversion tests\n%s",
-                     "="*79, "-"*79)
         pass_n = 0
         """Test conversion of GPS DMS coordinates to decimal format."""
         for test_case in test_vals.valid_coordinates:
@@ -115,26 +96,17 @@ class TestGPS(unittest.TestCase):
             pass_n += 1
         logging.info("\t*** %s of %s valid coordinate tests passed",
                      pass_n, len(test_vals.valid_coordinates))
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_Coordinate_out_of_bounds(self):
         """Test GPS coord conversion raises an error when out of bounds."""
-        logging.info(
-            "\n%s\n\t\t   Commencing out of bounds coordinate tests\n%s",
-            "="*79, "-"*79)
-        logging.getLogger().setLevel(logging.DEBUG)
         for test_val in test_vals.invalid_coordinates:
             coord = test_val.get("coord")
             dir = test_val.get("dir")
             with self.assertRaises(GPSOutOfBoundsError):
                 coord = Coordinate(gps_string=coord, direction=dir)
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_nmea_checksum_valid(self):
         """Test that NMEA checksum validation passes for valid data."""
-        logging.info("\n%s\n\t\t   Commencing VALID NMEA checksum tests\n%s",
-                     "="*79, "-"*79)
-        logging.getLogger().setLevel(self.default_loglevel)
         pass_n = 0
         for message in test_vals.valid_NMEA:
             msg = message['msg']
@@ -144,13 +116,9 @@ class TestGPS(unittest.TestCase):
                 self.assertTrue(False, f"Valid NMEA failed for message: {msg}")
         logging.info("\t*** %s of %s valid checksum tests passed",
                      pass_n, len(test_vals.valid_NMEA))
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_nmea_checksum_invalid(self):
         """Test that NMEA checksum validation fails for invalid data."""
-        logging.info("\n%s\n\t\t   Commencing INVALID NMEA checksum tests\n%s",
-                     "="*79, "-"*79)
-        logging.getLogger().setLevel(self.default_loglevel)
         pass_n = 0  # Initialize pass_n to 0 for invalid tests
         for message in test_vals.valid_NMEA:
             # Modify the message to have an invalid checksum
@@ -164,7 +132,6 @@ class TestGPS(unittest.TestCase):
                                 f"passed for message: {invalid_checksum}")
         logging.info("\t*** %s of %s invalid checksum tests passed",
                      pass_n, len(test_vals.valid_NMEA))
-        logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('shelterGPS.Position.GPS._get_msg')
     @patch('shelterGPS.Position.GPS._get_coordinates')
@@ -172,13 +139,10 @@ class TestGPS(unittest.TestCase):
     def test_get_fix_success(self, mock_get_datetime,
                              mock_get_coordinates, mock_get_msg):
         """Test that `get_fix` calls required methods for a successful fix."""
-        logging.getLogger().setLevel(logging.DEBUG)
-
         gps = GPS()
         gps.get_fix()
         mock_get_coordinates.assert_called_once()
         mock_get_datetime.assert_called_once()
-        logging.getLogger().setLevel(self.default_loglevel)
 
     @patch('shelterGPS.Position.GPS._get_msg', side_effect=GPSInvalid)
     def test_get_fix_failure(self, mock_get_msg):
@@ -186,15 +150,11 @@ class TestGPS(unittest.TestCase):
         gps = GPS()
         with self.assertRaises(GPSInvalid):
             gps.get_fix()
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_process_datetime_valid(self):
         """GPS correctly processes and converts valid UTC time and date."""
-        logging.info("\n%s\n\t\t   Commencing VALID datetime tests\n%s",
-                     "="*79, "-"*79)
         gps = GPS()
         pass_n = 0
-        logging.getLogger().setLevel(self.default_loglevel)
         for val in test_vals.valid_dt:
             expected = val.get("dt_obj")
             dt_obj = gps._process_datetime(
@@ -203,15 +163,11 @@ class TestGPS(unittest.TestCase):
                 pass_n += 1
         logging.info("\t*** %s of %s valid date tests passed",
                      pass_n, len(test_vals.valid_dt))
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_process_datetime_invalid(self):
         """GPS raises ValueError for improperly formatted datetime strings."""
-        logging.info("\n%s\n\t\t   Commencing INVALID datetime tests\n%s",
-                     "="*79, "-"*79)
         gps = GPS()
         pass_n = 0
-        logging.getLogger().setLevel(self.default_loglevel)
 
         for val in test_vals.invalid_dt:
             try:
@@ -228,12 +184,10 @@ class TestGPS(unittest.TestCase):
 
         logging.info("\t*** %s of %s invalid date tests passed",
                      pass_n, len(test_vals.invalid_dt))
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_decode_message_valid(self):
         """Decoding of a valid GPS message, & storage in `self._last_msg`."""
         gps = GPS()
-        logging.getLogger().setLevel(logging.DEBUG)
 
         for test_message in test_vals.valid_NMEA:
             gps._decode_message(test_message['msg'])
@@ -243,4 +197,13 @@ class TestGPS(unittest.TestCase):
                             "Decoded message should not be empty")
             logging.debug("%s", gps.message_type)
             self.assertTrue(gps._validate_message_content(gps.message_type))
-        logging.getLogger().setLevel(self.default_loglevel)
+
+
+if __name__ == '__main__':
+    """Verbosity:
+
+        0	One . per test	CI logs, super compact view
+        1	Test name + result	(Default)
+        2	Test + docstring + result	Debugging, test review, clarity
+    """
+    unittest.main(testRunner=util.LoggingTestRunner(verbosity=2))

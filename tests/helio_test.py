@@ -11,56 +11,46 @@ Version: 0.1
 
 import unittest
 from unittest.mock import patch, MagicMock
+import gps_test_vals as test_vals
 import datetime as dt
 import sys
 import os
 import logging
+import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-parent_path = os.path.abspath(os.path.join(base_path, '..'))
-sys.path.append(base_path)
-sys.path.append(parent_path)
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-from . import gps_test_vals as test_vals
 from shelterGPS.Position import GPS
 from shelterGPS.Helio import SunTimes
 from shelterGPS.common import NoSolarEventError
+
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
+
 
 class test_SolarEvent(unittest.TestCase):
     """Class testing for solar events."""
 
     def setUp(self):
         """Begin setup for each test."""
-        self.default_loglevel = logging.DEBUG
-        logfilename = 'helio_tests.log'
-        with open(logfilename, 'w'):
-            pass
-        logging.basicConfig(level=self.default_loglevel,
-                            filename=os.path.join('tests', logfilename))
 
     # Doesn't test, just debug.logs all of the calculations for review
     @patch('serial.Serial')
     def test_SunTimes_Initial_Location(self, mock_serial):
         """Test for initial location."""
-        logging.info("\n%s\n\t\t   Determine Location\n%s",
-                     "="*79, "-"*79)
-        logging.getLogger().setLevel(logging.DEBUG)
         SunTimes()
-        logging.getLogger().setLevel(self.default_loglevel)
 
     # Doesn't test, just debug.logs all of the calculations for review
     @patch('serial.Serial')
     def test_solar_event_times(self, mock_serial):
         """Testing solar event times."""
-        logging.info("\n%s\n\t\t   Calculate Sunrise and Sunset\n%s",
-                     "="*79, "-"*79)
-        logging.getLogger().setLevel(logging.DEBUG)
+        loglevel = logging.getLogger().getEffectiveLevel()
 
         mock_instance = mock_serial.return_value
         gps = GPS()
@@ -69,6 +59,9 @@ class test_SolarEvent(unittest.TestCase):
         for tv in test_vals.valid_NMEA:
             if tv['datetime'] is None:
                 continue
+            # We don't need all the GPS debug messages in this test.
+            # This should be tested using gps_test.py, drop the
+            # loglevel
             logging.getLogger().setLevel(logging.WARN)
             mock_instance.readline.return_value = tv['msg'].encode()
             gps._get_coordinates(fix_wait=5)
@@ -79,7 +72,8 @@ class test_SolarEvent(unittest.TestCase):
                     patch('datetime.date', wraps=dt.date) as mock_date:
 
                 mock_date.today.return_value = tv['datetime'].date()
-                logging.getLogger().setLevel(logging.DEBUG)
+                # Restore the loglevel
+                logging.getLogger().setLevel(loglevel)
 
                 try:
                     test_instance._set_solar_times_and_fix_window()
@@ -93,13 +87,9 @@ class test_SolarEvent(unittest.TestCase):
                     else:
                         raise e  # Unexpected
 
-        logging.getLogger().setLevel(logging.INFO)
-
     @patch('serial.Serial')
     def test_solar_event_no_sunset(self, mock_serial):
         """Test for extreme lattitudes (polar day, no sunset)."""
-        logging.info("\n%s\n\t\t   Testing polar day behaviour\n%s",
-                     "="*79, "-"*79)
         from astral import Observer
         from shelterGPS.common import NoSolarEventError
 
@@ -111,9 +101,7 @@ class test_SolarEvent(unittest.TestCase):
 
     @patch('serial.Serial')
     def test_solar_event_no_sunrise(self, mock_serial):
-        """Test for extreme latitudes (polar night, no sunrise/sunset)."""
-        logging.info("\n%s\n\t\t   Testing polar night behaviour\n%s",
-                     "="*79, "-"*79)
+        """Test for extreme latitudes (polar night, no sunrise or sunset)."""
         from astral import Observer
 
         test_instance = SunTimes()
@@ -125,3 +113,13 @@ class test_SolarEvent(unittest.TestCase):
 
         self.assertIsNone(result["sunrise"])
         self.assertIsNone(result["sunset"])
+
+
+if __name__ == '__main__':
+    """Verbosity:
+
+        0	One . per test	CI logs, super compact view
+        1	Test name + result	(Default)
+        2	Test + docstring + result	Debugging, test review, clarity
+    """
+    unittest.main(testRunner=util.LoggingTestRunner(verbosity=2))

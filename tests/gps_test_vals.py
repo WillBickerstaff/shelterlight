@@ -10,6 +10,10 @@ Version: 0.1
 """
 
 import datetime as dt
+import os
+import sys
+base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(base_path)
 from shelterGPS.common import GPSDir
 
 # Chat GPT used to generate test message.

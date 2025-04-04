@@ -15,12 +15,11 @@ import datetime as dt
 import sys
 import os
 import logging
+import util
+
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-parent_path = os.path.abspath(os.path.join(base_path, '..'))
-sys.path.append(base_path)
-sys.path.append(parent_path)
 
 from lightlib.persist import PersistentData
 
@@ -29,6 +28,9 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
+
 
 class TestPersist(unittest.TestCase):
     """Testing persistent data."""
@@ -36,11 +38,6 @@ class TestPersist(unittest.TestCase):
     def setUp(self):
         """Begin setup for each test."""
         self.default_loglevel = logging.DEBUG
-        logfilename = 'persist_tests.log'
-        with open(logfilename, 'w'):
-            pass
-        logging.basicConfig(level=self.default_loglevel,
-                            filename=os.path.join('tests', logfilename))
 
     def test_singleton_behaviour(self):
         """Confirm class behaves as a singleton."""
@@ -50,8 +47,6 @@ class TestPersist(unittest.TestCase):
 
     def test_json_storage(self):
         """Check JSON data storage."""
-        logging.getLogger().setLevel(logging.DEBUG)
-
         PersistentData().current_latitude = 10.6
         PersistentData().current_longitude = -5.2
         s_time = dt.datetime.now(tz=dt.timezone.utc)
@@ -67,10 +62,18 @@ class TestPersist(unittest.TestCase):
         s_time = s_time + dt.timedelta(hours=4, minutes=-4, days=1)
         PersistentData().add_sunset_time(datetime_instance=s_time)
         PersistentData().store_data()
-        logging.getLogger().setLevel(self.default_loglevel)
 
     def test_json_retrieval(self):
         """Check JSON data retrieval."""
-        logging.getLogger().setLevel(logging.DEBUG)
         # self.assertEqual(PersistentData().last_latitude,10.5)
         PersistentData()._populate_locals_from_file()
+
+
+if __name__ == '__main__':
+    """Verbosity:
+
+        0	One . per test	CI logs, super compact view
+        1	Test name + result	(Default)
+        2	Test + docstring + result	Debugging, test review, clarity
+    """
+    unittest.main(testRunner=util.LoggingTestRunner(verbosity=2))
