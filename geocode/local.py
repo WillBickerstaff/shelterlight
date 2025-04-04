@@ -99,8 +99,8 @@ class Location():
                     "or the database does not provide lat or lng for "
                     "the location")
             # Populate attributes
-            #self._place_name = place
-            #self._country = iso
+            self._place_name = place
+            self._country = iso
             # iloc gets the first record returned.
             # Latitude from the results,
             self._latitude = df.get("Lat").iloc[0]
