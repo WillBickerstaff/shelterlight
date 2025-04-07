@@ -365,8 +365,8 @@ Example content:
 
 **Explanation:**
 
-| Option            | Description                                           |
-| ----------------- | ----------------------------------------------------- |
+| Option          | Description                                           |
+| --------------- | ----------------------------------------------------- |
 | `daily`         | Rotate the log file daily.                            |
 | `rotate 7`      | Keep the last 7 rotated log files.                    |
 | `compress`      | Compress old log files to save space.                 |
