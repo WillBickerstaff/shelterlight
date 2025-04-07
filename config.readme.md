@@ -4,7 +4,7 @@ This document describes the configuration options used by the Bike Shelter Light
 
 ---
 
-## ✨ USB Configuration Behaviour
+## USB Configuration Behaviour
 
 If a USB device is inserted and mounted at `media_mount_point`, the following will occur:
 
@@ -28,11 +28,11 @@ If the `config.ini` on the USB is **invalid or missing**, the system will still 
 
 ---
 
-## 🔄 Configuration & Log File Backup
+## Configuration & Log File Backup
 
 When a USB device is inserted, the system will **always back up the current configuration and log files** to the USB drive, even if no config.ini is found or it is invalid.
 
-### 📂 Backup Location
+### Backup Location
 
 The backups will be stored in the following directories on the USB device:
 
@@ -41,11 +41,11 @@ The backups will be stored in the following directories on the USB device:
 - Log file backups:
   `/media/<usb_device>/smartlight/logs/`
 
-> ⚠️ The actual mount point is defined by the `media_mount_point` option in `[DATA_STORE]`.
+> The actual mount point is defined by the `media_mount_point` option in `[DATA_STORE]`.
 
 ---
 
-## 🟢 Default Values & Missing Options
+## Default Values & Missing Options
 
 If any configuration options are **omitted** from `config.ini`, the system will automatically use **default values** defined internally.
 This ensures the system can continue to run safely even if the configuration file is incomplete.
@@ -53,7 +53,7 @@ This ensures the system can continue to run safely even if the configuration fil
 All default values are documented in the tables below.
 These defaults are hard-coded in the system source and will be used unless explicitly overridden in `config.ini`.
 
-⚠️ If an option is incorrectly formatted, the default value will also be used and a warning will be logged.
+! If an option is incorrectly formatted, the default value will also be used and a warning will be logged.
 
 ---
 
@@ -215,7 +215,7 @@ connect_retry_delay = 2
 
 ---
 
-## 💾 USB Backup of Rotated Logs
+## USB Backup of Rotated Logs
 
 When a USB device is inserted, **all log files, including rotated and compressed logs, will be backed up to the USB drive.**
 
