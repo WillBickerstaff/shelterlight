@@ -2,7 +2,7 @@
 
 ---
 
-## 🚲 Project Overview
+## Project Overview
 
 **Shelter Light Control System** is a standalone, autonomous lighting controller designed for bicycle shelters and similar outdoor environments.
 It uses a GPS module and activity detection inputs to intelligently schedule lighting during hours of darkness, based on historical activity patterns and sunrise/sunset times.
@@ -14,17 +14,17 @@ The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Pyt
 
 ---
 
-## 🍓 Minimal Raspberry Pi Installation
+## Minimal Raspberry Pi Installation
 
 The Shelter Light Control System is designed to run efficiently on a **Raspberry Pi Zero** (or similar) with a minimal, headless configuration.
 
-### 🔥 Recommended OS
+### Recommended OS
 
 - **Raspberry Pi OS Lite (32-bit)**
   *(Debian Bookworm based, headless, no desktop)*
   Example: `2025-02-16-raspios-bookworm-armhf-lite.img`
 
-### ⚙️ Minimal Setup Steps
+### Minimal Setup Steps
 
 1. **Flash OS Image**
 
@@ -52,11 +52,11 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
 ---
 
-## 🗄️ Initial Database Setup
+## Initial Database Setup
 
 The Shelter Light Control System uses a **local PostgreSQL database** to store historical activity logs and generated light schedules.
 
-### 📌 Database Configuration
+### Database Configuration
 
 Database connection settings are defined in `config.ini` under the `[ACTIVITY_DB]` section.
 
@@ -73,7 +73,7 @@ connect_retry = 3
 connect_retry_delay = 5
 ```
 
-### 🐃 Create Database & User
+### Create Database & User
 
 Run the following commands:
 
@@ -90,7 +90,7 @@ GRANT ALL PRIVILEGES ON DATABASE smartlight TO pi;
 \q
 ```
 
-### 🏐️ Create Tables
+### Create Tables
 
 The system will automatically create the required tables (`activity_log` and `light_schedules`) when it first runs.
 
@@ -164,11 +164,11 @@ CREATE TRIGGER update_light_schedules_updated_at
 
 ---
 
-## 🔋 Python Environment Setup
+## Python Environment Setup
 
 This system is written in **Python 3.13.2** and is intended to run on Raspberry Pi Zero (or similar).
 
-### 🔥 Required Python Libraries
+### Required Python Libraries
 
 The following Python packages are required:
 
@@ -183,7 +183,7 @@ A complete list is provided in `req_modules.txt`:
 
 ---
 
-### ✅ Installation
+### Installation
 
 To avoid affecting your system Python environment, it is recommended to install dependencies in a **virtual environment**.
 
@@ -202,11 +202,11 @@ pip install -r req_modules.txt
 
 ---
 
-## 🚀 Running as a Systemd Service
+## Running as a Systemd Service
 
 This system is configured to run automatically at boot using **systemd**.
 
-### 🗂️ Service File
+### Service File
 
 Create a new systemd service file:
 
@@ -235,7 +235,7 @@ WantedBy=multi-user.target
 
 ---
 
-### ⚙️ Enable & Start the Service
+### Enable & Start the Service
 
 Run the following commands to enable and start the service:
 
@@ -248,7 +248,7 @@ sudo systemctl status shelterlight.service
 
 ---
 
-### ⟳ Auto-Restart Behaviour
+### Auto-Restart Behaviour
 
 With the service configured:
 
@@ -261,7 +261,7 @@ The service will automatically restart **5 seconds** after any unexpected failur
 
 ---
 
-### 📄 Logs
+### Logs
 
 To view runtime logs:
 
@@ -271,7 +271,7 @@ journalctl -u shelterlight.service -f
 
 ---
 
-### ❌ Stopping & Disabling
+### Stopping & Disabling
 
 ```bash
 sudo systemctl stop shelterlight.service
@@ -280,7 +280,7 @@ sudo systemctl disable shelterlight.service
 
 ---
 
-### ℹ️ Notes
+### Notes
 
 - The service requires access to GPIO and USB devices.
 - Make sure all hardware components are connected before starting the service.
@@ -288,11 +288,11 @@ sudo systemctl disable shelterlight.service
 
 ---
 
-## 🕒 System Time Synchronisation
+## System Time Synchronisation
 
 The system uses the GPS module as the authoritative time source. After a successful fix, the system clock is updated to GPS-provided **UTC time**.
 
-### ✨ How it works
+### How it works
 
 After a valid fix, the system executes:
 
@@ -302,7 +302,7 @@ sudo /bin/date -s <utc_time>
 
 This will synchronise the Raspberry Pi system time to UTC.
 
-### 🔒 Permissions & Security
+### Permissions & Security
 
 Setting system time requires **sudo** privileges.
 
@@ -325,15 +325,15 @@ Setting system time requires **sudo** privileges.
 
 ---
 
-### ℹ️ Why this is necessary
+### Why this is necessary
 
 The Raspberry Pi Zero does not have a battery-backed RTC. This system operates offline and uses GPS as the only reliable time source.
 
 ---
 
-## 📄 Log File Management
+## Log File Management
 
-### 🌀 Log Rotation
+### Log Rotation
 
 To prevent log files from consuming excessive disk space, it is recommended to configure **logrotate** for the shelter light log files.
 
@@ -341,7 +341,7 @@ This will ensure that old logs are compressed and automatically removed after a 
 
 ---
 
-### ⚙️ Configuration Example
+### Configuration Example
 
 Create a logrotate configuration file:
 
@@ -365,8 +365,8 @@ Example content:
 
 **Explanation:**
 
-| Option            | Description                                           |
-| ----------------- | ----------------------------------------------------- |
+| Option          | Description                                           |
+| --------------- | ----------------------------------------------------- |
 | `daily`         | Rotate the log file daily.                            |
 | `rotate 7`      | Keep the last 7 rotated log files.                    |
 | `compress`      | Compress old log files to save space.                 |
@@ -377,7 +377,7 @@ Example content:
 
 ---
 
-### 🚀 Apply Logrotate Immediately (Optional)
+### Apply Logrotate Immediately (Optional)
 
 You can manually force logrotate to test your configuration:
 
@@ -387,14 +387,14 @@ sudo logrotate -f /etc/logrotate.d/shelterlight
 
 ---
 
-### 🔄 Automatic Execution
+### Automatic Execution
 
 By default, logrotate runs daily via **cron** on Raspberry Pi OS.
 No additional action is required after creating the config file.
 
 ---
 
-### 💾 USB Backup of Rotated Logs
+### USB Backup of Rotated Logs
 
 When a USB device is inserted, **all log files, including rotated and compressed logs**, will be backed up to the USB drive.
 This includes:
@@ -417,13 +417,13 @@ If the USB is removed and re-inserted, a fresh backup will be created.
 
 ---
 
-## 🚫 Disabling Unnecessary Services
+## Disabling Unnecessary Services
 
 To improve system performance, reduce boot time, and lower power consumption, certain default Raspberry Pi OS services can be safely disabled for this headless, offline application.
 
 The following services are not required for the Shelter Light Control System and can be disabled:
 
-### ⚙️ Recommended Services to Disable
+### Recommended Services to Disable
 
 | Service                | Reason                                                                                       |
 | ---------------------- | -------------------------------------------------------------------------------------------- |
@@ -439,7 +439,7 @@ The following services are not required for the Shelter Light Control System and
 
 ---
 
-### 🛠️ Disable Services
+### Disable Services
 
 Disable these services with:
 
@@ -464,7 +464,7 @@ sudo systemctl enable dhcpcd.service
 
 ---
 
-### ⚠️ Other Services to consider
+### Other Services to consider
 
 | Service                 | Function                                                                                                                                                                                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -482,7 +482,7 @@ sudo systemctl disable ssh.service
 
 ---
 
-## 🛠️ Maintenance & Monitoring
+## Maintenance & Monitoring
 
 The Shelter Light Control System is designed to run unattended. However, minimal periodic maintenance is recommended to ensure long-term reliability.
 
@@ -496,11 +496,11 @@ The Shelter Light Control System is designed to run unattended. However, minimal
 
 ---
 
-## 🧹 Database Cleanup
+## Database Cleanup
 
 Over time, the database may accumulate old activity and schedule data. It is recommended to periodically remove older records to prevent excessive disk usage.
 
-### 🔐 Passwordless Database Access for Automation
+### Passwordless Database Access for Automation
 
 Since the system is configured with password access, you can securely automate cleanup tasks by creating a .pgpass file:
 
@@ -520,7 +520,7 @@ Set the correct file permissions:
 chmod 600 /home/pi/.pgpass
 ```
 
-### ⏰ Automate the cleanup task using cron.
+### Automate the cleanup task using cron.
 
 Edit the crontab for user pi:
 
@@ -550,7 +550,7 @@ Regular auto-vacuum is usually enabled by default and will handle cleanup over t
 
 VACUUM FULL will lock the tables until it completes, so it should only be run during maintenance periods when the service can tolerate downtime.
 
-### 🧹 To check auto-vacuum status
+### To check auto-vacuum status
 
 Log into PostgreSQL:
 
@@ -587,7 +587,7 @@ sudo systemctl restart postgresql
 
 ---
 
-## ⚙️ Configuration Overview
+## Configuration Overview
 
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
 
