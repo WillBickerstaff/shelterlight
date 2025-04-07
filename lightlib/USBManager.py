@@ -25,6 +25,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..')))
 
+logging.debug("USBManager is importing os from:", os.__file__)
+logging.debug("USBManager os.path.exists is:", os.path.exists)
+
 
 class USBFileManager:
     """Singleton for managing USB file operations.
@@ -162,7 +165,7 @@ class USBFileManager:
 
         # Prompt user for confirmation to overwrite onboard config
         user_choice = warn_and_wait(
-            message="About to overwrite onboard config. "
+            message="Onboard config will be replaced in 10s. "
             "Press cancel to abort.",
             wait_time=10,
             default_action=CANCEL_CONFIRM.CONFIRM)
