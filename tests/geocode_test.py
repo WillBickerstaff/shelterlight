@@ -10,7 +10,7 @@ import os
 import sys
 from unittest.mock import patch
 import pytz
-import util
+from . import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
@@ -18,13 +18,14 @@ sys.path.append(base_path)
 from geocode.local import Location, InvalidLocationError
 from lightlib.config import ConfigLoader
 
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
 
 class TestGeocode(unittest.TestCase):
     """Integration tests for the Location class."""
 
     def setUp(self):
         """Set up the test environment forcls each test case."""
-        util.setup_test_logging()
         self.location = Location()
 
     def test_location_properties_populated(self):

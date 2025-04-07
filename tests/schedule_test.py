@@ -17,7 +17,7 @@ import numpy as np
 import os
 import sys
 import logging
-import util
+from . import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
@@ -265,7 +265,7 @@ class TestLightScheduler(unittest.TestCase):
         database update when the schedule date is in the future.
         """
         # Arrange
-        now = dt.datetime.utcnow()
+        now = dt.datetime.now(dt.UTC)
         mock_dt.datetime.utcnow = MagicMock(return_value=now)
 
         # Create a future date 10 days from now

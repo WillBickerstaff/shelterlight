@@ -11,12 +11,12 @@ Version: 0.1
 
 import unittest
 from unittest.mock import patch, MagicMock
-import gps_test_vals as test_vals
+from . import gps_test_vals as test_vals
 import datetime as dt
 import sys
 import os
 import logging
-import util
+from . import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)

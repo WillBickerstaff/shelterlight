@@ -14,15 +14,16 @@ import os
 import unittest
 import logging
 from unittest.mock import patch
-
+from . import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-parent_path = os.path.abspath(os.path.join(base_path, '..'))
-sys.path.append(base_path)
-sys.path.append(parent_path)
+
 
 from lightlib.USBManager import USBFileManager, ConfigReloaded
+
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
 
 
 class TestUSBManager(unittest.TestCase):
@@ -31,12 +32,6 @@ class TestUSBManager(unittest.TestCase):
     def setUp(self):
         """Begin setup for each test."""
         # Set up USBFileManager instance with a mock mount point for each test.
-        self.default_loglevel = logging.DEBUG
-        logfilename = 'usb_tests.log'
-        with open(logfilename, 'w'):
-            pass
-        logging.basicConfig(level=self.default_loglevel,
-                            filename=os.path.join('tests', logfilename))
         self.usb_manager = USBFileManager(mount_point='/mock/mount/point')
 
     def test_usb_check_triggers_config_reload(self):
