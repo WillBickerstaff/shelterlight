@@ -139,4 +139,4 @@ def setup_test_logging(name: str = None,
         format="[%(levelname)s] %(message)s"
     )
 
-    logging.debug("Log initialized at: %s", log_path)
+    logging.debug("Log initialized at:\n\t%s", log_path)

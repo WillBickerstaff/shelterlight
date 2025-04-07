@@ -14,7 +14,7 @@ import os
 import unittest
 import logging
 from unittest.mock import patch
-from . import util
+import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
@@ -34,7 +34,11 @@ class TestUSBManager(unittest.TestCase):
         # Set up USBFileManager instance with a mock mount point for each test.
         self.usb_manager = USBFileManager(mount_point='/mock/mount/point')
 
-    def test_usb_check_triggers_config_reload(self):
+    @patch('lightlib.USBManager.USBFileManager.replace_config_with_usb',
+           return_value=True)
+    @patch.object(USBFileManager, 'backup_files_to_usb')
+    def test_usb_check_triggers_config_reload(self, mock_backup, mock_replace):
+        """Test usb_check raises ConfigReloaded when config is replaced."""
         """Check a new config triggers a config file reload."""
         with patch.object(self.usb_manager, 'backup_files_to_usb'), \
                 patch.object(self.usb_manager, 'replace_config_with_usb',
@@ -44,7 +48,11 @@ class TestUSBManager(unittest.TestCase):
             with self.assertRaises(ConfigReloaded):
                 self.usb_manager.usb_check()
 
-    def test_replace_config_with_usb_validation_failure(self):
+    @patch('lightlib.USBManager.USBFileManager.replace_config_with_usb',
+           return_value=False)
+    @patch.object(USBFileManager, 'backup_files_to_usb')
+    def test_replace_config_with_usb_validation_failure(self, mock_backup,
+                                                        mock_replace):
         """Check config file is not replaced if validation fails."""
         with patch('lightlib.config.ConfigLoader.validate_config_file',
                    return_value=False):
@@ -53,3 +61,13 @@ class TestUSBManager(unittest.TestCase):
             # Verify replace_config_with_usb returns False if config
             # validation fails.
             self.assertFalse(result)
+
+
+if __name__ == '__main__':
+    """Verbosity:
+
+        0	One . per test	CI logs, super compact view
+        1	Test name + result	(Default)
+        2	Test + docstring + result	Debugging, test review, clarity
+    """
+    unittest.main(testRunner=util.LoggingTestRunner(verbosity=2))

@@ -15,7 +15,7 @@ import datetime as dt
 import sys
 import os
 import logging
-from . import util
+import util
 
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
