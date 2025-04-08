@@ -63,12 +63,13 @@ class TestUSBManager(unittest.TestCase):
         mock_copy2.assert_called_once_with(expected_path, 'config.ini')
         self.assertTrue(result)
 
-    @patch('lightlib.USBManager.USBFileManager.is_usb_inserted',
-           return_value=True)  # Mock USB insertion
-    @patch('lightlib.USBManager.USBFileManager.replace_config_with_usb',
-           return_value=True)  # Mock config replacement
-    def test_usb_check_triggers_config_reload(self, mock_replace,
-                                              mock_is_inserted):
+    @patch('lightlib.USBManager.datetime_to_iso',
+           return_value="2025-04-08T122218")
+    @patch.object(USBFileManager, 'replace_config_with_usb', return_value=True)
+    @patch('lightlib.USBManager.os.path.ismount', return_value=True)
+    @patch('lightlib.USBManager.os.listdir', return_value=["mockfile"])
+    def test_usb_check_triggers_config_reload(
+            self, mock_listdir, mock_ismount, mock_replace, mock_datetime):
         """Test usb_check raises ConfigReloaded when config is replaced."""
         try:
             """Check a new config triggers a config file reload."""
@@ -134,6 +135,34 @@ class TestUSBManager(unittest.TestCase):
 
         # Ensure that _backed-up is now True
         self.assertTrue(self.usb_manager._backed_up)
+
+    @patch.object(USBFileManager, 'replace_config_with_usb',
+                  return_value=False)
+    @patch.object(USBFileManager, 'backup_files_to_usb')  # Verified elsewhere
+    @patch('lightlib.USBManager.os.path.ismount')
+    @patch('lightlib.USBManager.os.listdir')
+    def test_backup_occurs_on_each_usb_insertion(
+            self, mock_listdir, mock_ismount, mock_backup, mock_replace):
+        """Test backup triggered on each USB insertion."""
+        # Simulate the sequence: Not Inserted, Inserted, Removed, Inserted
+        usb_states = [False, True, False, True]
+
+        def ismount_side_effect(_):
+            return usb_states.pop(0)
+
+        def listdir_side_effect(_):
+            # If last ismount was True, return content; else []
+            return ["dummy_file"] if mock_ismount.return_value else []
+
+        mock_ismount.side_effect = ismount_side_effect
+        mock_listdir.side_effect = listdir_side_effect
+
+        for i in range(4):
+            logging.debug(f"USB Check #{i + 1}")
+            self.usb_manager.usb_check()
+
+        # Backup should have been called twice.
+        self.assertEqual(mock_backup.call_count, 2)
 
 
 if __name__ == '__main__':
