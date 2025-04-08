@@ -14,6 +14,7 @@ import os
 import sys
 from unittest.mock import MagicMock, patch, mock_open
 import util
+import logging
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, base_path)
@@ -87,6 +88,48 @@ class TestUSBManager(unittest.TestCase):
             # Verify replace_config_with_usb returns False if config
             # validation fails.
             self.assertFalse(result)
+
+    @patch('lightlib.USBManager.os')  # patches 'os' module in USBManager.py
+    @patch('lightlib.USBManager.ConfigLoader.validate_config_file',
+           return_value=True)
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('shutil.copy2')
+    @patch('lightlib.USBManager.datetime_to_iso')  # Mocking datetime_to_iso
+    def test_backup_files_to_usb_copies_expected_files(
+            self, mock_datetime, mock_copy2, mock_file,
+            mock_validate, mock_os):
+        """Test backup files to USB copies expected files."""
+        mock_config = 'mock_config.ini'
+        mount = os.path.join("mock", "mount", "point")
+        manager = USBFileManager(mount_point=mount)
+        expected_path = os.path.join(mount, mock_config)
+
+        # Mock datetime_to_iso to return a fixed timestamp for testing
+        mock_datetime.return_value = "2025-04-07T00:00:00Z"
+
+        # Mock os.path.join to return the expected path as a string
+        mock_os.path.join.side_effect = \
+            lambda *args: os.path.normpath(os.path.join(*args))
+
+        # Set side effect for mocked os.path.exists
+        mock_os.path.exists.side_effect = \
+            lambda path: os.path.normpath(path) == \
+            os.path.normpath(expected_path)
+
+        # USBManager backup status should be false
+        self.assertFalse(manager._backed_up)
+        # Run test logic
+        config_backup_path = os.path.join(
+            self.mount_point, "smartlight", "configs",
+            "config_backup_2025-04-07T00:00:00Z.ini")
+        logging.debug(f"Expected backup path: {config_backup_path}")
+        manager.backup_files_to_usb()
+
+        # Match the call to mock_copy2 with the correct timestamp
+        mock_copy2.assert_any_call("config.ini", config_backup_path)
+
+        # Ensure that _backed-up is now True
+        self.assertTrue(manager._backed_up)
 
 
 if __name__ == '__main__':

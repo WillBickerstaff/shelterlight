@@ -91,12 +91,14 @@ class USBFileManager:
             FileNotFoundError: If the USB drive is not mounted or accessible.
         """
         if self._backed_up:
+            logging.debug("Backup not required - already done.")
             return  # Skip if already backed up
 
         if not self.is_usb_inserted():
             raise FileNotFoundError(
                 "USB drive not inserted or mount point inaccessible.")
 
+        logging.debug("Beginning file backup to USB")
         timestamp = datetime_to_iso(dt.datetime.now())
         usb_backup_dir = os.path.join(
             self.mount_point, "smartlight", "configs")
@@ -106,8 +108,10 @@ class USBFileManager:
 
         # Backup config and log files
         config_source = "config.ini"
+        dest_filename = f"config_backup_{timestamp}.ini"
         config_backup = os.path.join(
-            usb_backup_dir, f"config_backup_{timestamp}.ini")
+            usb_backup_dir, dest_filename)
+        logging.debug("Copying config file to %s", config_backup)
         shutil.copy2(config_source, config_backup)
         logging.info("Config file backed up to USB: %s", config_backup)
 
