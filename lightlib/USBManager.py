@@ -60,13 +60,22 @@ class USBFileManager:
 
     def usb_check(self) -> None:
         """Check USB, backup files, and attempt config replacement."""
+        if not self.is_usb_inserted():
+            # Log warning and skip if no USB inserted
+            logging.warning("USB drive not inserted or inaccessible. "
+                            "Skipping backup and config replacement.")
+            return  # No need to proceed if USB is not inserted
+
         try:
+            # Perform backup if USB is inserted
             self.backup_files_to_usb()
+
+            # Check if config needs to be replaced, raise ConfigReloaded
             if self.replace_config_with_usb():
-                logging.info(
-                    "Configuration update detected")
-                raise ConfigReloaded
+                logging.info("Configuration update detected")
+                raise ConfigReloaded  # Trigger reload for valid config change
         except FileNotFoundError as e:
+            # Handle case when USB is not accessible or other IO issues
             logging.warning("USB not found or inaccessible: %s", e)
 
     def is_usb_inserted(self) -> bool:
@@ -77,8 +86,10 @@ class USBFileManager:
             bool: True if the USB drive is inserted, False otherwise.
         """
         if os.path.ismount(self.mount_point) and os.listdir(self.mount_point):
+            logging.debug("Detected USB Insertion")
             return True
         else:
+            logging.debug("No USB inserted")
             self._backed_up = False  # Reset to allow future backups
             self._config_copied = False  # Reset to allow future overwrites
             return False  # Ensure a consistent return value
@@ -170,7 +181,7 @@ class USBFileManager:
         # Prompt user for confirmation to overwrite onboard config
         user_choice = warn_and_wait(
             message="Onboard config will be replaced in 10s. "
-            "Press cancel to abort.",
+            "Press cancel to abort. Overwriting",
             wait_time=10,
             default_action=CANCEL_CONFIRM.CONFIRM)
 

@@ -13,19 +13,18 @@ import unittest
 import os
 import sys
 from unittest.mock import MagicMock, patch, mock_open
-import util
 import logging
+import util
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, base_path)
-
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
     sys.modules['RPi.GPIO'] = MagicMock()
 
-# Set up logging ONCE for the entire test module
-util.setup_test_logging()
 from lightlib.USBManager import USBFileManager, ConfigReloaded
 
 
@@ -37,6 +36,11 @@ class TestUSBManager(unittest.TestCase):
         self.mount_point = os.path.join("mock", "mount", "point")
         self.usb_manager = USBFileManager(mount_point=self.mount_point)
 
+    def tearDown(self):
+        """Ensure logging handlers are flushed after each test."""
+        for handler in logging.getLogger().handlers:
+            handler.flush()  # Make sure log entries are written
+
     @patch('lightlib.USBManager.os')  # patches 'os' module in USBManager.py
     @patch('lightlib.USBManager.ConfigLoader.validate_config_file',
            return_value=True)
@@ -45,9 +49,7 @@ class TestUSBManager(unittest.TestCase):
     def test_config_copy(self, mock_copy2, mock_file, mock_validate, mock_os):
         """Test config copies locally."""
         mock_config = 'mock_config.ini'
-        mount = os.path.join("mock", "mount", "point")
-        manager = USBFileManager(mount_point=mount)
-        expected_path = os.path.join(mount, mock_config)
+        expected_path = os.path.join(self.mount_point, mock_config)
         mock_os.path.join = os.path.join
         # Set side effect for mocked os.path.exists
         mock_os.path.exists.side_effect = \
@@ -55,25 +57,28 @@ class TestUSBManager(unittest.TestCase):
             os.path.normpath(expected_path)
 
         # Run test logic
-        result = manager.replace_config_with_usb(mock_config)
+        result = self.usb_manager.replace_config_with_usb(mock_config)
 
         # Assert that the copy happened
         mock_copy2.assert_called_once_with(expected_path, 'config.ini')
         self.assertTrue(result)
 
+    @patch('lightlib.USBManager.USBFileManager.is_usb_inserted',
+           return_value=True)  # Mock USB insertion
     @patch('lightlib.USBManager.USBFileManager.replace_config_with_usb',
-           return_value=True)
-    @patch.object(USBFileManager, 'backup_files_to_usb')
-    def test_usb_check_triggers_config_reload(self, mock_backup, mock_replace):
+           return_value=True)  # Mock config replacement
+    def test_usb_check_triggers_config_reload(self, mock_replace,
+                                              mock_is_inserted):
         """Test usb_check raises ConfigReloaded when config is replaced."""
-        """Check a new config triggers a config file reload."""
-        with patch.object(self.usb_manager, 'backup_files_to_usb'), \
-                patch.object(self.usb_manager, 'replace_config_with_usb',
-                             return_value=True):
-            # Verify that usb_check raises ConfigReloaded when
-            # replace_config_with_usb returns True
+        try:
+            """Check a new config triggers a config file reload."""
             with self.assertRaises(ConfigReloaded):
                 self.usb_manager.usb_check()
+
+            # Check config replacement happened and ConfigReloaded was raised
+            mock_replace.assert_called_once()
+        except ConfigReloaded:
+            logging.info("Config reloaded as expected.")
 
     @patch('lightlib.USBManager.USBFileManager.replace_config_with_usb',
            return_value=False)
@@ -81,6 +86,7 @@ class TestUSBManager(unittest.TestCase):
     def test_replace_config_with_usb_validation_failure(self, mock_backup,
                                                         mock_replace):
         """Check config file is not replaced if validation fails."""
+        logging.debug("Logging is working here 1")
         with patch('lightlib.config.ConfigLoader.validate_config_file',
                    return_value=False):
             result = self.usb_manager.replace_config_with_usb(
@@ -100,9 +106,7 @@ class TestUSBManager(unittest.TestCase):
             mock_validate, mock_os):
         """Test backup files to USB copies expected files."""
         mock_config = 'mock_config.ini'
-        mount = os.path.join("mock", "mount", "point")
-        manager = USBFileManager(mount_point=mount)
-        expected_path = os.path.join(mount, mock_config)
+        expected_path = os.path.join(self.mount_point, mock_config)
 
         # Mock datetime_to_iso to return a fixed timestamp for testing
         mock_datetime.return_value = "2025-04-07T00:00:00Z"
@@ -117,19 +121,19 @@ class TestUSBManager(unittest.TestCase):
             os.path.normpath(expected_path)
 
         # USBManager backup status should be false
-        self.assertFalse(manager._backed_up)
+        self.assertFalse(self.usb_manager._backed_up)
         # Run test logic
         config_backup_path = os.path.join(
             self.mount_point, "smartlight", "configs",
             "config_backup_2025-04-07T00:00:00Z.ini")
         logging.debug(f"Expected backup path: {config_backup_path}")
-        manager.backup_files_to_usb()
+        self.usb_manager.backup_files_to_usb()
 
         # Match the call to mock_copy2 with the correct timestamp
         mock_copy2.assert_any_call("config.ini", config_backup_path)
 
         # Ensure that _backed-up is now True
-        self.assertTrue(manager._backed_up)
+        self.assertTrue(self.usb_manager._backed_up)
 
 
 if __name__ == '__main__':
