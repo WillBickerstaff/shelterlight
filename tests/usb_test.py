@@ -26,6 +26,7 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
 
 from lightlib.USBManager import USBFileManager, ConfigReloaded
+from lightlib.smartlight import CANCEL_CONFIRM
 
 
 class TestUSBManager(unittest.TestCase):
@@ -87,7 +88,6 @@ class TestUSBManager(unittest.TestCase):
     def test_replace_config_with_usb_validation_failure(self, mock_backup,
                                                         mock_replace):
         """Check config file is not replaced if validation fails."""
-        logging.debug("Logging is working here 1")
         with patch('lightlib.config.ConfigLoader.validate_config_file',
                    return_value=False):
             result = self.usb_manager.replace_config_with_usb(
@@ -163,6 +163,22 @@ class TestUSBManager(unittest.TestCase):
 
         # Backup should have been called twice.
         self.assertEqual(mock_backup.call_count, 2)
+
+    @patch('lightlib.USBManager.warn_and_wait',
+           return_value=CANCEL_CONFIRM.CANCEL)
+    @patch('lightlib.USBManager.ConfigLoader.validate_config_file',
+           return_value=True)
+    @patch('lightlib.USBManager.os.path.isfile', return_value=True)
+    @patch('shutil.copy2')
+    def test__user_cancels_config_copy(
+            self, mock_copy2, mock_isfile, mock_validate, mock_warn):
+        """Test user cancels config overwrite, USB file is not copied."""
+        mock_config = 'mock_config.ini'
+        result = self.usb_manager.replace_config_with_usb(mock_config)
+
+        # Assert copy did not happen
+        mock_copy2.assert_not_called()
+        self.assertFalse(result)
 
 
 if __name__ == '__main__':
