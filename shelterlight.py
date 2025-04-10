@@ -13,8 +13,8 @@ import argparse
 import logging
 import socket
 import threading
-import time
 import datetime as dt
+import time
 import RPi.GPIO as GPIO
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
@@ -24,11 +24,12 @@ from lightlib.common import ConfigReloaded, gpio_init, gpio_cleanup
 from lightlib.lightcontrol import LightController
 
 
-def cleanup_resources(gps: SunTimes) -> None:
+def cleanup_resources(gps: SunTimes, light_control: LightController) -> None:
     """Perform resource cleanup for GPS, GPIO, and logging."""
     logging.info("Performing resource cleanup...")
     gps.cleanup()  # Stops GPS fix process thread, if any
-    gpio_cleanup()  # Reset all GPIO pins
+    light_control.cleanup()  # Clean up light output GPIO
+    gpio_cleanup()
     logging.info("Resources cleaned up successfully.")
 
 
@@ -46,8 +47,23 @@ def usb_listener(usb_manager, gps, host="localhost", port=9999):
                 try:
                     usb_manager.usb_check()
                 except ConfigReloaded:
-                    cleanup_resources(gps)
+                    cleanup_resources(gps, LightController())
                     raise  # Propagate to restart main loop in main program
+
+
+def light_loop(light_control):
+    """Run light control updates in a tight polling loop."""
+    while True:
+        light_control.set_lights()
+        time.sleep(1)
+
+
+def gps_loop(gps):
+    """Run periodic GPS fix attempts on a configurable interval."""
+    while True:
+        if not gps.fixed_today and gps.in_fix_window:
+            gps.start_gps_fix_process()
+        time.sleep(ConfigLoader().cycle_time)
 
 
 def daily_schedule_generation(stop_event, scheduler, solar_times):
@@ -115,32 +131,46 @@ def main():
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
     stop_event = threading.Event()
-    gpio_init()
+    gpio_init()  # Set GPIO mode globally if not already set
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
     init_log(args.log_level)
-    config = ConfigLoader()  # Initialize the singleton config loader
     gps = SunTimes()  # Initialize GPS/SunTimes instance
+    light_control = LightController()  # Singleton managing light output logic
 
     # Start USB listener in a separate thread to handle USB insert signals
     usb_thread = threading.Thread(target=usb_listener,
                                   args=(usb_manager, gps), daemon=True)
-    usb_thread.start()
+    usb_thread.start()  # Begin listening for USB-based config reloads
+
+    # Start schedule generation in background
+    scheduler = light_control.schedule
+    scheduler_thread = threading.Thread(target=daily_schedule_generation,
+                                        args=(stop_event, scheduler, gps),
+                                        daemon=True)
+    scheduler_thread.start()
+
+    # Start GPS fix loop in background
+    gps_thread = threading.Thread(target=gps_loop, args=(gps,), daemon=True)
+    gps_thread.start()
+
+    # Start light control loop in background
+    light_thread = threading.Thread(target=light_loop,
+                                    args=(light_control,), daemon=True)
+    light_thread.start()
 
     try:
         while True:
-            if not gps.fixed_today and gps.in_fix_window:
-                gps.start_gps_fix_process()
-
             # Control CPU usage in main loop
-            time.sleep(config.cycle_time)
+            time.sleep(10)
 
     except ConfigReloaded:
         pass  # Handle by restarting the loop in `main_loop()`
     finally:
         stop_event.set()
-        cleanup_resources(gps)
+        scheduler_thread.join()
+        cleanup_resources(gps, light_control)
 
 
 if __name__ == "__main__":
