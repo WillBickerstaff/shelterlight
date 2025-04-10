@@ -33,7 +33,7 @@ class TestUSBManager(unittest.TestCase):
     """Tests for USB operations."""
 
     def setUp(self):
-        """Set up the test environment forcls each test case."""
+        """Set up the test environment for each test case."""
         self.mount_point = os.path.join("mock", "mount", "point")
         self.usb_manager = USBFileManager(mount_point=self.mount_point)
 
