@@ -166,6 +166,72 @@ class TestActivity(unittest.TestCase):
         logging.debug("Pin correctly set FAULT")
         logging.debug("** Pin successfully cleared fault on falling edge **")
 
+    def test_end_activity_event_handles_excessive_duration(self):
+        """_end_activity_event skips database if duration exceeds SMALLINT."""
+        test_pin = 17
+        # Set start time beyond the 32767-second limit
+        sub_time = 32768
+        self.activity._start_times[test_pin] = (
+            dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=sub_time)
+        )
+        self.activity._pin_status[test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[test_pin]["status"] = PinHealth.FAULT
+        logging.debug("Pin %i forced to FAULT with duration %is (invalid)",
+                      test_pin, sub_time)
+
+        # Patch the logger to verify error message
+        with self.assertLogs(level="DEBUG") as log:
+            self.activity._end_activity_event(test_pin)
+
+        # Should NOT call query() due to duration error
+        self.mock_db.query.assert_not_called()
+        pin_status = self.activity._pin_status[test_pin]
+        self.assertEqual(pin_status["state"], PinLevel.LOW)
+        self.assertEqual(pin_status["status"], PinHealth.OK)
+        logging.debug("Pin status correctly reset\n\t\tState: %s\tStatus: %s",
+                      self.activity._pin_status[test_pin]["state"].name,
+                      self.activity._pin_status[test_pin]["status"].name)
+
+        # Should log an appropriate error message
+        self.assertTrue(any(
+            "duration must be <=" in message
+            for message in log.output
+        ))
+
+        log_summary = "\n".join(log.output)
+        logging.debug("Captured logs:\n%s", log_summary)
+
+    def test_end_activity_event_accepts_max_valid_smallint(self):
+        """_end_activity_event should log duration of 32767 seconds."""
+        test_pin = 17
+        duration = 32767  # Max allowed SMALLINT value
+        start_time = dt.datetime.now(dt.timezone.utc) - \
+            dt.timedelta(seconds=duration)
+        self.activity._start_times[test_pin] = start_time
+        self.activity._pin_status[test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[test_pin]["status"] = PinHealth.OK
+
+        logging.debug("Pin %i set with duration %is (valid)",
+                      test_pin, duration)
+
+        # Patch the logger to verify error message
+        with self.assertLogs(level="DEBUG") as log:
+            self.activity._end_activity_event(test_pin)
+
+        # Should attempt to insert into DB
+        self.mock_db.query.assert_called_once()
+        logging.debug("Database query was called")
+
+        # Check that start_time was removed
+        self.assertNotIn(test_pin, self.activity._start_times)
+
+        # Pin state and status should still be cleared
+        pin_status = self.activity._pin_status[test_pin]
+        self.assertEqual(pin_status["state"], PinLevel.LOW)
+        self.assertEqual(pin_status["status"], PinHealth.OK)
+
+        log_summary = "\n".join(log.output)
+        logging.debug("Captured logs:\n%s", log_summary)
 
 
 if __name__ == '__main__':

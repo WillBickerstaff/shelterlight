@@ -182,8 +182,8 @@ class Activity:
                 f"No start time found for pin {pin}, skipping log.")
             return
         try:
-            duration = (dt.datetime.now(dt.timezone.utc) -
-                        start_time).total_seconds()  # Calc duration
+            duration = int((dt.datetime.now(dt.timezone.utc) -
+                            start_time).total_seconds())  # Calc duration
             valid_smallint(duration)
         except ValueError:
             logging.error(f"Will not log an activity duration of {duration}s, "
@@ -220,8 +220,8 @@ class Activity:
     def _run_fault_check_cycle(self) -> None:
         """Run one fault detection cycle."""
         for pin, start_time in list(self._start_times.items()):
-            duration = (dt.datetime.now(dt.timezone.utc) - start_time) \
-                .total_seconds()
+            duration = int((dt.datetime.now(dt.timezone.utc) - start_time)
+                           .total_seconds())
             if duration > self._fault_threshold and \
                     self._pin_status[pin]["state"] == PinLevel.HIGH:
                 self._pin_status[pin]["status"] = PinHealth.FAULT
