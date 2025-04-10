@@ -90,6 +90,83 @@ class TestActivity(unittest.TestCase):
         else:
             logging.debug("mock_db.query was never called.")
 
+    def test_get_pin_status_returns_correct_values(self):
+        """get_pin_status returns current state and status for a known pin."""
+        test_pin = 17
+
+        combinations = [
+            (PinHealth.OK, PinLevel.HIGH),
+            (PinHealth.OK, PinLevel.LOW),
+            (PinHealth.FAULT, PinLevel.HIGH),
+            (PinHealth.FAULT, PinLevel.LOW)]
+
+        for health, level in combinations:
+            with self.subTest(status=health.name, state=level.name):
+                logging.debug("Setting status for pin %i\n"
+                              "\t\tStatus: %s\tState: %s", test_pin,
+                              health.name, level.name)
+                self.activity._pin_status[test_pin]["status"] = health
+                self.activity._pin_status[test_pin]["state"] = level
+
+                result = self.activity.get_pin_status(test_pin)
+                self.assertEqual(result["status"], health)
+                self.assertEqual(result["state"], level)
+                logging.debug(
+                    "Pin staus verified\n\t\tStatus: %s\tState: %s",
+                    self.activity._pin_status[test_pin]["status"].name,
+                    self.activity._pin_status[test_pin]["state"].name)
+
+    def test_pin_fault_detection(self):
+        """Test long detection marks FAULT & auto clears on falling edge."""
+        test_pin = 17
+        threshold = self.activity._fault_threshold
+
+        # Simulate a long HIGH to trigger fault
+        self.activity._start_times[test_pin] = (
+            dt.datetime.now(dt.timezone.utc) -
+            dt.timedelta(seconds=threshold + 5))
+        self.activity._pin_status[test_pin]["state"] = PinLevel.HIGH
+
+        # First fault check (should set FAULT)
+        logging.debug("1st Fault check")
+        self.activity._run_fault_check_cycle()
+        self.assertEqual(
+            self.activity._pin_status[test_pin]["status"],
+            PinHealth.FAULT,
+            "Pin should be marked FAULT due to prolonged HIGH signal."
+        )
+        logging.debug("Pin correctly set FAULT")
+
+        logging.debug("Setting pin edge low to trigger _end_activity_event")
+        # Call _end_activity_event to simulate falling edge
+        self.activity._end_activity_event(test_pin)
+
+        # Should now be OK
+        self.assertEqual(
+            self.activity._pin_status[test_pin]["status"],
+            PinHealth.OK,
+            "Pin should reset to OK after falling edge."
+        )
+        logging.debug("Pin correctly set OK")
+        self.assertEqual(
+            self.activity._pin_status[test_pin]["state"],
+            PinLevel.LOW,
+            "Pin state should be LOW after falling edge."
+        )
+        logging.debug("Pin State is LOW")
+
+        # 2nd fault check (should set OK)
+        logging.debug("2nd Fault check")
+        self.activity._run_fault_check_cycle()
+        self.assertEqual(
+            self.activity._pin_status[test_pin]["status"],
+            PinHealth.OK,
+            "Pin should be marked OK due to LOW signal."
+        )
+        logging.debug("Pin correctly set FAULT")
+        logging.debug("** Pin successfully cleared fault on falling edge **")
+
+
 
 if __name__ == '__main__':
     """Verbosity:

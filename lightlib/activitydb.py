@@ -172,6 +172,8 @@ class Activity:
             psycopg2.DatabaseError: If there is an error executing the database
                                     query.
         """
+        if (self._pin_status[pin]["status"] == PinHealth.FAULT):
+            logging.warning("Pin %i fault cleared", pin)
         self._pin_status[pin]["status"] = PinHealth.OK  # Reset status to OK
         self._pin_status[pin]["state"] = PinLevel.LOW  # Set state to LOW
         start_time = self._start_times.pop(pin, None)  # Retrieve start time
@@ -215,6 +217,21 @@ class Activity:
             logging.error(
                 "Failed to log activity event for pin %s: %s", pin, e)
 
+    def _run_fault_check_cycle(self) -> None:
+        """Run one fault detection cycle."""
+        for pin, start_time in list(self._start_times.items()):
+            duration = (dt.datetime.now(dt.timezone.utc) - start_time) \
+                .total_seconds()
+            if duration > self._fault_threshold and \
+                    self._pin_status[pin]["state"] == PinLevel.HIGH:
+                self._pin_status[pin]["status"] = PinHealth.FAULT
+                logging.warning(
+                    f"Pin {pin} set to FAULT status, high for {duration} "
+                    "seconds."
+                )
+            else:
+                self._pin_status[pin]["status"] = PinHealth.OK  # Set OK
+
     def _start_fault_detection(self) -> None:
         """Periodic fault check.
 
@@ -222,19 +239,7 @@ class Activity:
         high beyond the fault threshold.
         """
         def fault_check():
-            for pin, start_time in list(self._start_times.items()):
-                duration = (
-                    dt.datetime.now(dt.timezone.utc) - start_time
-                ).total_seconds()
-                if duration > self._fault_threshold:
-                    # Set FAULT
-                    self._pin_status[pin]["status"] = PinHealth.FAULT
-                    logging.warning(
-                        f"Pin {pin} set to FAULT status, high for {duration} "
-                        "seconds."
-                    )
-                else:
-                    self._pin_status[pin]["status"] = PinHealth.OK  # Set OK
+            self._run_fault_check_cycle()
             t = threading.Timer(self._health_check_interval, fault_check)
             t.daemon = True
             t.start()  # Re-run check
