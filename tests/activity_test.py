@@ -89,30 +89,6 @@ class TestActivity(unittest.TestCase):
         else:
             logging.debug("mock_db.query was never called.")
 
-    def test_get_pin_status_returns_correct_values(self):
-        """get_pin_status returns current state and status for a known pin."""
-        combinations = [
-            (PinHealth.OK, PinLevel.HIGH),
-            (PinHealth.OK, PinLevel.LOW),
-            (PinHealth.FAULT, PinLevel.HIGH),
-            (PinHealth.FAULT, PinLevel.LOW)]
-
-        for health, level in combinations:
-            with self.subTest(status=health.name, state=level.name):
-                logging.debug("Setting status for pin %i\n"
-                              "\t\tStatus: %s\tState: %s", self.test_pin,
-                              health.name, level.name)
-                self.activity._pin_status[self.test_pin]["status"] = health
-                self.activity._pin_status[self.test_pin]["state"] = level
-
-                result = self.activity.get_pin_status(self.test_pin)
-                self.assertEqual(result["status"], health)
-                self.assertEqual(result["state"], level)
-                logging.debug(
-                    "Pin staus verified\n\t\tStatus: %s\tState: %s",
-                    self.activity._pin_status[self.test_pin]["status"].name,
-                    self.activity._pin_status[self.test_pin]["state"].name)
-
     def test_pin_fault_detection(self):
         """Test long detection marks FAULT & auto clears on falling edge."""
         threshold = self.activity._fault_threshold
@@ -287,6 +263,62 @@ class TestActivity(unittest.TestCase):
         logging.debug("Exceeded max_activity_time threshold; "
                       "log skipped as expected.")
 
+    def test_multiple_pins_independent_states(self):
+        """Each pin should retain and update independent status/state."""
+        # Initial combinations for setup
+        initial_combinations = [
+            (PinHealth.OK, PinLevel.HIGH),
+            (PinHealth.OK, PinLevel.LOW),
+            (PinHealth.FAULT, PinLevel.HIGH),
+            (PinHealth.FAULT, PinLevel.LOW)]
+
+        # New combinations to update to after first verification
+        updated_combinations = [
+            (PinHealth.FAULT, PinLevel.LOW),
+            (PinHealth.FAULT, PinLevel.HIGH),
+            (PinHealth.OK, PinLevel.LOW),
+            (PinHealth.OK, PinLevel.HIGH)]
+
+        # Generate pin numbers for each test case
+        pin_base = 17
+        pins = [pin_base + i for i in range(len(initial_combinations))]
+
+        # Assign initial states
+        for pin, (health, level) in zip(pins, initial_combinations):
+            self.activity._pin_status[pin] = {"status": health, "state": level}
+            logging.debug(
+                "Initially set Pin %i => Status: %s, State: %s",
+                pin, health.name, level.name)
+
+        # Verify initial states
+        for pin, (expected_status, expected_state) in zip(
+                pins, initial_combinations):
+            with self.subTest(phase="initial", pin=pin):
+                result = self.activity.get_pin_status(pin)
+                self.assertEqual(result["status"], expected_status)
+                self.assertEqual(result["state"], expected_state)
+                logging.debug(
+                    "Verified (initial) Pin %i => Status: %s, State: %s",
+                    pin, result["status"].name, result["state"].name)
+
+        # Update states
+        for pin, (new_status, new_state) in zip(pins, updated_combinations):
+            self.activity._pin_status[pin]["status"] = new_status
+            self.activity._pin_status[pin]["state"] = new_state
+            logging.debug(
+                "Updated Pin %i => Status: %s, State: %s",
+                pin, new_status.name, new_state.name)
+
+        # Verify updated states
+        for pin, (expected_status, expected_state) in zip(
+                pins, updated_combinations):
+            with self.subTest(phase="updated", pin=pin):
+                result = self.activity.get_pin_status(pin)
+                self.assertEqual(result["status"], expected_status)
+                self.assertEqual(result["state"], expected_state)
+                logging.debug(
+                    "Verified (updated) Pin %i => Status: %s, State: %s",
+                    pin, result["status"].name, result["state"].name)
 
 if __name__ == '__main__':
     """Verbosity:
