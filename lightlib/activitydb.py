@@ -19,7 +19,8 @@ import psycopg2
 from psycopg2 import sql
 import RPi.GPIO as GPIO
 
-from lightlib.db import DB, ConfigLoader, valid_smallint
+from lightlib.db import DB, ConfigLoader
+from lightlib.common import valid_smallint
 
 class PinHealth(Enum):
     """Enumeration for pin statuses."""
@@ -185,6 +186,12 @@ class Activity:
             duration = int((dt.datetime.now(dt.timezone.utc) -
                             start_time).total_seconds())  # Calc duration
             valid_smallint(duration)
+            if duration > self._fault_threshold:
+                logging.warning(
+                    f"Skipping log: activity duration {duration}s exceeded "
+                    f"max_activity_time ({self._fault_threshold}).")
+                return
+
         except ValueError:
             logging.error(f"Will not log an activity duration of {duration}s, "
                           "duration must be <= 32767s (9h 6m)")

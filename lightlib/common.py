@@ -109,3 +109,10 @@ def gpio_cleanup():
     """Global GPIO cleanup."""
     GPIO.cleanup()
     logging.debug("GPIO Resources cleaned up")
+
+def valid_smallint(value):
+    """Check a value can fit within smallint."""
+    if -32768 <= value <= 32767:
+        return True
+    else:
+        raise ValueError

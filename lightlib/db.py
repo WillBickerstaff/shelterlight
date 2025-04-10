@@ -243,11 +243,3 @@ class DB:
     def __del__(self):
         """Destructor to ensure connection is closed on deletion of the DB."""
         self.close_connection()
-
-
-def valid_smallint(value):
-    """Check a value can fit within smallint."""
-    if -32768 <= value <= 32767:
-        return True
-    else:
-        raise ValueError

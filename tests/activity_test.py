@@ -31,7 +31,7 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi'].GPIO = GPIO
 
 from lightlib.activitydb import Activity, PinLevel, PinHealth
-from lightlib.db import valid_smallint
+from lightlib.common import valid_smallint
 
 
 class TestActivity(unittest.TestCase):
@@ -54,30 +54,29 @@ class TestActivity(unittest.TestCase):
         # Reset singleton and initialize fresh Activity instance
         Activity._instance = None
         self.activity = Activity()
+        self.test_pin = 17
 
     def test_start_activity_event_sets_state_and_status(self):
         """_start_activity_event should set pin HIGH & status to OK."""
-        test_pin = 17
-        self.activity._start_activity_event(test_pin)
+        self.activity._start_activity_event(self.test_pin)
 
-        pin_status = self.activity._pin_status[test_pin]
+        pin_status = self.activity._pin_status[self.test_pin]
         self.assertEqual(pin_status["state"], PinLevel.HIGH)
         self.assertEqual(pin_status["status"], PinHealth.OK)
-        self.assertIn(test_pin, self.activity._start_times)
+        self.assertIn(self.test_pin, self.activity._start_times)
 
     def test_end_activity_event_logs_valid_activity(self):
         """_end_activity_event should log activity and reset pin state."""
-        test_pin = 17
         start_time = dt.datetime.now(dt.timezone.utc) - \
             dt.timedelta(seconds=10)
-        self.activity._start_times[test_pin] = start_time
+        self.activity._start_times[self.test_pin] = start_time
 
-        self.activity._end_activity_event(test_pin)
+        self.activity._end_activity_event(self.test_pin)
 
-        pin_status = self.activity._pin_status[test_pin]
+        pin_status = self.activity._pin_status[self.test_pin]
         self.assertEqual(pin_status["status"], PinHealth.OK)
         self.assertEqual(pin_status["state"], PinLevel.LOW)
-        self.assertNotIn(test_pin, self.activity._start_times)
+        self.assertNotIn(self.test_pin, self.activity._start_times)
         self.assertTrue(self.mock_db.query.called)
 
         call = self.mock_db.query.call_args
@@ -92,8 +91,6 @@ class TestActivity(unittest.TestCase):
 
     def test_get_pin_status_returns_correct_values(self):
         """get_pin_status returns current state and status for a known pin."""
-        test_pin = 17
-
         combinations = [
             (PinHealth.OK, PinLevel.HIGH),
             (PinHealth.OK, PinLevel.LOW),
@@ -103,35 +100,34 @@ class TestActivity(unittest.TestCase):
         for health, level in combinations:
             with self.subTest(status=health.name, state=level.name):
                 logging.debug("Setting status for pin %i\n"
-                              "\t\tStatus: %s\tState: %s", test_pin,
+                              "\t\tStatus: %s\tState: %s", self.test_pin,
                               health.name, level.name)
-                self.activity._pin_status[test_pin]["status"] = health
-                self.activity._pin_status[test_pin]["state"] = level
+                self.activity._pin_status[self.test_pin]["status"] = health
+                self.activity._pin_status[self.test_pin]["state"] = level
 
-                result = self.activity.get_pin_status(test_pin)
+                result = self.activity.get_pin_status(self.test_pin)
                 self.assertEqual(result["status"], health)
                 self.assertEqual(result["state"], level)
                 logging.debug(
                     "Pin staus verified\n\t\tStatus: %s\tState: %s",
-                    self.activity._pin_status[test_pin]["status"].name,
-                    self.activity._pin_status[test_pin]["state"].name)
+                    self.activity._pin_status[self.test_pin]["status"].name,
+                    self.activity._pin_status[self.test_pin]["state"].name)
 
     def test_pin_fault_detection(self):
         """Test long detection marks FAULT & auto clears on falling edge."""
-        test_pin = 17
         threshold = self.activity._fault_threshold
 
         # Simulate a long HIGH to trigger fault
-        self.activity._start_times[test_pin] = (
+        self.activity._start_times[self.test_pin] = (
             dt.datetime.now(dt.timezone.utc) -
             dt.timedelta(seconds=threshold + 5))
-        self.activity._pin_status[test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
 
         # First fault check (should set FAULT)
         logging.debug("1st Fault check")
         self.activity._run_fault_check_cycle()
         self.assertEqual(
-            self.activity._pin_status[test_pin]["status"],
+            self.activity._pin_status[self.test_pin]["status"],
             PinHealth.FAULT,
             "Pin should be marked FAULT due to prolonged HIGH signal."
         )
@@ -139,17 +135,17 @@ class TestActivity(unittest.TestCase):
 
         logging.debug("Setting pin edge low to trigger _end_activity_event")
         # Call _end_activity_event to simulate falling edge
-        self.activity._end_activity_event(test_pin)
+        self.activity._end_activity_event(self.test_pin)
 
         # Should now be OK
         self.assertEqual(
-            self.activity._pin_status[test_pin]["status"],
+            self.activity._pin_status[self.test_pin]["status"],
             PinHealth.OK,
             "Pin should reset to OK after falling edge."
         )
         logging.debug("Pin correctly set OK")
         self.assertEqual(
-            self.activity._pin_status[test_pin]["state"],
+            self.activity._pin_status[self.test_pin]["state"],
             PinLevel.LOW,
             "Pin state should be LOW after falling edge."
         )
@@ -159,7 +155,7 @@ class TestActivity(unittest.TestCase):
         logging.debug("2nd Fault check")
         self.activity._run_fault_check_cycle()
         self.assertEqual(
-            self.activity._pin_status[test_pin]["status"],
+            self.activity._pin_status[self.test_pin]["status"],
             PinHealth.OK,
             "Pin should be marked OK due to LOW signal."
         )
@@ -168,29 +164,29 @@ class TestActivity(unittest.TestCase):
 
     def test_end_activity_event_handles_excessive_duration(self):
         """_end_activity_event skips database if duration exceeds SMALLINT."""
-        test_pin = 17
         # Set start time beyond the 32767-second limit
+        self.activity._fault_threshold = 99999
         sub_time = 32768
-        self.activity._start_times[test_pin] = (
+        self.activity._start_times[self.test_pin] = (
             dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=sub_time)
         )
-        self.activity._pin_status[test_pin]["state"] = PinLevel.HIGH
-        self.activity._pin_status[test_pin]["status"] = PinHealth.FAULT
+        self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[self.test_pin]["status"] = PinHealth.FAULT
         logging.debug("Pin %i forced to FAULT with duration %is (invalid)",
-                      test_pin, sub_time)
+                      self.test_pin, sub_time)
 
         # Patch the logger to verify error message
         with self.assertLogs(level="DEBUG") as log:
-            self.activity._end_activity_event(test_pin)
+            self.activity._end_activity_event(self.test_pin)
 
         # Should NOT call query() due to duration error
         self.mock_db.query.assert_not_called()
-        pin_status = self.activity._pin_status[test_pin]
+        pin_status = self.activity._pin_status[self.test_pin]
         self.assertEqual(pin_status["state"], PinLevel.LOW)
         self.assertEqual(pin_status["status"], PinHealth.OK)
         logging.debug("Pin status correctly reset\n\t\tState: %s\tStatus: %s",
-                      self.activity._pin_status[test_pin]["state"].name,
-                      self.activity._pin_status[test_pin]["status"].name)
+                      self.activity._pin_status[self.test_pin]["state"].name,
+                      self.activity._pin_status[self.test_pin]["status"].name)
 
         # Should log an appropriate error message
         self.assertTrue(any(
@@ -203,35 +199,93 @@ class TestActivity(unittest.TestCase):
 
     def test_end_activity_event_accepts_max_valid_smallint(self):
         """_end_activity_event should log duration of 32767 seconds."""
-        test_pin = 17
+        self.activity._fault_threshold = 99999
         duration = 32767  # Max allowed SMALLINT value
         start_time = dt.datetime.now(dt.timezone.utc) - \
             dt.timedelta(seconds=duration)
-        self.activity._start_times[test_pin] = start_time
-        self.activity._pin_status[test_pin]["state"] = PinLevel.HIGH
-        self.activity._pin_status[test_pin]["status"] = PinHealth.OK
+        self.activity._start_times[self.test_pin] = start_time
+        self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[self.test_pin]["status"] = PinHealth.OK
 
         logging.debug("Pin %i set with duration %is (valid)",
-                      test_pin, duration)
+                      self.test_pin, duration)
 
         # Patch the logger to verify error message
         with self.assertLogs(level="DEBUG") as log:
-            self.activity._end_activity_event(test_pin)
+            self.activity._end_activity_event(self.test_pin)
 
         # Should attempt to insert into DB
         self.mock_db.query.assert_called_once()
         logging.debug("Database query was called")
 
         # Check that start_time was removed
-        self.assertNotIn(test_pin, self.activity._start_times)
+        self.assertNotIn(self.test_pin, self.activity._start_times)
 
         # Pin state and status should still be cleared
-        pin_status = self.activity._pin_status[test_pin]
+        pin_status = self.activity._pin_status[self.test_pin]
         self.assertEqual(pin_status["state"], PinLevel.LOW)
         self.assertEqual(pin_status["status"], PinHealth.OK)
 
         log_summary = "\n".join(log.output)
         logging.debug("Captured logs:\n%s", log_summary)
+
+    def test_end_activity_event_skips_if_no_start_time(self):
+        """_end_activity_event should skip logging if start time is missing."""
+        # Simulate no start time
+        self.activity._start_times = {}  # ensure it's not present
+        self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[self.test_pin]["status"] = PinHealth.FAULT
+
+        with self.assertLogs(level="WARNING") as log:
+            self.activity._end_activity_event(self.test_pin)
+
+        # DB should not be called
+        self.mock_db.query.assert_not_called()
+
+        # Confirm warning was logged
+        self.assertTrue(any(
+            "No start time found for pin" in message
+            for message in log.output
+        ))
+
+        # State should still be LOW and OK (recovery behavior)
+        pin_status = self.activity._pin_status[self.test_pin]
+        self.assertEqual(pin_status["state"], PinLevel.LOW)
+        self.assertEqual(pin_status["status"], PinHealth.OK)
+
+        log_summary = "\n".join(log.output)
+        logging.debug("Captured logs:\n%s", log_summary)
+
+    def test_end_activity_event_skips_log_if_dur_is_gt_config_threshold(self):
+        """Should skip logging if duration exceeds config max_activity_time."""
+        self.activity._fault_threshold = 1200
+        logging.debug("Fault threshold set to %s",
+                      self.activity._fault_threshold)
+        # Exceed the patched threshold
+        duration = self.activity._fault_threshold + 1
+
+        self.activity._start_times[self.test_pin] = (
+            dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=duration)
+        )
+        self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
+        self.activity._pin_status[self.test_pin]["status"] = PinHealth.FAULT
+
+        with self.assertLogs(level="WARNING") as log:
+            self.activity._end_activity_event(self.test_pin)
+
+        self.mock_db.query.assert_not_called()
+
+        pin_status = self.activity._pin_status[self.test_pin]
+        self.assertEqual(pin_status["state"], PinLevel.LOW)
+        self.assertEqual(pin_status["status"], PinHealth.OK)
+
+        self.assertTrue(any(
+            "exceeded max_activity_time" in msg
+            for msg in log.output
+        ))
+
+        logging.debug("Exceeded max_activity_time threshold; "
+                      "log skipped as expected.")
 
 
 if __name__ == '__main__':

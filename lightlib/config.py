@@ -11,6 +11,7 @@ Version: 0.1
 
 import logging
 import configparser
+from lightlib.common import valid_smallint
 
 
 class ConfigNotLoaded(Exception):
@@ -259,9 +260,17 @@ class ConfigLoader:
     @property
     def max_activity_time(self) -> int:
         """Max time activity can be high before fault is generated."""
-        return self.get_config_value(config=self.config,
-                                     section="IO",
-                                     option="max_activity_time")
+        t = self.get_config_value(config=self.config, section="IO",
+                                  option="max_activity_time")
+        # Validate against SMALLINT max
+        try:
+            valid_smallint(t)
+            return t
+        except ValueError:
+            logging.warning(
+                f"Configured max_activity_time={t} "
+                "exceeds SMALLINT limit (32767), using 32767")
+            return 32767
 
     @property
     def health_check_interval(self) -> int:

@@ -10,7 +10,7 @@ If a USB device is inserted and mounted at `media_mount_point`, the following wi
 
 1. **Configuration Validity Check:**
 
-   - If a `config.ini` is found on the USB device, it will be validated.
+   - If a `config.ini` is found on the USB device, it will be validated. Sections and keys can be ommitted but all present must be valid. Any invalid entry will mark the entire config as invalid and defaults will be used for all settings. 
 
 2. **Backup Existing Config & Logs:**
 
@@ -104,14 +104,14 @@ GPS module settings.
 
 Digital input/output GPIO configuration.
 
-| Option                    | Type      | Default | Description                                                       |
-| ------------------------- | --------- | ------- | ----------------------------------------------------------------- |
-| `activity_digital_inputs` | list[int] | `17`    | Comma-separated list of GPIO pins used as activity inputs.        |
-| `max_activity_time`       | int       | `1800`  | Max time (s) that an activity input can remain high before fault. |
-| `health_check_interval`   | float     | `300`   | Interval (s) between input health checks.                         |
-| `lights_output`           | int       | `16`    | GPIO pin(s) used to control lighting.                             |
-| `fault_output`            | int       | `15`    | GPIO pin used for fault indication.                               |
-| `crit_fault_out`          | int       | `14`    | GPIO pin used for critical fault indication.                      |
+| Option                    | Type      | Default | Description                                                                                                                                                                       |
+| ------------------------- | --------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `activity_digital_inputs` | list[int] | `17`    | Comma-separated list of GPIO pins used as activity inputs.                                                                                                                        |
+| `max_activity_time`       | int       | `1800`  | Max time (s) that an activity input can remain high before fault. This has an absolute maximum limit of 32767s (9 hours 6 minutes). You can set it higher but 32767 will be used. |
+| `health_check_interval`   | float     | `300`   | Interval (s) between input health checks.                                                                                                                                         |
+| `lights_output`           | int       | `16`    | GPIO pin(s) used to control lighting.                                                                                                                                             |
+| `fault_output`            | int       | `15`    | GPIO pin used for fault indication.                                                                                                                                               |
+| `crit_fault_out`          | int       | `14`    | GPIO pin used for critical fault indication.                                                                                                                                      |
 
 Example:
 
