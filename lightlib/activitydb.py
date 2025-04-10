@@ -22,11 +22,16 @@ import RPi.GPIO as GPIO
 from lightlib.db import DB, ConfigLoader
 
 
-class PinStatus(Enum):
-    """Enumeration for pin statuses and states."""
+class PinHealth(Enum):
+    """Enumeration for pin statuses."""
 
     OK = True
     FAULT = False
+
+
+class PinLevel(Enum):
+    """Enumeration for pin states."""
+
     HIGH = True
     LOW = False
 
@@ -59,9 +64,10 @@ class Activity:
 
         _start_times (Dict[int, dt.datetime]): Dictionary to store start times
                                                for each monitored GPIO pin.
-        _pin_status (Dict[int, Dict[str, Union[PinStatus, str]]]): Dictionary
-        to store both the status ('OK' or 'FAULT') and the state ('HIGH' or
-        LOW') for each pin.
+
+        _pin_status (Dict[int, Dict[str, Union[PinHealth, PinLevel]]]):
+            Dictionary mapping each GPIO pin to its current 'status'
+            (PinHealth.OK or .FAULT) and 'state' (PinLevel.HIGH or .LOW).
 
         _fault_threshold (float): Threshold in seconds for a high state
         duration considered faulty.
@@ -80,7 +86,6 @@ class Activity:
                 cls._instance = super().__new__(cls)
         return cls._instance
 
-
     def __init__(self):
         """Initialize class, set up db conn, GPIO & fault detection timer.
 
@@ -96,14 +101,14 @@ class Activity:
         self._activity_inputs: List[int] = \
             ConfigLoader().activity_digital_inputs
         self._start_times: Dict[int, dt.datetime] = {}
-        self._pin_status: Dict[int, Dict[str, Union[PinStatus, str]]] = {
-            pin: {"status": PinStatus.OK, "state": PinStatus.LOW}
+        self._pin_status: Dict[int, Dict[str, Union[PinHealth, PinLevel]]] = {
+            pin: {"status": PinHealth.OK, "state": PinLevel.LOW}
             for pin in self._activity_inputs
         }  # Track status and state of each pin
         self._setup_activity_inputs()
-        self._start_fault_detection()  # Start periodic fault checking
         self._fault_threshold = ConfigLoader().max_activity_time
         self._health_check_interval = ConfigLoader().health_check_interval
+        self._start_fault_detection()  # Start periodic fault checking
 
     def _setup_activity_inputs(self) -> None:
         """
@@ -143,11 +148,14 @@ class Activity:
         """
         # Record start time
         self._start_times[pin] = dt.datetime.now(dt.timezone.utc)
-        self._pin_status[pin]["status"] = PinStatus.OK  # Set status to OK
-        self._pin_status[pin]["state"] = PinStatus.HIGH  # Set state to HIGH
+        self._pin_status[pin]["status"] = PinHealth.OK  # Set status to OK
+        self._pin_status[pin]["state"] = PinLevel.HIGH  # Set state to HIGH
         logging.info(
             f"Activity started on pin {pin} at {self._start_times[pin]}"
         )
+        logging.debug("Pin %i: Status = %s, State = %s", pin,
+                      self._pin_status[pin]["status"].name,
+                      self._pin_status[pin]["state"].name)
 
     def _end_activity_event(self, pin: int) -> None:
         """Log activity to DB.
@@ -165,8 +173,8 @@ class Activity:
             psycopg2.DatabaseError: If there is an error executing the database
                                     query.
         """
-        self._pin_status[pin]["status"] = PinStatus.OK  # Reset status to OK
-        self._pin_status[pin]["state"] = PinStatus.LOW  # Set state to LOW
+        self._pin_status[pin]["status"] = PinHealth.OK  # Reset status to OK
+        self._pin_status[pin]["state"] = PinLevel.LOW  # Set state to LOW
         start_time = self._start_times.pop(pin, None)  # Retrieve start time
         if start_time is None:
             logging.warning(
@@ -221,20 +229,20 @@ class Activity:
                 ).total_seconds()
                 if duration > self._fault_threshold:
                     # Set FAULT
-                    self._pin_status[pin]["status"] = PinStatus.FAULT
+                    self._pin_status[pin]["status"] = PinHealth.FAULT
                     logging.warning(
                         f"Pin {pin} set to FAULT status, high for {duration} "
                         "seconds."
                     )
                 else:
-                    self._pin_status[pin]["status"] = PinStatus.OK  # Set OK
-            threading.Timer(
-                self._health_check_interval, fault_check
-            ).start()  # Re-run check
+                    self._pin_status[pin]["status"] = PinHealth.OK  # Set OK
+            t = threading.Timer(self._health_check_interval, fault_check)
+            t.daemon = True
+            t.start()  # Re-run check
 
         fault_check()
 
-    def get_pin_status(self, pin: int) -> Dict[str, PinStatus]:
+    def get_pin_status(self, pin: int) -> Dict[str, PinHealth]:
         """Retrieve the current status and state of a specific GPIO pin.
 
         Args
@@ -243,20 +251,21 @@ class Activity:
 
         Returns
         -------
-            Dict[str, PinStatus]: The 'status' and 'state' of the pin.
+            Dict[str, PinHealth]: The 'status' and 'state' of the pin.
         """
         return self._pin_status.get(
-            pin, {"status": PinStatus.FAULT, "state": PinStatus.LOW}
+            pin, {"status": PinHealth.FAULT, "state": PinLevel.LOW}
         )
 
-    def get_all_pin_statuses(self) -> Dict[int, Dict[str, PinStatus]]:
+    def get_all_pin_statuses(self) -> Dict[int, Dict[str, Union[PinHealth,
+                                                                PinLevel]]]:
         """Retrieve the current status and state of all monitored GPIO pins.
 
         Returns
         -------
-            Dict[int, Dict[str, PinStatus]]: Dictionary with pin numbers as
-            keys and dictionaries containing 'status' and 'state' keys with
-            PinStatus values.
+            Dict[int, Dict[str, Union[PinHealth, PinLevel]]]:
+                Dictionary with pin numbers as keys and dictionaries containing
+                'status' and 'state' keys with PinHealth & PinLevel values.
         """
         return self._pin_status
 
@@ -268,7 +277,7 @@ class Activity:
             Bool: True if activity is detected.
         """
         return any(
-            status["state"] == PinStatus.HIGH
+            status["state"] == PinLevel.HIGH
             for status in self._pin_status.values()
         )
 

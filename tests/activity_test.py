@@ -14,6 +14,7 @@ import unittest
 import sys
 import os
 import logging
+import types
 import util
 # Set up logging ONCE for the entire test module
 util.setup_test_logging()
@@ -23,11 +24,12 @@ base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
 if 'RPi' not in sys.modules:
-    with patch('RPi.GPIO') as MockGPIO:
-        from lightlib.activitydb import Activity, PinStatus
-else:
-    from lightlib.activitydb import Activity, PinStatus
+    from RPi.GPIO import GPIO
+    sys.modules['RPi'] = types.ModuleType('RPi')
+    sys.modules['RPi.GPIO'] = GPIO
+    sys.modules['RPi'].GPIO = GPIO
 
+from lightlib.activitydb import Activity, PinLevel, PinHealth
 
 class TestActivity(unittest.TestCase):
     """Tests Activity functions."""
@@ -49,9 +51,15 @@ class TestActivity(unittest.TestCase):
         Activity._instance = None
         self.activity = Activity()
 
-    def test_stub(self):
-        """Placeholder test to validate test runner."""
-        self.assertTrue(True)
+    def test_start_activity_event_sets_state_and_status(self):
+        """_start_activity_event should set pin HIGH & status to OK."""
+        test_pin = 17
+        self.activity._start_activity_event(test_pin)
+    
+        pin_status = self.activity._pin_status[test_pin]
+        self.assertEqual(pin_status["state"], PinLevel.HIGH)
+        self.assertEqual(pin_status["status"], PinHealth.OK)
+        self.assertIn(test_pin, self.activity._start_times)
 
 
 if __name__ == '__main__':
