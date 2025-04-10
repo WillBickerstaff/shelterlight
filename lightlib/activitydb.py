@@ -19,8 +19,7 @@ import psycopg2
 from psycopg2 import sql
 import RPi.GPIO as GPIO
 
-from lightlib.db import DB, ConfigLoader
-
+from lightlib.db import DB, ConfigLoader, valid_smallint
 
 class PinHealth(Enum):
     """Enumeration for pin statuses."""
@@ -183,7 +182,7 @@ class Activity:
         try:
             duration = (dt.datetime.now(dt.timezone.utc) -
                         start_time).total_seconds()  # Calc duration
-            DB.valid_smallint(duration)
+            valid_smallint(duration)
         except ValueError:
             logging.error(f"Will not log an activity duration of {duration}s, "
                           "duration must be <= 32767s (9h 6m)")

@@ -10,6 +10,7 @@ Version: 0.1
 """
 
 from unittest.mock import patch, MagicMock
+import datetime as dt
 import unittest
 import sys
 import os
@@ -30,6 +31,8 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi'].GPIO = GPIO
 
 from lightlib.activitydb import Activity, PinLevel, PinHealth
+from lightlib.db import valid_smallint
+
 
 class TestActivity(unittest.TestCase):
     """Tests Activity functions."""
@@ -46,6 +49,7 @@ class TestActivity(unittest.TestCase):
         # Stub DB connection
         self.mock_db = MagicMock()
         mock_db_class.return_value = self.mock_db
+        mock_db_class.valid_smallint = valid_smallint
 
         # Reset singleton and initialize fresh Activity instance
         Activity._instance = None
@@ -55,11 +59,36 @@ class TestActivity(unittest.TestCase):
         """_start_activity_event should set pin HIGH & status to OK."""
         test_pin = 17
         self.activity._start_activity_event(test_pin)
-    
+
         pin_status = self.activity._pin_status[test_pin]
         self.assertEqual(pin_status["state"], PinLevel.HIGH)
         self.assertEqual(pin_status["status"], PinHealth.OK)
         self.assertIn(test_pin, self.activity._start_times)
+
+    def test_end_activity_event_logs_valid_activity(self):
+        """_end_activity_event should log activity and reset pin state."""
+        test_pin = 17
+        start_time = dt.datetime.now(dt.timezone.utc) - \
+            dt.timedelta(seconds=10)
+        self.activity._start_times[test_pin] = start_time
+
+        self.activity._end_activity_event(test_pin)
+
+        pin_status = self.activity._pin_status[test_pin]
+        self.assertEqual(pin_status["status"], PinHealth.OK)
+        self.assertEqual(pin_status["state"], PinLevel.LOW)
+        self.assertNotIn(test_pin, self.activity._start_times)
+        self.assertTrue(self.mock_db.query.called)
+
+        call = self.mock_db.query.call_args
+        if call:
+            _, kwargs = call
+            sql = kwargs.get("query", "<No query key>")
+            params = kwargs.get("params", "<No params>")
+            logging.debug("SQL that would have been executed:\n"
+                          "%s\nwith parameters: %s", sql, params)
+        else:
+            logging.debug("mock_db.query was never called.")
 
 
 if __name__ == '__main__':
