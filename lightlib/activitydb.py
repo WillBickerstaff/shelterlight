@@ -70,6 +70,17 @@ class Activity:
                                         check cycle.
     """
 
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        """Ensure only one instance of Activity exists (Singleton pattern)."""
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+        return cls._instance
+
+
     def __init__(self):
         """Initialize class, set up db conn, GPIO & fault detection timer.
 
@@ -77,6 +88,9 @@ class Activity:
         ------
             Exception: If GPIO setup or database connection fails.
         """
+        if hasattr(self, "_initialized"):
+            return
+        self._initialized = True
         # Load PostgreSQL connection settings
         self._db = DB("ACTIVITY_DB")
         self._activity_inputs: List[int] = \
