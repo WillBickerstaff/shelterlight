@@ -21,6 +21,7 @@ from lightlib import USBManager
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
 from lightlib.common import ConfigReloaded
+from lightlib.activitydb import Activity
 from scheduler.Schedule import LightScheduler
 
 
@@ -115,9 +116,6 @@ def main():
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
 
-    # Set GPIO mode for RPi GPIO pins
-    GPIO.setmode(GPIO.BOARD)
-
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
     init_log(args.log_level)
@@ -125,10 +123,7 @@ def main():
     gps = SunTimes()  # Initialize GPS/SunTimes instance
     scheduler = LightScheduler()
     scheduler.set_db_connection()
-
-    # GPIO setup for light output
-    light_pin = config.light_output_pin
-    GPIO.setup(light_pin, GPIO.OUT)
+    activity_monitor = Activity()
 
     # Start USB listener in a separate thread to handle USB insert signals
     usb_thread = threading.Thread(target=usb_listener,
@@ -147,11 +142,6 @@ def main():
             if not gps.fixed_today and gps.in_fix_window:
                 gps.start_gps_fix_process()
 
-            # Light state control
-            light_on = scheduler.should_light_be_on()
-            GPIO.output(light_pin, GPIO.HIGH if light_on else GPIO.LOW)
-            logging.debug(f"Light {'ON' if light_on else 'OFF'}")
-
             # Control CPU usage in main loop
             time.sleep(config.cycle_time)
 
@@ -161,6 +151,7 @@ def main():
         stop_event.set()
         scheduler_thread.join()
         cleanup_resources(gps)
+        activity_monitor.close()
 
 
 if __name__ == "__main__":

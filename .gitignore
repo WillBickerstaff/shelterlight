@@ -6,6 +6,7 @@ RPi/
 .vscode/
 persist.json
 cities*.txt
+mock/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
