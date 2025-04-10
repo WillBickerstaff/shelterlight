@@ -261,6 +261,27 @@ class Activity:
         """
         return self._pin_status
 
+    def is_activity_detected(self) -> bool:
+        """Return True if any activity input is currently HIGH.
+
+        Returns
+        -------
+            Bool: True if activity is detected.
+        """
+        return any(
+            status["state"] == PinStatus.HIGH
+            for status in self._pin_status.values()
+        )
+
+    def should_lights_be_on(self) -> bool:
+        """Return True if activity is current ans lights should be on.
+
+        Returns
+        -------
+            Bool: True if any activity is current and lights should be on.
+        """
+        return self.is_activity_detected()
+
     def close(self) -> None:
         """Clean up GPIO resources and close the database connection."""
         GPIO.cleanup(self._activity_inputs)

@@ -22,6 +22,7 @@ from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
 from lightlib.common import ConfigReloaded
 from lightlib.activitydb import Activity
+from lightlib.lightcontrol import LightController
 from scheduler.Schedule import LightScheduler
 
 
@@ -115,27 +116,18 @@ def main():
     parser.add_argument('--log_level', type=str,
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
+    stop_event = threading.Event()
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
     init_log(args.log_level)
     config = ConfigLoader()  # Initialize the singleton config loader
     gps = SunTimes()  # Initialize GPS/SunTimes instance
-    scheduler = LightScheduler()
-    scheduler.set_db_connection()
-    activity_monitor = Activity()
 
     # Start USB listener in a separate thread to handle USB insert signals
     usb_thread = threading.Thread(target=usb_listener,
                                   args=(usb_manager, gps), daemon=True)
     usb_thread.start()
-
-    # Start daily schedule generation thread
-    stop_event = threading.Event()
-    scheduler_thread = threading.Thread(target=daily_schedule_generation,
-                                        args=(stop_event, scheduler, gps),
-                                        daemon=True)
-    scheduler_thread.start()
 
     try:
         while True:
@@ -149,9 +141,7 @@ def main():
         pass  # Handle by restarting the loop in `main_loop()`
     finally:
         stop_event.set()
-        scheduler_thread.join()
         cleanup_resources(gps)
-        activity_monitor.close()
 
 
 if __name__ == "__main__":
