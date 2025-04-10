@@ -113,7 +113,6 @@ class Activity:
         low-to-high transition (RISING edge) and `_end_activity_event` on a
         high-to-low transition (FALLING edge).
         """
-        GPIO.setmode(GPIO.BOARD)
         for pin in self._activity_inputs:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
             # Detect rising edge to mark start of activity
@@ -261,7 +260,7 @@ class Activity:
         """
         return self._pin_status
 
-    def is_activity_detected(self) -> bool:
+    def activity_detected(self) -> bool:
         """Return True if any activity input is currently HIGH.
 
         Returns
@@ -274,7 +273,7 @@ class Activity:
         )
 
     def should_lights_be_on(self) -> bool:
-        """Return True if activity is current ans lights should be on.
+        """Return True if activity is current and lights should be on.
 
         Returns
         -------

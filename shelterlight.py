@@ -20,17 +20,15 @@ from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
-from lightlib.common import ConfigReloaded
-from lightlib.activitydb import Activity
+from lightlib.common import ConfigReloaded, gpio_init, gpio_cleanup
 from lightlib.lightcontrol import LightController
-from scheduler.Schedule import LightScheduler
 
 
 def cleanup_resources(gps: SunTimes) -> None:
     """Perform resource cleanup for GPS, GPIO, and logging."""
     logging.info("Performing resource cleanup...")
     gps.cleanup()  # Stops GPS fix process thread, if any
-    GPIO.cleanup()  # Reset all GPIO pins
+    gpio_cleanup()  # Reset all GPIO pins
     logging.info("Resources cleaned up successfully.")
 
 
@@ -117,6 +115,7 @@ def main():
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
     stop_event = threading.Event()
+    gpio_init()
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()

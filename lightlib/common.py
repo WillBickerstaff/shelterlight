@@ -10,7 +10,10 @@ Version: 0.1
 """
 
 import datetime as dt
+import logging
+import RPi.GPIO as GPIO
 from typing import Union
+from typing import Optional
 
 EPOCH_DATETIME = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)
 
@@ -59,3 +62,50 @@ def iso_to_datetime(iso_str: str) -> dt.datetime:
 def datetime_to_iso(dt_obj: dt.datetime) -> str:
     """Convert a dt object into an ISO formatted datetime string."""
     return dt_obj.isoformat()
+
+
+def gpio_init(mode: Optional[int] = GPIO.BOARD) -> None:
+    """Set the global GPIO mode to BOARD, unless already set correctly.
+
+    Safely initialize GPIO pin numbering mode for consistency across the
+    application. Allows GPIO mode to be set once, and prevents runtime errors
+    from conflicting mode assignments.
+
+    Args
+    ----
+    mode : int, optional
+        The desired GPIO numbering mode, either GPIO.BOARD (default) or
+        GPIO.BCM.
+
+    Raises
+    ------
+    RuntimeError
+        If the GPIO mode is already set and differs from the requested mode.
+    """
+    current_mode = GPIO.getmode()
+
+    mode_names = {
+        None: "None",
+        GPIO.BOARD: "BOARD",
+        GPIO.BCM: "BCM"
+    }
+
+    logging.debug("GPIO Mode currently set to: %s",
+                  mode_names.get(current_mode, str(current_mode)))
+
+    if current_mode is None:
+        GPIO.setmode(mode)
+        logging.info("GPIO Mode initialized to: %s",
+                     mode_names.get(mode, str(mode)))
+    elif current_mode != mode:
+        raise RuntimeError(
+            "GPIO mode already set to "
+            f"{mode_names.get(current_mode, str(current_mode))}, "
+            f"expected {mode_names.get(mode, str(mode))}."
+        )
+
+
+def gpio_cleanup():
+    """Global GPIO cleanup."""
+    GPIO.cleanup()
+    logging.debug("GPIO Resources cleaned up")
