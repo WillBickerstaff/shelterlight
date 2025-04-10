@@ -95,6 +95,9 @@ class LoggingTestRunner(unittest.TextTestRunner):
         result.printErrors()
         result.printSummary(self.stream)
 
+        for handler in logging.getLogger().handlers:
+            handler.flush()
+
         return result
 
 
@@ -126,17 +129,18 @@ def setup_test_logging(name: str = None,
     log_dir = os.path.dirname(__file__)
     log_path = os.path.join(log_dir, name)
 
+    # Clear the log file if requested
     if clear:
         with open(log_path, 'w'):
             pass  # Clears the log file
 
-    if logging.getLogger().hasHandlers():
-        logging.getLogger().handlers.clear()
-
-    logging.basicConfig(
-        filename=log_path,
-        level=level,
-        format="[%(levelname)s] %(message)s"
-    )
-
-    logging.debug("Log initialized at: %s", log_path)
+    # Only add the file handler if it's not already present
+    if not logging.getLogger().hasHandlers():
+        logging.basicConfig(
+            filename=log_path,
+            level=level,
+            format="[%(levelname)s] %(message)s"
+        )
+        logging.debug("Log initialized at:\n\t%s", log_path)
+    else:
+        logging.debug("Logger already initialized.")

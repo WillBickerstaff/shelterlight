@@ -25,6 +25,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..')))
 
+logging.debug("USBManager is importing os from:", os.__file__)
+logging.debug("USBManager os.path.exists is:", os.path.exists)
+
 
 class USBFileManager:
     """Singleton for managing USB file operations.
@@ -57,13 +60,22 @@ class USBFileManager:
 
     def usb_check(self) -> None:
         """Check USB, backup files, and attempt config replacement."""
+        if not self.is_usb_inserted():
+            # Log warning and skip if no USB inserted
+            logging.warning("USB drive not inserted or inaccessible. "
+                            "Skipping backup and config replacement.")
+            return  # No need to proceed if USB is not inserted
+
         try:
+            # Perform backup if USB is inserted
             self.backup_files_to_usb()
+
+            # Check if config needs to be replaced, raise ConfigReloaded
             if self.replace_config_with_usb():
-                logging.info(
-                    "Configuration update detected")
-                raise ConfigReloaded
+                logging.info("Configuration update detected")
+                raise ConfigReloaded  # Trigger reload for valid config change
         except FileNotFoundError as e:
+            # Handle case when USB is not accessible or other IO issues
             logging.warning("USB not found or inaccessible: %s", e)
 
     def is_usb_inserted(self) -> bool:
@@ -74,8 +86,10 @@ class USBFileManager:
             bool: True if the USB drive is inserted, False otherwise.
         """
         if os.path.ismount(self.mount_point) and os.listdir(self.mount_point):
+            logging.debug("Detected USB Insertion")
             return True
         else:
+            logging.debug("No USB inserted")
             self._backed_up = False  # Reset to allow future backups
             self._config_copied = False  # Reset to allow future overwrites
             return False  # Ensure a consistent return value
@@ -88,12 +102,14 @@ class USBFileManager:
             FileNotFoundError: If the USB drive is not mounted or accessible.
         """
         if self._backed_up:
+            logging.debug("Backup not required - already done.")
             return  # Skip if already backed up
 
         if not self.is_usb_inserted():
             raise FileNotFoundError(
                 "USB drive not inserted or mount point inaccessible.")
 
+        logging.debug("Beginning file backup to USB")
         timestamp = datetime_to_iso(dt.datetime.now())
         usb_backup_dir = os.path.join(
             self.mount_point, "smartlight", "configs")
@@ -103,8 +119,10 @@ class USBFileManager:
 
         # Backup config and log files
         config_source = "config.ini"
+        dest_filename = f"config_backup_{timestamp}.ini"
         config_backup = os.path.join(
-            usb_backup_dir, f"config_backup_{timestamp}.ini")
+            usb_backup_dir, dest_filename)
+        logging.debug("Copying config file to %s", config_backup)
         shutil.copy2(config_source, config_backup)
         logging.info("Config file backed up to USB: %s", config_backup)
 
@@ -162,8 +180,8 @@ class USBFileManager:
 
         # Prompt user for confirmation to overwrite onboard config
         user_choice = warn_and_wait(
-            message="About to overwrite onboard config. "
-            "Press cancel to abort.",
+            message="Onboard config will be replaced in 10s. "
+            "Press cancel to abort. Overwriting",
             wait_time=10,
             default_action=CANCEL_CONFIRM.CONFIRM)
 

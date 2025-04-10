@@ -17,7 +17,7 @@ import numpy as np
 import os
 import sys
 import logging
-from . import util
+import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
