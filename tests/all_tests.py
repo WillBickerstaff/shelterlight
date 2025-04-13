@@ -12,6 +12,7 @@ Version: 0.1
 import subprocess
 import os
 
+lines = []
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 test_files = [
     "tests/activity_test.py",
@@ -22,11 +23,19 @@ test_files = [
     "tests/schedule_test.py",
     "tests/usb_test.py",
 ]
-
+print("-"*79)
 for path in test_files:
     print(f"Running: {path}")
-    subprocess.run(
+    result = subprocess.run(
         ["python", path],
-        check=True,
-        env={**os.environ, "PYTHONPATH": project_root}
+        env={**os.environ, "PYTHONPATH": project_root},
+        capture_output=True
     )
+
+    if result.returncode != 0:
+        lines.append(f"{path}\t\tFAILED - check the log")
+    else:
+        lines.append(f"{path}\t\tPASSED")
+
+# Print results summary
+print("-"*79 + "\n" + "\n".join(lines) + "\n" + "-"*79)
