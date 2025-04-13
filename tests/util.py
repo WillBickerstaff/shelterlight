@@ -7,6 +7,7 @@ import logging
 import os
 import inspect
 import time
+import datetime
 
 
 class LoggingTestResult(unittest.TextTestResult):
@@ -103,7 +104,7 @@ class LoggingTestRunner(unittest.TextTestRunner):
 
 def setup_test_logging(name: str = None,
                        level: int = logging.DEBUG,
-                       clear: bool = True):
+                       clear: bool = True) -> logging.Logger:
     """Set up consistent logging for test cases.
 
     Args
@@ -141,6 +142,8 @@ def setup_test_logging(name: str = None,
             level=level,
             format="[%(levelname)s] %(message)s"
         )
-        logging.debug("Log initialized at:\n\t%s", log_path)
+        logging.debug("%s UTC - Log initialized at:\n\t%s",
+                      datetime.datetime.now(datetime.timezone.utc).strftime(
+                          "%Y-%m-%d %H:%M:%S"), log_path)
     else:
         logging.debug("Logger already initialized.")

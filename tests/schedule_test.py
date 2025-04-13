@@ -19,10 +19,12 @@ import sys
 import logging
 import util
 
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
+
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-from scheduler.Schedule import LightScheduler
 
 # Mock GPIO/serial for Raspberry Pi compatibility (import safety)
 if 'RPi' not in sys.modules:
@@ -30,9 +32,7 @@ if 'RPi' not in sys.modules:
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-
-# Set up logging ONCE for the entire test module
-util.setup_test_logging()
+from scheduler.Schedule import LightScheduler
 
 
 class TestLightScheduler(unittest.TestCase):

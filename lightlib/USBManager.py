@@ -25,9 +25,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..')))
 
-logging.debug("USBManager is importing os from:", os.__file__)
-logging.debug("USBManager os.path.exists is:", os.path.exists)
-
 
 class USBFileManager:
     """Singleton for managing USB file operations.

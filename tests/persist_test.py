@@ -17,20 +17,18 @@ import os
 import logging
 import util
 
+# Set up logging ONCE for the entire test module
+util.setup_test_logging()
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-
-from lightlib.persist import PersistentData
 
 if 'RPi' not in sys.modules:
     sys.modules['RPi'] = MagicMock()
     sys.modules['RPi.GPIO'] = MagicMock()
     sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
-# Set up logging ONCE for the entire test module
-util.setup_test_logging()
-
+from lightlib.persist import PersistentData
 
 class TestPersist(unittest.TestCase):
     """Testing persistent data."""
