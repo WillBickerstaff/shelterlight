@@ -12,7 +12,6 @@ Version: 0.1
 import subprocess
 import os
 
-lines = []
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 test_files = [
     "tests/activity_test.py",
@@ -23,19 +22,28 @@ test_files = [
     "tests/schedule_test.py",
     "tests/usb_test.py",
 ]
-print("-"*79)
-for path in test_files:
-    print(f"Running: {path}")
+
+# Clear screen
+os.system('cls' if os.name == 'nt' else 'clear')
+
+total = len(test_files)
+print("-" * 79 + "\n" + f"Starting test suite... ({total} unit tests)" + "\n" +
+      "-" * 79)
+
+passed = 0
+for i, path in enumerate(test_files, start=1):
+    print(f"Running Test:\t{path}\t\t", end='', flush=True)
     result = subprocess.run(
         ["python", path],
         env={**os.environ, "PYTHONPATH": project_root},
         capture_output=True
     )
-
     if result.returncode != 0:
-        lines.append(f"{path}\t\tFAILED - check the log")
+        print("FAILED -- Check the test log")
     else:
-        lines.append(f"{path}\t\tPASSED")
+        passed += 1
+        print("PASSED")
 
-# Print results summary
-print("-"*79 + "\n" + "\n".join(lines) + "\n" + "-"*79)
+print("-"*79 + "\n" +
+      f"Test suite complete: {passed} of {total} unit tests passed."
+      + "\n" + "-" * 79)
