@@ -743,6 +743,7 @@ class LightScheduler:
 
                 # Log the successful update and return the new schedule
                 logging.info("Successfully updated schedule for %s", tomorrow)
+                self._log_schedule(new_schedule, tomorrow)
                 return new_schedule
 
         except Exception as e:
@@ -1080,3 +1081,59 @@ class LightScheduler:
         except Exception as e:
             logging.error("Failed to retrieve past activity: %s", e)
             return []
+
+    def _log_schedule(self, schedule: dict, schedule_date: dt.date) -> None:
+        """Log the generated UTC schedule as a fomatted table (DEBUG only).
+
+        Logs each scheduled interval where the light is predicted to be ON,
+        along with its start and end time and associated confidence score.
+        The output is formatted as a table and sorted chronologically by ON
+        time.
+
+        Logging only occurs if the active log level is DEBUG. If the schedule
+        is empty, a warning is logged instead.
+
+        Args
+        ----
+        schedule : dict
+            The generated schedule, where each key is an interval number and
+            the value is a dictionary containing 'start', 'end', 'prediction',
+            and optionally 'confidence'.
+
+        schedule_date : datetime.date
+            The date the schedule was generated for, used in the log output.
+        """
+        if not schedule:
+            logging.warning("Empty UTC Schedule generated")
+            return
+        if not logging.getLogger().isEnabledFor(logging.DEBUG):
+            return  # Skip formatting unless debug level is enabled
+
+        rows = []
+        # Extract all intervals and build row data
+        for interval, val in schedule.items():
+            rows.append({
+                "start": val["start"],
+                "end": val["end"],
+                "confidence": val.get("confidence", 0.0),
+                "state": "ON" if val.get("prediction", 0) == 1 else "OFF"
+            })
+
+        # Sort by start time
+        rows.sort(key=lambda r: r["start"])
+
+        # Table heading
+        lines = [
+            "UTC Schedule generated:\n",
+            "Sched Date  | Start    | End      | State | Confidence",
+            "-" * 59
+        ]
+        for r in rows:
+            lines.append(
+                f" {schedule_date.strftime('%Y-%m-%d')} |"
+                f" {r['start'].strftime('%H:%M')}    |"
+                f" {r['end'].strftime('%H:%M')}    |"
+                f" {r['state']:^5} | {r['confidence']:.2f}"
+            )
+
+        logging.debug("\n" + "\n".join(lines))

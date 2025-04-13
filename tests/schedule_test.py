@@ -469,7 +469,20 @@ class TestLightScheduler(unittest.TestCase):
         self.scheduler._get_darkness_times = MagicMock(return_value=(
             dt.time(18, 0), dt.time(6, 0)
         ))
-        mock_schedule = {0: 1, 1: 0}
+        mock_schedule = {
+            0: {
+                "start": dt.time(0, 0),
+                "end": dt.time(0, 10),
+                "prediction": 1,
+                "confidence": 0.95
+            },
+            1: {
+                "start": dt.time(0, 10),
+                "end": dt.time(0, 20),
+                "prediction": 0,
+                "confidence": 0.45
+            }
+        }
         self.scheduler.generate_daily_schedule = MagicMock(
             return_value=mock_schedule)
 
