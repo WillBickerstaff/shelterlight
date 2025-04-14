@@ -308,3 +308,10 @@ class Activity:
             self._db.close_connection()
             logging.info(
                 "Database connection closed and GPIO cleanup completed.")
+
+    def cleanup(self):
+        """Clean up GPIO activity pins."""
+        for pin in self._activity_inputs:
+            GPIO.remove_event_detect(pin)
+            GPIO.cleanup(pin)
+        logging.info("Activity GPIO cleanup complete.")

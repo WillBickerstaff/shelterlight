@@ -9,6 +9,7 @@ Author: Will Bickerstaff
 Version: 0.1
 """
 
+import atexit
 import argparse
 import logging
 import socket
@@ -139,6 +140,9 @@ def main():
     gps = SunTimes()  # Initialize GPS/SunTimes instance
     light_control = LightController()  # Singleton managing light output logic
 
+    # Make sure cleanup happens after sys.exit() or systemd shutdown
+    atexit.register(lambda: cleanup_resources(gps, light_control))
+
     # Start USB listener in a separate thread to handle USB insert signals
     usb_thread = threading.Thread(target=usb_listener,
                                   args=(usb_manager, gps), daemon=True)
@@ -166,6 +170,7 @@ def main():
             time.sleep(10)
 
     except ConfigReloaded:
+        cleanup_resources(gps, light_control)  # Cleanup Resources
         pass  # Handle by restarting the loop in `main_loop()`
     finally:
         stop_event.set()

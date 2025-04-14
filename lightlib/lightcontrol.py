@@ -86,3 +86,6 @@ class LightController:
 
     def cleanup(self):
         """Cleanup GPIO resources."""
+        GPIO.cleanup(self._lights_output)
+        self.activity_monitor.cleanup()
+        logging.info("LightController GPIO cleaned up.")

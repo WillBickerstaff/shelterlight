@@ -263,4 +263,9 @@ def warn_and_wait(message: str, wait_time: int = 5,
     print("\nNo input received, proceeding.")
     logging.info(
         f"{message} - proceeding with default: {default_action.name}.")
+
+    # Cleanup GPIO resources
+    GPIO.cleanup(cancel_pin)
+    GPIO.cleanup(confirm_pin)
+
     return default_action

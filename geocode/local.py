@@ -14,13 +14,8 @@ from lightlib.config import ConfigLoader
 import pandas as pd
 import sqlite3
 import logging
-import sys
 import os
 import pytz
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..')))
-sys.path.append(os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', '..')))
 
 GEODB = "geocode.db"
 GEOTABLE = "geocode_data"

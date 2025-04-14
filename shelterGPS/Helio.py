@@ -686,3 +686,8 @@ class SunTimes:
             logging.error("Invalid observer data or date: %s", ve)
             raise InvalidObserverError(
                 "Invalid observer location or date.") from ve
+
+    def cleanup(self):
+        """Stop fix thread and clean up GPS."""
+        self.stop_gps_fix_process()
+        self._gps.cleanup()

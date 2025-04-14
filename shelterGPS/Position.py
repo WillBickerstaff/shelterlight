@@ -137,25 +137,11 @@ class GPS:
         self.__initialized = True
 
     def __del__(self):
-        """Clean up resources when the GPS instance is deleted.
-
-        This method ensures that the serial connection and GPIO resources
-        are properly released when the instance is no longer in use.
-        """
-        # Close the serial connection if it exists and is open
-        if hasattr(self, '_GPS__gps_ser') and self.__gps_ser.is_open:
-            try:
-                self.__gps_ser.close()
-                logging.info("GPS: Serial connection closed.")
-            except serial.SerialException as e:
-                logging.error("GPS: Failed to close serial connection: %s", e)
-
-        # Clean up GPIO resources
+        """Clean up resources when the GPS instance is deleted."""
         try:
-            GPIO.cleanup(self.__pwr_pin)
-            logging.info("GPS: GPIO resources cleaned up.")
-        except RuntimeError as e:
-            logging.warning("GPS: Failed to clean up GPIO resources: %s", e)
+            self.cleanup()
+        except Exception as e:
+            logging.warning("GPS __del__ cleanup failed: %s", e)
 
     @property
     def position_established(self) -> bool:
@@ -646,3 +632,24 @@ class GPS:
                 logging.error(f"Failed to sync system time: {e}")
         else:
             logging.warning("System time sync skipped. No valid datetime fix.")
+
+    def cleanup(self):
+        """Clean up serial and GPIO resources.
+
+        This method ensures that the serial connection and GPIO resources
+        are properly released when the instance is no longer in use.
+        """
+        # Close the serial connection if it exists and is open
+        if hasattr(self, '_GPS__gps_ser') and self.__gps_ser.is_open:
+            try:
+                self.__gps_ser.close()
+                logging.info("GPS: Serial connection closed.")
+            except serial.SerialException as e:
+                logging.error("GPS: Failed to close serial connection: %s", e)
+
+        # Clean up GPIO resources
+        try:
+            GPIO.cleanup(self.__pwr_pin)
+            logging.info("GPS: GPS Power Pin resources.")
+        except Exception:
+            logging.warning("GPS: Failed to cleanup GPS Power pin resources")
