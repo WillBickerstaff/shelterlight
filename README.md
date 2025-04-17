@@ -10,7 +10,7 @@ It uses a GPS module and activity detection inputs to intelligently schedule lig
 The system is designed to operate completely **offline and headless** (no display, no network), learning and adapting over time without external input.
 Configuration updates and system logs can be managed via **USB device insertion**.
 
-The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Python 3.13.2** with minimal external dependencies.
+The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Python 3** with minimal external dependencies.
 
 ---
 
@@ -32,18 +32,30 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 2. **Enable SSH (optional but recommended)**
 
    - Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
-3. **Disable Unnecessary Services**
+
+3. **Set timezone**
+
+   The application is written to calculate and control using UTC
+   as the default timezone throughout the year. This avoids complications with timezone boundaries and daylight saving.
+   **Make sure the RPi has its timezone set to UTC:**
+   ```bash
+   sudo raspi-config
+   ```
+   Choose **Localisation Options** -> **Timezone**. At the bottom of the list of available timezones the option *'None of the above'* exists, choose this and then **'UTC'**
+
+4. **Disable Unnecessary Services**
 
    Certain system services are not required and should be disabled to improve boot time and reduce resource usage.
 
    See the section **Disabling Unnecessary Services** later in this document for recommended services to disable.
-4. **Install System Packages**
+
+5. **Install System Packages**
 
    ```bash
    sudo apt update
-   sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql
+   sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql libopenblas-dev git
    ```
-5. **Optional Configuration Tweaks**
+6. **Optional Configuration Tweaks**
 
    - Disable HDMI output to save power:
      ```bash
@@ -66,8 +78,8 @@ Database connection settings are defined in `config.ini` under the `[ACTIVITY_DB
 [ACTIVITY_DB]
 host = localhost
 port = 5432
-database = smartlight
-user = pi
+database =
+user = piactivity_db
 password = changeme
 connect_retry = 3
 connect_retry_delay = 5
@@ -84,15 +96,20 @@ sudo -u postgres psql
 Inside the `psql` shell:
 
 ```sql
-CREATE DATABASE smartlight;
+CREATE DATABASE activity_db;
 CREATE USER pi WITH ENCRYPTED PASSWORD 'changeme';
-GRANT ALL PRIVILEGES ON DATABASE smartlight TO pi;
+GRANT ALL PRIVILEGES ON DATABASE activity_db TO pi;
+
+\c activity_db
+GRANT USAGE ON SCHEMA public TO pi;
+GRANT CREATE ON SCHEMA public TO pi;
 \q
 ```
 
 ### Create Tables
 
 The system will automatically create the required tables (`activity_log` and `light_schedules`) when it first runs.
+**Database username and password must first be set in the config**
 
 **Alternatively, to create manually:**
 
@@ -166,18 +183,25 @@ CREATE TRIGGER update_light_schedules_updated_at
 
 ## Python Environment Setup
 
-This system is written in **Python 3.13.2** and is intended to run on Raspberry Pi Zero (or similar).
+This system is written **Python 3** and is intended to run on Raspberry Pi Zero (or similar) with python version >= **3.11**.
+
+### Grab the source
+Grab the source for the application from the git repository with:
+```bash
+git clone https://WillBickerstaff/shelterlight
+```
 
 ### Required Python Libraries
 
 The following Python packages are required:
 
 - `RPi.GPIO` — Raspberry Pi GPIO control
-- `pyserial` — Serial communication for GPS module
+- `serial` — Serial communication for GPS module
 - `lightgbm` — Machine learning for schedule prediction
 - `psycopg2` — PostgreSQL database driver
-- `pandas` — Data manipulation
-- `numpy` — Numerical operations
+- `pandas` — Data manipulation (should also install numpy)
+- `timezonefinder` — Determine location timezone
+> **Note:** Although all scheduling and system operations use UTC internally, `timezcd                       onefinder` is retained to support future features such as a local display. This would allow sunrise, sunset, and schedule times to present in a human readable local time to avoid confusion.
 
 A complete list is provided in `req_modules.txt`:
 
@@ -190,6 +214,7 @@ To avoid affecting your system Python environment, it is recommended to install 
 #### 1. Create & Activate Virtual Environment
 
 ```bash
+cd ~/shelterlight
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -204,7 +229,7 @@ pip install -r req_modules.txt
 
 ## Running as a Systemd Service
 
-This system is configured to run automatically at boot using **systemd**.
+Configure to run automatically at boot using **systemd**.
 
 ### Service File
 
@@ -298,7 +323,7 @@ After a valid fix, the system executes:
 
 ```bash
 sudo /bin/date -s <utc_time>
-```
+``
 
 This will synchronise the Raspberry Pi system time to UTC.
 

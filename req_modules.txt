@@ -2,6 +2,5 @@ lightgbm
 astral
 psycopg2
 pandas
-numpy
 timezonefinder
-serial
+pyserial

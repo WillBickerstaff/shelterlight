@@ -119,7 +119,7 @@ class GPS:
         except serial.SerialException as e:
             logging.error("GPS: Failed to initialize serial port %s - %s",
                           self.__serial_port, e)
-            raise e
+            self.__gps_ser = None
 
         # Initialize remaining attributes
         self._pwr_up_time = ConfigLoader().gps_pwr_up_time
@@ -640,7 +640,8 @@ class GPS:
         are properly released when the instance is no longer in use.
         """
         # Close the serial connection if it exists and is open
-        if hasattr(self, '_GPS__gps_ser') and self.__gps_ser.is_open:
+        if hasattr(self, '_GPS__gps_ser') and self.__gps_ser is not None and \
+                self.__gps_ser.is_open:
             try:
                 self.__gps_ser.close()
                 logging.info("GPS: Serial connection closed.")
