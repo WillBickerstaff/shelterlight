@@ -24,7 +24,7 @@ util.setup_test_logging()
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-import RPi.GPIO as GPIO
+import .RPi.GPIO as GPIO
 from lightlib.activitydb import Activity, PinLevel, PinHealth
 from lightlib.common import valid_smallint, gpio_init
 

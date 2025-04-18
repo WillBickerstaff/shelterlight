@@ -3,6 +3,8 @@ directory_structure.txt
 req modules.txt
 RPi.GPIO.py
 RPi/
+!/tests/RPi/RPi.GPIO.py
+!tests/RPi/
 .vscode/
 persist.json
 cities*.txt
