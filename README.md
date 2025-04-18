@@ -26,6 +26,8 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
 ### Minimal Setup Steps
 
+**TLDR -- Read [TLDR.md](./TLDR.md)**
+
 1. **Flash OS Image**
 
    - Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd` to write the OS image to your microSD card.
@@ -78,8 +80,8 @@ Database connection settings are defined in `config.ini` under the `[ACTIVITY_DB
 [ACTIVITY_DB]
 host = localhost
 port = 5432
-database =
-user = piactivity_db
+database = activity_db
+user = pi
 password = changeme
 connect_retry = 3
 connect_retry_delay = 5
