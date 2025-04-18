@@ -131,12 +131,12 @@ def main():
     parser.add_argument('--log_level', type=str,
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
+    init_log(args.log_level)
     stop_event = threading.Event()
     gpio_init()  # Set GPIO mode globally if not already set
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
-    init_log(args.log_level)
     gps = SunTimes()  # Initialize GPS/SunTimes instance
     light_control = LightController()  # Singleton managing light output logic
 
@@ -179,4 +179,7 @@ def main():
 
 
 if __name__ == "__main__":
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     main_loop()

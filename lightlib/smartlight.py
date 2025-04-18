@@ -185,28 +185,29 @@ def init_log(log_level: Optional[str] = None):
         configuration is detected (i.e., it avoids reconfiguring if
         handlers are already set).
     """
-    # Ensure logging is not configured multiple times
-    if not logging.getLogger().hasHandlers():
-        # Use provided log level or fetch from config if not specified
-        log_level = log_level or ConfigLoader().log_level
-        # Determine the logging level or default to INFO if invalid
-        level = getattr(logging, log_level.upper(), logging.INFO)
+    # Use provided log level or fetch from config if not specified
+    log_level = log_level or ConfigLoader().log_level
+    # Determine the logging level or default to INFO if invalid
+    level = getattr(logging, log_level.upper(), logging.INFO)
 
-        # Log a warning if an unrecognized log level is provided and
-        # fallback to INFO
-        if level == logging.INFO and log_level.upper() != "INFO":
-            logging.warning("Invalid log level '%s' provided, defaulting "
-                            "to INFO.", log_level)
+    # Log a warning if an unrecognized log level is provided and
+    # fallback to INFO
+    if level == logging.INFO and log_level.upper() != "INFO":
+        logging.warning("Invalid log level '%s' provided, defaulting "
+                        "to INFO.", log_level)
 
-        # Set up the logging configuration with specified format and file
-        logging.basicConfig(
-            level=level,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            filename=ConfigLoader().log_file
-        )
+    # Set up the logging configuration with specified format and file
+    file_handler = logging.FileHandler(ConfigLoader().log_file)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s"))
+    logging.basicConfig(
+        level=level,
+        handlers=[file_handler],
+        force=True  # Force reset any existing handlers
+    )
 
-        logging.info("Logging initialized with level %s.",
-                     log_level.upper())
+    logging.info("Logging initialized with level %s.",
+                 log_level.upper())
 
 
 def warn_and_wait(message: str, wait_time: int = 5,

@@ -375,7 +375,7 @@ class ConfigLoader:
         """GPIO pins for sensor inputs: list of int."""
         return self.get_config_value(config=self.config,
                                      section="IO",
-                                     option="sensor_inputs")
+                                     option="activity_digital_inputs")
 
     @property
     def lights_output(self) -> int:
