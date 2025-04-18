@@ -24,15 +24,11 @@ util.setup_test_logging()
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-if 'RPi' not in sys.modules:
-    from RPi.GPIO import GPIO
-    sys.modules['RPi'] = types.ModuleType('RPi')
-    sys.modules['RPi.GPIO'] = GPIO
-    sys.modules['RPi'].GPIO = GPIO
-
+import RPi.GPIO as GPIO
 from lightlib.activitydb import Activity, PinLevel, PinHealth
-from lightlib.common import valid_smallint
+from lightlib.common import valid_smallint, gpio_init
 
+gpio_init()
 
 class TestActivity(unittest.TestCase):
     """Tests Activity functions."""
@@ -41,8 +37,10 @@ class TestActivity(unittest.TestCase):
     @patch('lightlib.activitydb.DB')
     def setUp(self, mock_db_class, mock_config_loader):
         """Set up the test environment for each test case."""
+        self.test_pin = 11
         # Mock config values
-        mock_config_loader.return_value.activity_digital_inputs = [17]
+        mock_config_loader.return_value.activity_digital_inputs = \
+            [self.test_pin]
         mock_config_loader.return_value.max_activity_time = 60
         mock_config_loader.return_value.health_check_interval = 300
 
@@ -51,10 +49,10 @@ class TestActivity(unittest.TestCase):
         mock_db_class.return_value = self.mock_db
         mock_db_class.valid_smallint = valid_smallint
 
-        # Reset singleton and initialize fresh Activity instance
+        # Reset singleton and initialize fresh Activity
+        GPIO.remove_event_detect(self.test_pin)
         Activity._instance = None
         self.activity = Activity()
-        self.test_pin = 17
 
     def test_start_activity_event_sets_state_and_status(self):
         """_start_activity_event should set pin HIGH & status to OK."""
