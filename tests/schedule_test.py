@@ -25,13 +25,6 @@ util.setup_test_logging()
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-
-# Mock GPIO/serial for Raspberry Pi compatibility (import safety)
-if 'RPi' not in sys.modules:
-    sys.modules['RPi'] = MagicMock()
-    sys.modules['RPi.GPIO'] = MagicMock()
-    sys.modules['serial'] = MagicMock()  # Also mock serial if needed
-
 from scheduler.Schedule import LightScheduler
 
 

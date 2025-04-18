@@ -11,6 +11,18 @@ Version: 0.1
 
 import subprocess
 import os
+import sys
+python_exe = sys.executable # Make sure we use the venv Python
+
+# Make sure project directories are in PATH
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+test_env = {
+    **os.environ,
+    "PYTHONPATH": os.pathsep.join([
+        project_root,
+        os.path.join(project_root, "tests")  # ensure tests/ is on PYTHONPATH
+    ])
+}
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 test_files = [
@@ -31,15 +43,22 @@ print("-" * 79 + "\n" + f"Starting test suite... ({total} unit tests)" + "\n" +
       "-" * 79)
 
 passed = 0
+# print(test_env)
 for i, path in enumerate(test_files, start=1):
     print(f"Running Test:\t{path}\t\t", end='', flush=True)
     result = subprocess.run(
-        ["python", path],
-        env={**os.environ, "PYTHONPATH": project_root},
-        capture_output=True
+        [python_exe, path],
+        env=test_env,
+        cwd=project_root,  # ensure correct working directory
+        capture_output=True,
+        text=True           # auto-decode stdout/stderr
     )
     if result.returncode != 0:
-        print("FAILED -- Check the test log")
+        print("FAILED")
+        print("---- STDOUT ----")
+        print(result.stdout)
+        print("---- STDERR ----")
+        print(result.stderr)
     else:
         passed += 1
         print("PASSED")

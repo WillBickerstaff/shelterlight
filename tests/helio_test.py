@@ -10,7 +10,7 @@ Version: 0.1
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import gps_test_vals as test_vals
 import datetime as dt
 import sys
@@ -20,11 +20,6 @@ import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
-
-if 'RPi' not in sys.modules:
-    sys.modules['RPi'] = MagicMock()
-    sys.modules['RPi.GPIO'] = MagicMock()
-    sys.modules['serial'] = MagicMock()  # Also mock serial if needed
 
 from shelterGPS.Position import GPS
 from shelterGPS.Helio import SunTimes

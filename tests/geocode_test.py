@@ -8,17 +8,14 @@ import unittest
 import logging
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import pytz
 import util
 
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-if 'RPi' not in sys.modules:
-    sys.modules['RPi'] = MagicMock()
-    sys.modules['RPi.GPIO'] = MagicMock()
-    sys.modules['serial'] = MagicMock()  # Also mock serial if needed
+
 
 from geocode.local import Location, InvalidLocationError
 from lightlib.config import ConfigLoader

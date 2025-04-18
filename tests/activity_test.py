@@ -24,7 +24,19 @@ util.setup_test_logging()
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-import .RPi.GPIO as GPIO
+from tests.RPi import GPIO as fake_gpio
+
+# Clear out system GPIO
+sys.modules.pop('RPi', None)
+sys.modules.pop('RPi.GPIO', None)
+
+# Patch the fake GPIO
+sys.modules['RPi'] = types.ModuleType("RPi")
+sys.modules['RPi.GPIO'] = fake_gpio
+sys.modules['RPi'].GPIO = fake_gpio
+
+import RPi.GPIO as GPIO
+
 from lightlib.activitydb import Activity, PinLevel, PinHealth
 from lightlib.common import valid_smallint, gpio_init
 
