@@ -78,11 +78,11 @@ class LightController:
 
     def turn_on(self):
         """Turn on lights."""
-        GPIO.output(self.lights_output, GPIO.HIGH)
+        GPIO.output(self._lights_output, GPIO.HIGH)
 
     def turn_off(self):
         """Turn off lights."""
-        GPIO.output(self.lights_output, GPIO.LOW)
+        GPIO.output(self._lights_output, GPIO.LOW)
 
     def cleanup(self):
         """Cleanup GPIO resources."""

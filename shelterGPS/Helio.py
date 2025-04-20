@@ -188,7 +188,7 @@ class SunTimes:
             bool: `True` if the current time is within today's or tomorrow's
             fixing window; `False` otherwise.
         """
-        dt_now = dt.datetime.now()
+        dt_now = dt.datetime.now(dt.timezone.utc)
         return ((self._fix_window["start_today"] <= dt_now <=
                  self._fix_window["end_today"]) or
                 (self._fix_window["start_tomorrow"] <= dt_now <=

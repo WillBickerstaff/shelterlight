@@ -118,26 +118,46 @@ class Activity:
         low-to-high transition (RISING edge) and `_end_activity_event` on a
         high-to-low transition (FALLING edge).
         """
+        GPIO.setwarnings(False)
         for pin in self._activity_inputs:
-            GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-            # Detect rising edge to mark start of activity
-            GPIO.add_event_detect(
-                pin,
-                GPIO.RISING,
-                callback=self._start_activity_event,
-                bouncetime=300
-            )
-            # Detect falling edge to mark end of activity
-            GPIO.add_event_detect(
-                pin,
-                GPIO.FALLING,
-                callback=self._end_activity_event,
-                bouncetime=300
-            )
-        logging.info(
-            "Activity monitoring initialized on GPIO pins: %s",
-            self._activity_inputs
-        )
+            try:
+                logging.debug("Removing event detection on pin %s",pin)
+                GPIO.remove_event_detect(pin)
+            except RuntimeError:
+                logging.debug("No Events to remove on pin %s", pin)
+                pass
+            try:
+                logging.debug("Cleaning up pin %s", pin)
+                GPIO.cleanup(pin)
+            except Exception:
+                logging.debug("Nothing to cleanup for pin %s", pin)
+                pass
+
+            try:
+                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                logging.info("GPIO pin %s setup as INPUT, PULL DOWN", pin)
+                # Detect rising edge to mark start of activity
+                logging.debug("Adding edge detection to pin %s", pin)
+                logging.debug("pin is type %s", type(pin))
+                GPIO.add_event_detect(
+                    pin,
+                    GPIO.BOTH,
+                    callback=self._activity_event_handler,
+                    bouncetime=300
+                )
+                logging.info(
+                    "Activity monitoring initialized on GPIO pins: %s",
+                    self._activity_inputs
+                )
+            except RuntimeError as e:
+                logging.error("Failed to set edge detection for pin %s: %s",
+                              pin, e)
+
+    def _activity_event_handler(self, pin):
+        if GPIO.input(pin):  # High after Risng edge
+            self._start_activity_event(pin)
+        else:                # Low after Falling edge
+            self._end_activity_event(pin)
 
     def _start_activity_event(self, pin: int) -> None:
         """Record start time and set pin state HIGH for GPIO pin high.

@@ -64,7 +64,7 @@ def datetime_to_iso(dt_obj: dt.datetime) -> str:
     return dt_obj.isoformat()
 
 
-def gpio_init(mode: Optional[int] = GPIO.BOARD) -> None:
+def gpio_init(mode: Optional[int] = GPIO.BCM) -> None:
     """Set the global GPIO mode to BOARD, unless already set correctly.
 
     Safely initialize GPIO pin numbering mode for consistency across the
