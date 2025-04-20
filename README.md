@@ -22,7 +22,10 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
 - **Raspberry Pi OS Lite (32-bit)**
   *(Debian Bookworm based, headless, no desktop)*
-  Example: `2025-02-16-raspios-bookworm-armhf-lite.img`
+- This project relies on `RPi.GPIO` edge detection for activity sensing.
+- **Kernels 6.2 and above are currently not compatible** due to known issues with GPIO edge detection on newer kernel versions.
+- To ensure compatibility:
+- Use kernel **6.1.x** (e.g., `Linux ... 6.1.21-v8+`) or earlier
 
 ### Minimal Setup Steps
 
@@ -45,19 +48,27 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
    ```
    Choose **Localisation Options** -> **Timezone**. At the bottom of the list of available timezones the option *'None of the above'* exists, choose this and then **'UTC'**
 
-4. **Disable Unnecessary Services**
+4. ## Enable Hardware Serial
+   The GPS Module is intended to be connected
+   to the hardware serial of the RPI (Header pins 8 \& 10 which correspond to GPIO 14 \& 15 - UART TX \& UART RX)
+   ```bash
+   sudo raspi-config
+   ```
+   Choose **Interface Options** -> ** **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
+
+5. **Disable Unnecessary Services**
 
    Certain system services are not required and should be disabled to improve boot time and reduce resource usage.
 
    See the section **Disabling Unnecessary Services** later in this document for recommended services to disable.
 
-5. **Install System Packages**
+6. **Install System Packages**
 
    ```bash
    sudo apt update
-   sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql libopenblas-dev git
+   sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql wiringpi libopenblas-dev git
    ```
-6. **Optional Configuration Tweaks**
+7. **Optional Configuration Tweaks**
 
    - Disable HDMI output to save power:
      ```bash
