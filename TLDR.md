@@ -3,6 +3,11 @@
 1.  **Flash the OS**
 
     Using  Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd`
+    - **Raspberry Pi OS Lite (32-bit)**
+    - This project relies on `RPi.GPIO` edge detection for activity sensing.
+    - **Kernels 6.2 and above are currently not compatible** due to known issues with GPIO edge detection on newer kernel versions.
+    - To ensure compatibility:
+    - Use kernel **6.1.x** (e.g., `Linux ... 6.1.21-v8+`) or earlier
 
 2. **Enable SSH (optional but recommended)**
 
@@ -16,6 +21,12 @@
 sudo raspi-config
 ```
 Choose **Localisation Options** -> **Timezone**. At the bottom of the list of available timezones the option *'None of the above'* exists, choose this and then **'UTC'**
+
+## Enable Hardware Serial
+```bash
+sudo raspi-config
+```
+Choose **Interface Options** -> ** **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
 
 ## Install system packages
 
