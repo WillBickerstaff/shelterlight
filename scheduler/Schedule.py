@@ -12,6 +12,7 @@ Version: 0.1
 from threading import Lock
 from lightlib.persist import PersistentData
 from lightlib.db import DB
+from lightlib.common import DATE_TODAY
 from typing import Optional
 import psycopg2
 import pandas as pd
@@ -77,6 +78,7 @@ class LightScheduler:
             self.min_confidence = 0.6  # Minimum prediction threshold
             self.schedule_cache = {}  # Cache for current schedule
             self.db = None  # Database connection
+            self._warned_missing = None
 
             # LightGBM model configuration
             self.model_params = {
@@ -238,13 +240,19 @@ class LightScheduler:
         darkness_start = persistent_data.sunset_today
         darkness_end = persistent_data.sunrise_tomorrow
 
+        # Create a tracking attribute for the logged warning
+        # (Removes multiple log entries)
+        if not hasattr(self, "_warned_missing"):
+            self._warned_missing = None
         # Ensure we have valid data, otherwise use default fallback
-        if not darkness_start or not darkness_end:
+        if (not darkness_start or not darkness_end) and \
+                self._warned_missing != DATE_TODAY:
             logging.warning(
                 "Missing sunrise/sunset data, using default "
                 "darkness (18:00-06:00).")
             darkness_start = dt.datetime.now(dt.UTC).replace(hour=18, minute=0)
             darkness_end = dt.datetime.now(dt.UTC).replace(hour=6, minute=0)
+            self._warned_missing = DATE_TODAY  # Track the warning as logged
 
         return darkness_start.time(), darkness_end.time()
 

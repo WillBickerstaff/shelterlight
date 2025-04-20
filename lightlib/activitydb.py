@@ -22,6 +22,7 @@ import RPi.GPIO as GPIO
 from lightlib.db import DB, ConfigLoader
 from lightlib.common import valid_smallint
 
+
 class PinHealth(Enum):
     """Enumeration for pin statuses."""
 
@@ -121,7 +122,7 @@ class Activity:
         GPIO.setwarnings(False)
         for pin in self._activity_inputs:
             try:
-                logging.debug("Removing event detection on pin %s",pin)
+                logging.debug("Removing event detection on pin %s", pin)
                 GPIO.remove_event_detect(pin)
             except RuntimeError:
                 logging.debug("No Events to remove on pin %s", pin)
@@ -154,6 +155,21 @@ class Activity:
                               pin, e)
 
     def _activity_event_handler(self, pin):
+        """Direct Rising & Falling events to the correct method.
+
+        Each GPIO pin is only permitted to have one event handler registered
+        (GPIO Limitation). As both rising and falling events are required,
+        activity pins have an event handler assigned for both of these
+        events by using GPIO.add_event_detect(GPIO.both)
+        in _setup_activity_inputs.
+
+        Either a rising or falling edge directs execution here where the
+        decision is made on what action to take.
+
+        Args
+        ----
+            pin(int): The pin number the edge is detected on.
+        """
         if GPIO.input(pin):  # High after Risng edge
             self._start_activity_event(pin)
         else:                # Low after Falling edge

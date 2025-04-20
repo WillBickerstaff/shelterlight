@@ -150,6 +150,21 @@ class PersistentData:
             logging.error("Failed to store GPS data in JSON: %s", e)
             raise DataStorageError("Failed to store data in JSON.") from e
 
+    def _warn_once(self, flag_attr: str, missing_date: dt.date, message: str):
+        """Warn only once daily for data missing from persistent data file.
+
+        Args
+        ----
+            flag_attr(str): Tracking variable name.
+            missing_date(dt,date): The date that is missing in persistent data.
+            message(str): An associated message to include in the log entry.
+        """
+        if not hasattr(self, flag_attr):
+            setattr(self, flag_attr, None)
+        if getattr(self, flag_attr) != DATE_TODAY:
+            logging.error(message, datetime_to_iso(missing_date))
+            setattr(self, flag_attr, DATE_TODAY)
+
     @property
     def current_altitude(self) -> float:
         """GPS altitude from persistent data."""
@@ -194,8 +209,8 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=DATE_TODAY,
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            logging.error("%s not found in persistent data sunrise times",
-                          datetime_to_iso(DATE_TODAY))
+            self._warn_once("_sr_today", DATE_TODAY,
+                            "%s not found in persistent data sunrise times")
             return None
 
     @property
@@ -205,8 +220,8 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=DATE_TODAY,
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            logging.error("%s not found in persistent data sunset times",
-                          datetime_to_iso(DATE_TODAY))
+            self._warn_once("_ss_today", DATE_TODAY,
+                            "%s not found in persistent data sunset times")
             return None
 
     @property
@@ -216,8 +231,8 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=DATE_TOMORROW,
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            logging.error("%s not found in persistent data sunrise times",
-                          datetime_to_iso(DATE_TOMORROW))
+            self._warn_once("_sr_tmrw", DATE_TOMORROW,
+                            "%s not found in persistent data sunrise times")
             return None
 
     @property
@@ -227,8 +242,8 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=DATE_TOMORROW,
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            logging.error("%s not found in persistent data sunset times",
-                          datetime_to_iso(DATE_TOMORROW))
+            self._warn_once("_ss_tmrw", DATE_TOMORROW,
+                            "%s not found in persistent data sunset times")
             return None
 
     @staticmethod
