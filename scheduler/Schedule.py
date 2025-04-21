@@ -248,8 +248,10 @@ class LightScheduler:
         if not darkness_start or not darkness_end:
             if self._warned_missing != DATE_TODAY:
                 logging.warning("Missing sunrise/sunset data, using default "
-                               "darkness (15:30-09:00).")
-                self._warned_missing = DATE_TODAY  # Track the warning as logged
+                                "darkness (15:30-09:00).")
+                # Track that the warning has been looged today
+                # (reduce log spam)
+                self._warned_missing = DATE_TODAY
             now = dt.datetime.now(dt.UTC)
             darkness_start = now.replace(hour=15, minute=30)
             darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)
