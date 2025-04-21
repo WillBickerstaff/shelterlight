@@ -17,7 +17,7 @@ from enum import Enum
 
 import psycopg2
 from psycopg2 import sql
-import RPi.GPIO as GPIO
+import lgpio
 
 from lightlib.db import DB, ConfigLoader
 from lightlib.common import valid_smallint
@@ -106,6 +106,7 @@ class Activity:
             pin: {"status": PinHealth.OK, "state": PinLevel.LOW}
             for pin in self._activity_inputs
         }  # Track status and state of each pin
+        self._gpio_handle = lgpio.gpiochip_open(0)
         self._setup_activity_inputs()
         self._fault_threshold = ConfigLoader().max_activity_time
         self._health_check_interval = ConfigLoader().health_check_interval
@@ -119,33 +120,17 @@ class Activity:
         low-to-high transition (RISING edge) and `_end_activity_event` on a
         high-to-low transition (FALLING edge).
         """
-        GPIO.setwarnings(False)
         for pin in self._activity_inputs:
             try:
-                logging.debug("Removing event detection on pin %s", pin)
-                GPIO.remove_event_detect(pin)
-            except RuntimeError:
-                logging.debug("No Events to remove on pin %s", pin)
-                pass
-            try:
-                logging.debug("Cleaning up pin %s", pin)
-                GPIO.cleanup(pin)
-            except Exception:
-                logging.debug("Nothing to cleanup for pin %s", pin)
-                pass
-
-            try:
-                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                lgpio.set_mode(self._gpio_handle, pin, lgpio.INPUT)
+                lgpio.set_pull(self._gpio_handle, pin, lgpio.PULL_DOWN)
                 logging.info("GPIO pin %s setup as INPUT, PULL DOWN", pin)
                 # Detect rising edge to mark start of activity
                 logging.debug("Adding edge detection to pin %s", pin)
                 logging.debug("pin is type %s", type(pin))
-                GPIO.add_event_detect(
-                    pin,
-                    GPIO.BOTH,
-                    callback=self._activity_event_handler,
-                    bouncetime=300
-                )
+                # Register callbacks for both rising and falling edges
+                lgpio.callback(self._gpio_handle, pin, lgpio.BOTH_EDGES,
+                               self._activity_event_handler)
                 logging.info(
                     "Activity monitoring initialized on GPIO pins: %s",
                     self._activity_inputs
@@ -154,25 +139,32 @@ class Activity:
                 logging.error("Failed to set edge detection for pin %s: %s",
                               pin, e)
 
-    def _activity_event_handler(self, pin):
+    def _activity_event_handler(
+            self, chip: int, pin: int, level: int, tick: int) -> None:
         """Direct Rising & Falling events to the correct method.
 
         Each GPIO pin is only permitted to have one event handler registered
         (GPIO Limitation). As both rising and falling events are required,
-        activity pins have an event handler assigned for both of these
-        events by using GPIO.add_event_detect(GPIO.both)
-        in _setup_activity_inputs.
+        activity pins register both rising and falling edge callbacks using
+        lgpio.callback() in _setup_activity_inputs.
 
         Either a rising or falling edge directs execution here where the
         decision is made on what action to take.
 
         Args
         ----
-            pin(int): The pin number the edge is detected on.
+            chip : int
+                The GPIO chip descriptor (usually 0).
+            gpio : int
+                The GPIO pin number.
+            level : int
+                Edge level: 1 = rising, 0 = falling.
+            tick : int
+                Timestamp in microseconds (unused).
         """
-        if GPIO.input(pin):  # High after Risng edge
+        if level == 1:    # High after Risng edge
             self._start_activity_event(pin)
-        else:                # Low after Falling edge
+        elif level == 0:  # Low after Falling edge
             self._end_activity_event(pin)
 
     def _start_activity_event(self, pin: int) -> None:
@@ -339,7 +331,7 @@ class Activity:
 
     def close(self) -> None:
         """Clean up GPIO resources and close the database connection."""
-        GPIO.cleanup(self._activity_inputs)
+        lgpio.gpiochip_close(self._gpio_handle)
         if self._db:
             self._db.close_connection()
             logging.info(
@@ -347,7 +339,5 @@ class Activity:
 
     def cleanup(self):
         """Clean up GPIO activity pins."""
-        for pin in self._activity_inputs:
-            GPIO.remove_event_detect(pin)
-            GPIO.cleanup(pin)
+        lgpio.gpiochip_close(self._gpio_handle)
         logging.info("Activity GPIO cleanup complete.")

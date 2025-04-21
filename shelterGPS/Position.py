@@ -396,7 +396,7 @@ class GPS:
         # Keep trying until we get the required message and it validates
         # or we reach the defined maximum attempt duration
         while dt.datetime.now() - start_time < dt.timedelta(seconds=max_time):
-            ser_line: str = self._gps_ser.readline()
+            ser_line: str = self.__gps_ser.readline()
 
             # Check if message is valid and proceed with decoding and
             # content verification if true

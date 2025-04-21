@@ -20,27 +20,18 @@ import util
 # Set up logging ONCE for the entire test module
 util.setup_test_logging()
 
-
 base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
-from tests.RPi import GPIO as fake_gpio
-
-# Clear out system GPIO
-sys.modules.pop('RPi', None)
-sys.modules.pop('RPi.GPIO', None)
-
-# Patch the fake GPIO
-sys.modules['RPi'] = types.ModuleType("RPi")
-sys.modules['RPi.GPIO'] = fake_gpio
-sys.modules['RPi'].GPIO = fake_gpio
-
-import RPi.GPIO as GPIO
+# Patch lgpio if running on non-RPi platforms
+try:
+    import lgpio
+except ImportError:
+    from tests.RPi import lgpio as fake_lgpio
+    sys.modules['lgpio'] = fake_lgpio
 
 from lightlib.activitydb import Activity, PinLevel, PinHealth
-from lightlib.common import valid_smallint, gpio_init
-
-gpio_init()
+from lightlib.common import valid_smallint
 
 class TestActivity(unittest.TestCase):
     """Tests Activity functions."""
@@ -62,7 +53,6 @@ class TestActivity(unittest.TestCase):
         mock_db_class.valid_smallint = valid_smallint
 
         # Reset singleton and initialize fresh Activity
-        GPIO.remove_event_detect(self.test_pin)
         Activity._instance = None
         self.activity = Activity()
 
