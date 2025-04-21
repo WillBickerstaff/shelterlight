@@ -4,10 +4,6 @@
 
     Using  Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd`
     - **Raspberry Pi OS Lite (32-bit)**
-    - This project relies on `RPi.GPIO` edge detection for activity sensing.
-    - **Kernels 6.2 and above are currently not compatible** due to known issues with GPIO edge detection on newer kernel versions.
-    - To ensure compatibility:
-    - Use kernel **6.1.x** (e.g., `Linux ... 6.1.21-v8+`) or earlier
 
 2. **Enable SSH (optional but recommended)**
 
@@ -32,7 +28,7 @@ Choose **Interface Options** -> ** **I6 Serial Port**, choose **"NO"** when aske
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql libopenblas-dev git
+sudo apt install -y python3 python3-venv python3-pip python3-lgpio python3-dev libpq-dev postgresql libopenblas-dev build-essential git
    ```
 
 ---
@@ -89,14 +85,19 @@ Create and activate a virtual environment
 
 ```bash
 cd ~/shelterlight
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
 ```
 
 **Install Dependencies**
 
 ```bash
 pip install -r req_modules.txt
+```
+
+if you get errors during numpy install try:
+```bash
+pip install --prefer-binary numpy
 ```
 
 ---
@@ -117,7 +118,7 @@ Description=Shelter Light Controller
 After=network.target
 
 [Service]
-ExecStart=/home/pi/shelterlight/venv/bin/python /home/pi/shelterlight/shelterlight.py
+ExecStart=/home/pi/shelterlight/.venv/bin/python /home/pi/shelterlight/shelterlight.py
 WorkingDirectory=/home/pi/shelterlight
 Restart=on-failure
 RestartSec=5
@@ -193,7 +194,7 @@ localhost:5432:smartlight:pi:changeme
 Set the correct file permissions:
 
 ```bash
-chmod 600 /home/pi/.pgpass
+localhost:5432:activity_db:pi:changeme
 ```
 
 **Automate the cleanup task using cron.**
@@ -207,5 +208,5 @@ crontab -e
 Add the following line to remove old data monthly:
 
 ```bash
-0 12 1 * * psql -U pi -d smartlight -c "DELETE FROM activity_log WHERE timestamp < NOW() - INTERVAL '90 days'; DELETE FROM light_schedules WHERE date < NOW() - INTERVAL '180 days';"
+0 12 1 * * psql -U pi -d activity_db -c  "DELETE FROM activity_log WHERE timestamp < NOW() - INTERVAL '90 days'; DELETE FROM light_schedules WHERE date < NOW() - INTERVAL '180 days';"
 ```
