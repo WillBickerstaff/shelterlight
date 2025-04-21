@@ -16,10 +16,10 @@ import serial
 import subprocess
 from threading import Lock
 from typing import Union, Optional
-import RPi.GPIO as GPIO
+import lgpio
 from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
-from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE, log_caller
+from lightlib.smartlight import log_caller
 from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
 
 
@@ -324,12 +324,32 @@ class GPS:
             wait_after (Optional[float]): Time to wait after power on
                                           before continuing
         """
-        set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.ON,
-                      self._pwr_up_time)
+        try:
+            if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
+                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("GPS Powered off.")
+                self._gpio_handle = None
+            else:
+                logging.warning("GPS power off called but "
+                                "no valid GPIO handle.")
+        except Exception as e:
+            logging.error("Failed to power off GPS: %s", e)
+        self._gpio_handle = None
 
     def pwr_off(self) -> None:
         """Disable the GPS module by setting its power control pin to LOW."""
-        set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.OFF)
+        try:
+            if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
+                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("GPS Powered off.")
+                self._gpio_handle = None
+            else:
+                logging.warning("GPS power of called but no valid GPIO handle")
+        except Exception as e:
+            logging.error("Failed to power off GPS: %s", e)
+            self._gpio_handle = None
 
     def get_fix(self, pwr_up_wait: float = None,
                 max_fix_time: float = None) -> None:
@@ -644,13 +664,23 @@ class GPS:
                 self.__gps_ser.is_open:
             try:
                 self.__gps_ser.close()
-                logging.info("GPS: Serial connection closed.")
+                logging.info("Serial connection closed.")
             except serial.SerialException as e:
-                logging.error("GPS: Failed to close serial connection: %s", e)
+                logging.error("Failed to close serial connection: %s", e)
 
         # Clean up GPIO resources
-        try:
-            GPIO.cleanup(self.__pwr_pin)
-            logging.info("GPS: GPS Power Pin resources.")
-        except Exception:
-            logging.warning("GPS: Failed to cleanup GPS Power pin resources")
+        if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
+            try:
+                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+                logging.info("GPS: Power pin set LOW during cleanup.")
+            except Exception as e:
+                logging.warning("GPS: Failed to set power pin LOW "
+                                "during cleanup: %s", e)
+
+            try:
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("GPS: gpiochip handle closed during cleanup.")
+            except Exception as e:
+                logging.warning("GPS: Failed to close gpiochip handle: %s", e)
+
+            self._gpio_handle = None  # Mark as cleaned up

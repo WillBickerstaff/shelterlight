@@ -92,6 +92,7 @@ class LightScheduler:
                 'bagging_freq': 5,        # Bagging frequency
                 'verbose': -1             # Suppress logging output
             }
+            self.set_db_connection()
 
     def set_db_connection(self, db_connection: Optional[DB] = None) -> None:
         """Set or initialize the database connection.
@@ -145,6 +146,10 @@ class LightScheduler:
             Combines activity data with schedule accuracy metrics for model
             training.
         """
+        # Don't do eanythin if the DB connection is not established
+        if self.db_connection is None or self.db.conn.closed:
+            logging.warning("DB connection not established, can't train")
+            return None
         # Define SQL queries
         # - Activity log query
         activity_query = """
