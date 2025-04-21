@@ -245,14 +245,14 @@ class LightScheduler:
         if not hasattr(self, "_warned_missing"):
             self._warned_missing = None
         # Ensure we have valid data, otherwise use default fallback
-        if (not darkness_start or not darkness_end) and \
-                self._warned_missing != DATE_TODAY:
-            logging.warning(
-                "Missing sunrise/sunset data, using default "
-                "darkness (18:00-06:00).")
-            darkness_start = dt.datetime.now(dt.UTC).replace(hour=18, minute=0)
-            darkness_end = dt.datetime.now(dt.UTC).replace(hour=6, minute=0)
-            self._warned_missing = DATE_TODAY  # Track the warning as logged
+        if not darkness_start or not darkness_end:
+            if self._warned_missing != DATE_TODAY:
+                logging.warning("Missing sunrise/sunset data, using default "
+                               "darkness (15:30-09:00).")
+                self._warned_missing = DATE_TODAY  # Track the warning as logged
+            now = dt.datetime.now(dt.UTC)
+            darkness_start = now.replace(hour=15, minute=30)
+            darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)
 
         return darkness_start.time(), darkness_end.time()
 

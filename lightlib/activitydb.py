@@ -122,8 +122,8 @@ class Activity:
         """
         for pin in self._activity_inputs:
             try:
-                lgpio.set_mode(self._gpio_handle, pin, lgpio.INPUT)
-                lgpio.set_pull(self._gpio_handle, pin, lgpio.PULL_DOWN)
+                lgpio.gpio_claim_input(self._gpio_handle, pin,
+                                       lgpio.SET_PULL_DOWN)
                 logging.info("GPIO pin %s setup as INPUT, PULL DOWN", pin)
                 # Detect rising edge to mark start of activity
                 logging.debug("Adding edge detection to pin %s", pin)
