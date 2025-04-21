@@ -29,7 +29,7 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
 ### Minimal Setup Steps
 
-**TLDR -- Read [TLDR.md](./TLDR.md)**
+**TLDR -- Read [TLDR.md](./DOC/TLDR.md)**
 
 1. **Flash OS Image**
 
@@ -66,7 +66,7 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
    ```bash
    sudo apt update
-   sudo apt install -y python3 python3-venv python3-pip libpq-dev postgresql wiringpi libopenblas-dev git
+   sudo apt install -y python3 python3-venv python3-pip python3-lgpio python3-dev libpq-dev postgresql libopenblas-dev build-essential git
    ```
 7. **Optional Configuration Tweaks**
 
@@ -207,14 +207,17 @@ git clone https://WillBickerstaff/shelterlight
 ### Required Python Libraries
 
 The following Python packages are required:
-
-- `RPi.GPIO` — Raspberry Pi GPIO control
+- `numpy` — Use the `--prefer-binary` flag to avoid compiling on the Pi, which is very slow and prone to errors:
+```bash
+pip install --prefer-binary numpy
+```
+- `RPi.GPIO` —  Used for light control output and other GPIO until full migration to lgpio is complete
 - `serial` — Serial communication for GPS module
 - `lightgbm` — Machine learning for schedule prediction
 - `psycopg2` — PostgreSQL database driver
 - `pandas` — Data manipulation (should also install numpy)
 - `timezonefinder` — Determine location timezone
-> **Note:** Although all scheduling and system operations use UTC internally, `timezcd                       onefinder` is retained to support future features such as a local display. This would allow sunrise, sunset, and schedule times to present in a human readable local time to avoid confusion.
+> **Note:** Although all scheduling and system operations use UTC internally, `timezonefinder` is retained to support future features such as a local display. This would allow sunrise, sunset, and schedule times to present in a human readable local time to avoid confusion.
 
 A complete list is provided in `req_modules.txt`:
 
@@ -222,14 +225,14 @@ A complete list is provided in `req_modules.txt`:
 
 ### Installation
 
-To avoid affecting your system Python environment, it is recommended to install dependencies in a **virtual environment**.
+To avoid affecting your system Python environment, it is recommended to install dependencies in a **virtual environment**. use `--system-site-packages` to allow the virtual environment access to the system lgpio library
 
 #### 1. Create & Activate Virtual Environment
 
 ```bash
 cd ~/shelterlight
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
 ```
 
 #### 2. Install Dependencies
@@ -260,7 +263,7 @@ Description=Shelter Light Controller
 After=network.target
 
 [Service]
-ExecStart=/home/pi/shelterlight/venv/bin/python /home/pi/shelterlight/shelterlight.py
+ExecStart=/home/pi/shelterlight/.venv/bin/python /home/pi/shelterlight/shelterlight.py
 WorkingDirectory=/home/pi/shelterlight
 Restart=on-failure
 RestartSec=5
@@ -629,4 +632,4 @@ sudo systemctl restart postgresql
 
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
 
-Full configuration documentation is provided in **[config.readme.md](./config.readme.md)**
+Full configuration documentation is provided in **[config.readme.md](./DOC/config.readme.md)**
