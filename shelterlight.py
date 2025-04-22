@@ -19,6 +19,7 @@ import time
 import RPi.GPIO as GPIO
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
+from scheduler.Schedule import LightScheduler
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
 from lightlib.common import ConfigReloaded, gpio_init, gpio_cleanup
@@ -52,22 +53,35 @@ def usb_listener(usb_manager, gps, host="localhost", port=9999):
                     raise  # Propagate to restart main loop in main program
 
 
-def light_loop(light_control):
+def light_loop(light_control: LightController,
+               stop_event: threading.Event):
     """Run light control updates in a tight polling loop."""
-    while True:
-        light_control.set_lights()
-        time.sleep(1)
+    try:
+        while not stop_event.is_set():
+            light_control.set_lights()
+            time.sleep(1)
+    except Exception as e:
+        logging.exception("Light control loop encountered an error: %s", e)
+    finally:
+        logging.info("Light loop exited")
 
 
-def gps_loop(gps):
+def gps_loop(gps: SunTimes, stop_event: threading.Event):
     """Run periodic GPS fix attempts on a configurable interval."""
-    while True:
-        if not gps.fixed_today and gps.in_fix_window:
-            gps.start_gps_fix_process()
-        time.sleep(ConfigLoader().cycle_time)
+    try:
+        while not stop_event.is_set():
+            if not gps.fixed_today and gps.in_fix_window:
+                gps.start_gps_fix_process()
+            time.sleep(ConfigLoader().cycle_time)
+    except Exception as e:
+        logging.exception("GPS control loop encountered an error: %s", e)
+    finally:
+        logging.info("GPS loop exited")
 
 
-def daily_schedule_generation(stop_event, scheduler, solar_times):
+def daily_schedule_generation(stop_event: threading.Event,
+                              scheduler: LightScheduler,
+                              solar_times: SunTimes):
     """Generate the daily schedule 1 hour after sunrise."""
     while not stop_event.is_set():
         now = dt.datetime.now(dt.timezone.utc)
@@ -156,12 +170,15 @@ def main():
     scheduler_thread.start()
 
     # Start GPS fix loop in background
-    gps_thread = threading.Thread(target=gps_loop, args=(gps,), daemon=True)
+    gps_thread = threading.Thread(target=gps_loop,
+                                  args=(gps, stop_event),
+                                  daemon=True)
     gps_thread.start()
 
     # Start light control loop in background
     light_thread = threading.Thread(target=light_loop,
-                                    args=(light_control,), daemon=True)
+                                    args=(light_control, stop_event),
+                                    daemon=True)
     light_thread.start()
 
     try:

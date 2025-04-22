@@ -270,14 +270,14 @@ class GPS:
             # `cksum` holds the expected checksum in hex format, located at
             # the end of the sentence.
             # Check if '*' is in the string, otherwise return False
-            if '*' not in msg_str:
-                logging.warning(
-                    "GPS: NMEA message does not contain a '*' for checksum "
-                    "extraction.")
+            if not msg_str.startswith('$') or '*' not in msg_str:
+                logging.warning("GPS: Invalid NMEA format, message does not "
+                                "start with a $ or contain a *")
                 return False
 
-            # Extract the checksum from the characters after '*'
-            cksum = msg_str[msg_str.find("*") + 1:msg_str.find("*") + 3]
+            # Extract the checksum after '*' and clean it: strip
+            # whitespace/newlines and isolate the hex portion
+            cksum = msg_str[msg_str.find("*") + 1:].strip().split()[0]
 
             # Isolate the main message content to compute checksum
             # Locate the part between '$' and '*', excluding both symbols.
@@ -303,10 +303,10 @@ class GPS:
             # Log the result: pass or fail, based on if the checksum matched.
             if is_valid:
                 logging.debug("GPS: NMEA checksum validation passed, computed "
-                              "%s, expected %s.", hex(csum), cksum)
+                              "%s, expected 0x%s.", hex(csum), cksum)
             else:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
-                                "expected %s", hex(csum), cksum)
+                                "expected 0x%s", hex(csum), cksum)
 
             return is_valid
 
@@ -417,7 +417,7 @@ class GPS:
         # or we reach the defined maximum attempt duration
         while dt.datetime.now() - start_time < dt.timedelta(seconds=max_time):
             ser_line: str = self.__gps_ser.readline()
-
+            logging.debug("GPS Raw message received:\n\t%s", ser_line)
             # Check if message is valid and proceed with decoding and
             # content verification if true
             if self._is_valid_message(ser_line):
@@ -466,16 +466,13 @@ class GPS:
             if isinstance(ser_line, bytes):
                 ser_line = ser_line.decode(errors="ignore")
             self._last_msg = ser_line.split(",")
+
+            # store trailing checksum from final field cleanly
+            # checksum is validated elsewhere
+            raw_checksum = self._last_msg[-1].split("*")[-1].strip()[:2]
+            self._last_msg[-1] = self._last_msg[-1].split("*")[0].strip()
+            self._last_msg.append(raw_checksum)
             logging.debug("GPS: Decoded message: %s", self._last_msg)
-
-            # Parse and store checksum, then remove it from the main message
-            csum = hex(int(self._last_msg[-1][-2:], 16))
-            self._last_msg[-1] = self._last_msg[-1][:-2]  # Remove checksum
-            self._last_msg.append(csum)
-
-            # Retain only the last three characters of the message type for
-            # consistency
-            self._last_msg[0] = self._last_msg[0][-3:]
 
         except ValueError as ve:
             logging.error("GPS: Error decoding message: %s", ve)
@@ -497,8 +494,9 @@ class GPS:
         """
         valid_vals = None
         valid_idx = None
+        msg_type = self._last_msg[0][-3:]
         for entry in self.msg_validate:
-            if self._last_msg[0] == entry['MSG']:
+            if msg_type == entry['MSG']:
                 # Verify that the message status\validation field contains
                 # a value indicating validated data
                 valid_idx = entry['ValidIdx']
@@ -513,7 +511,7 @@ class GPS:
                     valid_vals)
                 return False
 
-        logging.debug("GPS: Non-tracked message type %s; skipping.", msg)
+        logging.debug("GPS: Non-tracked message type %s; skipping.", msg_type)
         return False
 
     def _get_coordinates(self, fix_wait: float) -> None:
