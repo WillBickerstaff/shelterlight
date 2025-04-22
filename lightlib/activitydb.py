@@ -331,7 +331,7 @@ class Activity:
 
     def close(self) -> None:
         """Clean up GPIO resources and close the database connection."""
-        lgpio.gpiochip_close(self._gpio_handle)
+        self.cleanup()
         if self._db:
             self._db.close_connection()
             logging.info(
@@ -339,5 +339,10 @@ class Activity:
 
     def cleanup(self):
         """Clean up GPIO activity pins."""
-        lgpio.gpiochip_close(self._gpio_handle)
-        logging.info("Activity GPIO cleanup complete.")
+        try:
+            if hasattr(self, "_gpio_handle") and self._gpio_handle is not None:
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("Activity GPIO cleanup complete.")
+                self._gpio_handle = None
+        except lgpio.error as e:
+            logging.warning("Activity GPIO cleanup failed: %s", e)

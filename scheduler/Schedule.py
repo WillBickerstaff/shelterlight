@@ -92,6 +92,7 @@ class LightScheduler:
                 'bagging_freq': 5,        # Bagging frequency
                 'verbose': -1             # Suppress logging output
             }
+            self.set_db_connection()
 
     def set_db_connection(self, db_connection: Optional[DB] = None) -> None:
         """Set or initialize the database connection.
@@ -145,6 +146,10 @@ class LightScheduler:
             Combines activity data with schedule accuracy metrics for model
             training.
         """
+        # Don't do eanythin if the DB connection is not established
+        if self.db_connection is None or self.db.conn.closed:
+            logging.warning("DB connection not established, can't train")
+            return None
         # Define SQL queries
         # - Activity log query
         activity_query = """
@@ -248,8 +253,10 @@ class LightScheduler:
         if not darkness_start or not darkness_end:
             if self._warned_missing != DATE_TODAY:
                 logging.warning("Missing sunrise/sunset data, using default "
-                               "darkness (15:30-09:00).")
-                self._warned_missing = DATE_TODAY  # Track the warning as logged
+                                "darkness (15:30-09:00).")
+                # Track that the warning has been looged today
+                # (reduce log spam)
+                self._warned_missing = DATE_TODAY
             now = dt.datetime.now(dt.UTC)
             darkness_start = now.replace(hour=15, minute=30)
             darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)

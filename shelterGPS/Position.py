@@ -16,10 +16,10 @@ import serial
 import subprocess
 from threading import Lock
 from typing import Union, Optional
-import RPi.GPIO as GPIO
+import lgpio
 from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
-from lightlib.smartlight import set_power_pin, GPIO_PIN_STATE, log_caller
+from lightlib.smartlight import log_caller
 from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
 
 
@@ -270,14 +270,14 @@ class GPS:
             # `cksum` holds the expected checksum in hex format, located at
             # the end of the sentence.
             # Check if '*' is in the string, otherwise return False
-            if '*' not in msg_str:
-                logging.warning(
-                    "GPS: NMEA message does not contain a '*' for checksum "
-                    "extraction.")
+            if not msg_str.startswith('$') or '*' not in msg_str:
+                logging.warning("GPS: Invalid NMEA format, message does not "
+                                "start with a $ or contain a *")
                 return False
 
-            # Extract the checksum from the characters after '*'
-            cksum = msg_str[msg_str.find("*") + 1:msg_str.find("*") + 3]
+            # Extract the checksum after '*' and clean it: strip
+            # whitespace/newlines and isolate the hex portion
+            cksum = msg_str[msg_str.find("*") + 1:].strip().split()[0]
 
             # Isolate the main message content to compute checksum
             # Locate the part between '$' and '*', excluding both symbols.
@@ -303,10 +303,10 @@ class GPS:
             # Log the result: pass or fail, based on if the checksum matched.
             if is_valid:
                 logging.debug("GPS: NMEA checksum validation passed, computed "
-                              "%s, expected %s.", hex(csum), cksum)
+                              "%s, expected 0x%s.", hex(csum), cksum)
             else:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
-                                "expected %s", hex(csum), cksum)
+                                "expected 0x%s", hex(csum), cksum)
 
             return is_valid
 
@@ -324,12 +324,32 @@ class GPS:
             wait_after (Optional[float]): Time to wait after power on
                                           before continuing
         """
-        set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.ON,
-                      self._pwr_up_time)
+        try:
+            if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
+                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("GPS Powered off.")
+                self._gpio_handle = None
+            else:
+                logging.warning("GPS power off called but "
+                                "no valid GPIO handle.")
+        except Exception as e:
+            logging.error("Failed to power off GPS: %s", e)
+        self._gpio_handle = None
 
     def pwr_off(self) -> None:
         """Disable the GPS module by setting its power control pin to LOW."""
-        set_power_pin(self.__pwr_pin, GPIO_PIN_STATE.OFF)
+        try:
+            if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
+                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("GPS Powered off.")
+                self._gpio_handle = None
+            else:
+                logging.warning("GPS power of called but no valid GPIO handle")
+        except Exception as e:
+            logging.error("Failed to power off GPS: %s", e)
+            self._gpio_handle = None
 
     def get_fix(self, pwr_up_wait: float = None,
                 max_fix_time: float = None) -> None:
@@ -397,7 +417,7 @@ class GPS:
         # or we reach the defined maximum attempt duration
         while dt.datetime.now() - start_time < dt.timedelta(seconds=max_time):
             ser_line: str = self.__gps_ser.readline()
-
+            logging.debug("GPS Raw message received:\n\t%s", ser_line)
             # Check if message is valid and proceed with decoding and
             # content verification if true
             if self._is_valid_message(ser_line):
@@ -446,16 +466,13 @@ class GPS:
             if isinstance(ser_line, bytes):
                 ser_line = ser_line.decode(errors="ignore")
             self._last_msg = ser_line.split(",")
+
+            # store trailing checksum from final field cleanly
+            # checksum is validated elsewhere
+            raw_checksum = self._last_msg[-1].split("*")[-1].strip()[:2]
+            self._last_msg[-1] = self._last_msg[-1].split("*")[0].strip()
+            self._last_msg.append(raw_checksum)
             logging.debug("GPS: Decoded message: %s", self._last_msg)
-
-            # Parse and store checksum, then remove it from the main message
-            csum = hex(int(self._last_msg[-1][-2:], 16))
-            self._last_msg[-1] = self._last_msg[-1][:-2]  # Remove checksum
-            self._last_msg.append(csum)
-
-            # Retain only the last three characters of the message type for
-            # consistency
-            self._last_msg[0] = self._last_msg[0][-3:]
 
         except ValueError as ve:
             logging.error("GPS: Error decoding message: %s", ve)
@@ -477,8 +494,9 @@ class GPS:
         """
         valid_vals = None
         valid_idx = None
+        msg_type = self._last_msg[0][-3:]
         for entry in self.msg_validate:
-            if self._last_msg[0] == entry['MSG']:
+            if msg_type == entry['MSG']:
                 # Verify that the message status\validation field contains
                 # a value indicating validated data
                 valid_idx = entry['ValidIdx']
@@ -493,7 +511,7 @@ class GPS:
                     valid_vals)
                 return False
 
-        logging.debug("GPS: Non-tracked message type %s; skipping.", msg)
+        logging.debug("GPS: Non-tracked message type %s; skipping.", msg_type)
         return False
 
     def _get_coordinates(self, fix_wait: float) -> None:
@@ -644,13 +662,23 @@ class GPS:
                 self.__gps_ser.is_open:
             try:
                 self.__gps_ser.close()
-                logging.info("GPS: Serial connection closed.")
+                logging.info("Serial connection closed.")
             except serial.SerialException as e:
-                logging.error("GPS: Failed to close serial connection: %s", e)
+                logging.error("Failed to close serial connection: %s", e)
 
         # Clean up GPIO resources
-        try:
-            GPIO.cleanup(self.__pwr_pin)
-            logging.info("GPS: GPS Power Pin resources.")
-        except Exception:
-            logging.warning("GPS: Failed to cleanup GPS Power pin resources")
+        if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
+            try:
+                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+                logging.info("GPS: Power pin set LOW during cleanup.")
+            except Exception as e:
+                logging.warning("GPS: Failed to set power pin LOW "
+                                "during cleanup: %s", e)
+
+            try:
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("GPS: gpiochip handle closed during cleanup.")
+            except Exception as e:
+                logging.warning("GPS: Failed to close gpiochip handle: %s", e)
+
+            self._gpio_handle = None  # Mark as cleaned up

@@ -107,8 +107,14 @@ def gpio_init(mode: Optional[int] = GPIO.BCM) -> None:
 
 def gpio_cleanup():
     """Global GPIO cleanup."""
-    GPIO.cleanup()
-    logging.debug("GPIO Resources cleaned up")
+    try:
+        if GPIO.getmode() is not None:
+            GPIO.cleanup()
+            logging.debug("GPIO Resources cleaned up")
+        else:
+            logging.debug("GPIO cleanup skipped: GPIO mode not set.")
+    except RuntimeError as e:
+        logging.warning("GPIO cleanup failed: %s", e)
 
 def valid_smallint(value):
     """Check a value can fit within smallint."""
