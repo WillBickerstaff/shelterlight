@@ -11,8 +11,9 @@ Version: 0.1
 
 import logging
 import psycopg2
-from lightlib.config import ConfigLoader
 import time
+from sqlalchemy import create_engine
+from lightlib.config import ConfigLoader
 from typing import Optional, Tuple, List
 
 
@@ -57,6 +58,8 @@ class DB:
             config_loader.config, config_section, "connect_retry_delay"))
         self._conn = self._connect_to_db()
         self._setup_database()
+        self._alchemy_engine = None
+        self._alchemy_exists = True
 
     @property
     def conn(self) -> psycopg2.extensions.connection:
@@ -240,6 +243,19 @@ class DB:
             logging.error("Query execution failed: %s", e)
             raise
 
+    def get_alchemy_engine(self):
+        """Return an SQLAlchemy engine or fallback to None on failure."""
+        if  self._alchemy_engine is None and self._alchemy_exists:
+            try:
+                uri = f"postgresql://{self._db_user}:{self._db_password}" \
+                      f"@{self._db_host}:{self._db_port}/{self._db_database}"
+                self._alchemy_engine = create_engine(uri)
+            except (ImportError, SQLAlchemyError) as e:
+                logging.warning("Failed to create SQLAlchemy engine: %s", e)
+                self._alchemy_exists = False
+                self._alchemy_engine = None
+        return self._alchemy_engine
+    
     def __del__(self):
         """Destructor to ensure connection is closed on deletion of the DB."""
         self.close_connection()
