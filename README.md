@@ -95,7 +95,7 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 4. **Enable Hardware Serial**
 
    The GPS Module is intended to be connected
-   to the hardware serial of the RPI (Header pins 8 \& 10 which correspond to GPIO 14 \& 15 - UART TX \& UART RX)
+   to the hardware serial of the RPI (Header pins 8 & 10 which correspond to GPIO 14 & 15 - UART TX & UART RX)
 
    ```bash
    sudo raspi-config
