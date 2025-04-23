@@ -177,19 +177,26 @@ class LightScheduler:
             WHERE date >= NOW() - INTERVAL '%s days'
         """
 
+        engine = self.db.get_alchemy_engine()
         # Execute queries and load into pandas DataFrames
         try:
+            if engine is not None:
+                logging.debug("Using SQLAlchemy to retrieve training data.")
+            else:
+                engine = self.db.conn
+                logging.debug("Using psycopg2 to retrieve training data.")
+
             # Execute activity log query
             df_activity = pd.read_sql_query(
                 activity_query,
-                self.db.conn,
+                engine,
                 params=(days_history,)
             )
 
             # Execute schedule accuracy query
             df_schedules = pd.read_sql_query(
                 schedule_query,
-                self.db.conn,
+                engine,
                 params=(days_history,)
             )
 

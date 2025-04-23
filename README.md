@@ -292,8 +292,9 @@ pip install --prefer-binary numpy
 - `pyserial` — Serial communication for GPS module
 - `lightgbm` — Machine learning for schedule prediction
 - `psycopg2` — PostgreSQL database driver
-- `pandas` — Data manipulation (should also install numpy)
+- `pandas` — Data manipulation
 - `timezonefinder` — Determine location timezone
+- `SQLAlchemy` — pandas SQLAlchemy interface
 
 **Note:** *Although all scheduling and system operations use UTC internally, `timezonefinder` is retained to support future features such as a local display. This would allow sunrise, sunset, and schedule times to present in a human readable local time to avoid confusion.*
 
