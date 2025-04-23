@@ -147,7 +147,7 @@ class LightScheduler:
             training.
         """
         # Don't do eanythin if the DB connection is not established
-        if self.db_connection is None or self.db.conn.closed:
+        if self.db is None or self.db.conn.closed:
             logging.warning("DB connection not established, can't train")
             return None
         # Define SQL queries
@@ -182,14 +182,14 @@ class LightScheduler:
             # Execute activity log query
             df_activity = pd.read_sql_query(
                 activity_query,
-                self.db.connection,
+                self.db.conn,
                 params=(days_history,)
             )
 
             # Execute schedule accuracy query
             df_schedules = pd.read_sql_query(
                 schedule_query,
-                self.db.connection,
+                self.db.conn,
                 params=(days_history,)
             )
 
@@ -347,6 +347,11 @@ class LightScheduler:
         """
         #   1-Retrieve & prepare training data
         df = self._prepare_training_data(days_history)
+        # If there is no training data then exit
+        if df is None:
+            logging.warning("No training data available, skipping model training")
+            return
+            
         # 2-Select features for training
         feature_cols = self._get_feature_columns()
         x = df[feature_cols]
@@ -755,14 +760,20 @@ class LightScheduler:
                 # Storage of the generated schedule in the database & cache
                 # is completed by `self.generate_daily_schedule' with its
                 # final call to `self.store_schedule'
-
-                # Log the successful update and return the new schedule
-                logging.info("Successfully updated schedule for %s", tomorrow)
+                if not new_schedule:
+                    # Empty schedule
+                    logging.warning("Empty schedule generated for %s",
+                                    tomorrow)
+                else:
+                    # Log the successful update and return the new schedule
+                    logging.info("Successfully updated schedule for %s",
+                                 tomorrow)
                 self._log_schedule(new_schedule, tomorrow)
                 return new_schedule
 
         except Exception as e:
             logging.error("Failed to update daily schedule: %s", e)
+            raise e
             return None
 
     def get_current_schedule(self,

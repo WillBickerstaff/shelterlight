@@ -311,21 +311,37 @@ class SunTimes:
                    self._gps.position_established:
                     self._set_system_time()
                     self._fixed_today = dt.datetime.now().date()
-
+                    logging.info("GPS Fix succeeded, position & time established")
                     #  Update solar times and fix window based on GPS
                     #  coordinates
                     self._set_solar_times_and_fix_window()
                     self._store_persistent_data()
+                    logging.info("GPS Data stored in JSON file")
+                    self._gps.pwr_off()
                     break
 
             except pos.GPSInvalid:
                 self._fix_err_day += 1
+                logging.debug("GPS failed to fix:\n\t"
+                              "GPS Position: %s\tEstabilshed: %s\n\t"
+                              "GPS Datetime: %s\tEstablished: %s",
+                              self._gps.position_str,
+                              self._gps.position_established,
+                              self._gps.datetime,
+                              self._gps.datetime_established)
                 if self._fix_err_day >= max_fix_errors:
                     logging.error("Failed to fix for %s days.", max_fix_errors)
+                    self._gps.pwr_off()
                     raise GPSNoFix(
                         f"Unable to obtain GPS fix for {max_fix_errors} days.")
-            finally:
-                self._gps.pwr_off()
+
+            logging.debug("No fix on this attempt:\n\t"
+                          "GPS Position: %s\tEstablished: %s\n\t"
+                          "GPS Datetime: %s\tEstablished: %s\n",
+                          self._gps.position_str,
+                          self._gps.position_established,
+                          self._gps.datetime,
+                          self._gps.datetime_established)
             time.sleep(ConfigLoader().gps_fix_retry_interval)
 
     # -------------------- Solar Times and Fix Window Setup -------------------

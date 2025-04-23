@@ -14,6 +14,7 @@ import logging
 import re
 import serial
 import subprocess
+import glob
 from threading import Lock
 from typing import Union, Optional
 import lgpio
@@ -119,6 +120,8 @@ class GPS:
         except serial.SerialException as e:
             logging.error("GPS: Failed to initialize serial port %s - %s",
                           self.__serial_port, e)
+            available_ports = glob.glob('/dev/tty[A-Za-z]*')
+            logging.debug("GPS: Available serial ports: %s", available_ports)
             self.__gps_ser = None
 
         # Initialize remaining attributes
@@ -151,7 +154,7 @@ class GPS:
     @property
     def datetime_established(self) -> bool:
         """A bool representing if date and time have been established."""
-        return self._position_established
+        return self._datetime_established
 
     @property
     def message_type(self) -> str:
@@ -192,6 +195,13 @@ class GPS:
     def datetime(self) -> dt.datetime:
         """Return the current UTC date and time from the GPS fix."""
         return self._dt
+
+    @property
+    def position_str(self) -> str:
+        """Format and return position as a string."""
+        return "\n\t".join([f"Lat: {self.lattitude:.2f}",
+                            f"Lng: {self.longitude:.2f}",
+                            f"Alt: {self.altitude:.2f}m"])
 
     def gpsCoord2Dec(self,
                      gps_coord: Union[str, float], direction: GPSDir) -> float:
@@ -346,7 +356,7 @@ class GPS:
                 logging.info("GPS Powered off.")
                 self._gpio_handle = None
             else:
-                logging.warning("GPS power of called but no valid GPIO handle")
+                logging.debug("GPS power off called, no valid GPIO handle")
         except Exception as e:
             logging.error("Failed to power off GPS: %s", e)
             self._gpio_handle = None
@@ -384,6 +394,10 @@ class GPS:
         self.pwr_on(pwr_up_wait)
 
         try:
+            if self.__gps_ser is None:
+                logging.error("GPS Serial connection not initialized is %s"
+                              "the correct serial port?", self.__serial_port)
+                raise GPSInvalid
             self._get_coordinates(max_fix_time)
             self._get_datetime(max_fix_time)
         except GPSInvalid:
@@ -423,7 +437,7 @@ class GPS:
             if self._is_valid_message(ser_line):
                 self._decode_message(ser_line)
                 if self._validate_message_content(msg):
-                    return  # Exit once a valid message is confirmed
+                    return True  # Exit once a valid message is confirmed
 
         raise GPSInvalid(f"No valid fix obtained after {max_time} seconds")
 
@@ -495,6 +509,17 @@ class GPS:
         valid_vals = None
         valid_idx = None
         msg_type = self._last_msg[0][-3:]
+        if msg_type != msg:
+            logging.debug("Read a%s %s message, waiting for a%s %s",
+                          "n" if msg_type == "RMC" else "",
+                          msg_type,
+                          "n" if msg == "RMC" else "",
+                          msg)
+            return False
+
+        logging.info("Got a%s %s Message!!!", "n" if msg_type == "RMC" else "",
+                     msg_type)
+
         for entry in self.msg_validate:
             if msg_type == entry['MSG']:
                 # Verify that the message status\validation field contains
@@ -502,7 +527,7 @@ class GPS:
                 valid_idx = entry['ValidIdx']
                 valid_vals = entry['ValidVals']
                 if self._last_msg[valid_idx] in valid_vals:
-                    logging.debug("GPS: Validated %s message.", msg)
+                    logging.info("%s message is valid.", msg_type)
                     return True
                 logging.info(
                     "GPS: %s message does not include a validated data "
@@ -525,10 +550,12 @@ class GPS:
         ------
             GPSInvalid: If coordinates cannot be retrieved within `fix_wait`.
         """
-        self._get_msg('GGA', fix_wait)
+        if not self._get_msg('GGA', fix_wait):
+            return
         self._position_established = False
+        matched = False
         for entry in self.msg_coords:
-            if self._last_msg[0] == entry['MSG']:
+            if self._last_msg[0][-3:] == entry['MSG']:
                 try:
                     logging.debug("COORD: %s", self._last_msg)
                     self._lat = Coordinate(
@@ -543,16 +570,20 @@ class GPS:
                         self._alt = float(self._last_msg[entry['ALT']])
                     else:
                         self._alt = 0.0
-                    logging.info("GPS: Position fix obtained - %s, "
-                                 "%s, Alt: %s",
+                    logging.info("GPS: Position fix obtained:\n\t%s, "
+                                 "\n\t%s\n\tAlt: %s",
                                  self._lat.to_string(),
                                  self._lon.to_string(), self._alt)
                     self._position_established = True
+                    matched = True
                 except GPSOutOfBoundsError as obe:
                     logging.warning("GPS: Out-of-bounds coordinate: %s", obe)
                 except (KeyError, ValueError) as e:
                     logging.error("GPS: Error processing coordinates: %s", e)
                     raise GPSInvalid("Failed to retrieve coordinates.")
+        if not matched:
+            logging.debug("Never matched a %s in msg_coords",
+                          self._last_msg[0][-3:])
 
     def _get_datetime(self, fix_wait: float) -> None:
         """Retrieve GPS datetime from the module.
@@ -565,10 +596,12 @@ class GPS:
         ------
             GPSInvalid: If datetime cannot be retrieved within `fix_wait`.
         """
-        self._get_msg('RMC', fix_wait)
+        if not self._get_msg('RMC', fix_wait):
+            return
         self._datetime_established = False
+        matched = False
         for entry in self.msg_dt:
-            if self._last_msg[0] == entry['MSG']:
+            if self._last_msg[0][-3:] == entry['MSG']:
                 try:
                     utc_time = self._last_msg[entry['UTC']]
                     date_str = (self._last_msg[entry['DATE']]
@@ -578,9 +611,13 @@ class GPS:
                         "GPS: Date and time obtained: %s", self._dt)
                     self._datetime_established = True
                     self._sync_system_time()
+                    matched = True
                 except (KeyError, ValueError) as e:
                     logging.error("GPS: Error processing datetime: %s", e)
                     raise GPSInvalid("Failed to retrieve datetime.")
+        if not matched:
+            logging.debug("Never matched a %s in msg_dt",
+                          self._last_msg[0][-3:])
 
     def _process_datetime(self, utc_time: str,
                           date_str: Optional[str] = None) -> dt.datetime:
