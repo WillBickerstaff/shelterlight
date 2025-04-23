@@ -1,5 +1,7 @@
 # TLDR
 
+> *last updated for: **Raspberry Pi OS Bookworm (2025)** — Kernel 6.1.x*
+
 1.  **Flash the OS**
 
     Using  Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd`
@@ -24,12 +26,22 @@ sudo raspi-config
 ```
 Choose **Interface Options** -> ** **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
 
+**RPi Zero**
+
+Disable Bluetooth
+
+```bash
+sudo nano /boot/firmware/config.txt
+```
+
+add `dtoverlay=disable-bt` to the end of the file
+
 ## Install system packages
 
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-venv python3-pip python3-lgpio python3-dev libpq-dev postgresql libopenblas-dev build-essential git
-   ```
+```
 
 ---
 
@@ -192,10 +204,6 @@ localhost:5432:smartlight:pi:changeme
 ```
 
 Set the correct file permissions:
-
-```bash
-localhost:5432:activity_db:pi:changeme
-```
 
 **Automate the cleanup task using cron.**
 

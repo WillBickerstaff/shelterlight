@@ -1,5 +1,7 @@
 # Shelter Light Control System - Setup & Configuration
 
+*last updated for: **Raspberry Pi OS Bookworm (2025)** — Kernel 6.1.x*
+
 ---
 
 ## Project Overview
@@ -11,6 +13,49 @@ The system is designed to operate completely **offline and headless** (no displa
 Configuration updates and system logs can be managed via **USB device insertion**.
 
 The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Python 3** with minimal external dependencies.
+
+---
+
+## Table of Contents
+
+- [Project Overview](#project-overview)
+- [Minimal Raspberry Pi Installation](#minimal-raspberry-pi-installation)
+  - [Recommended OS](#recommended-os)
+  - [Minimal Setup Steps](#minimal-setup-steps)
+- [Initial Database Setup](#initial-database-setup)
+  - [Database Configuration](#database-configuration)
+  - [Create Database &amp; User](#create-database--user)
+  - [Create Tables](#create-tables)
+- [Python Environment Setup](#python-environment-setup)
+  - [Grab the source](#grab-the-source)
+  - [Required Python Libraries](#required-python-libraries)
+  - [Installation](#installation)
+- [Running as a Systemd Service](#running-as-a-systemd-service)
+  - [Service File](#service-file)
+  - [Enable &amp; Start the Service](#enable--start-the-service)
+  - [Auto-Restart Behaviour](#auto-restart-behaviour)
+  - [Logs](#logs)
+  - [Stopping &amp; Disabling](#stopping--disabling)
+- [System Time Synchronisation](#system-time-synchronisation)
+  - [How it works](#how-it-works)
+  - [Permissions &amp; Security](#permissions--security)
+  - [Why this is necessary](#why-this-is-necessary)
+- [Log File Management](#log-file-management)
+  - [Log Rotation](#log-rotation)
+  - [Configuration Example](#configuration-example)
+  - [Apply Logrotate Immediately (Optional)](#apply-logrotate-immediately-optional)
+  - [Automatic Execution](#automatic-execution)
+  - [USB Backup of Rotated Logs](#usb-backup-of-rotated-logs)
+- [Disabling Unnecessary Services](#disabling-unnecessary-services)
+  - [Recommended Services to Disable](#recommended-services-to-disable)
+  - [Disable Services](#disable-services)
+  - [Other Services to consider](#other-services-to-consider)
+- [Maintenance &amp; Monitoring](#maintenance--monitoring)
+- [Database Cleanup](#database-cleanup)
+  - [Passwordless Database Access for Automation](#passwordless-database-access-for-automation)
+  - [Automate the cleanup task using cron](#automate-the-cleanup-task-using-cron)
+  - [To check auto-vacuum status](#to-check-auto-vacuum-status)
+- [Configuration Overview](#configuration-overview)
 
 ---
 
@@ -37,31 +82,59 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 2. **Enable SSH (optional but recommended)**
 
    - Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
-
 3. **Set timezone**
 
    The application is written to calculate and control using UTC
    as the default timezone throughout the year. This avoids complications with timezone boundaries and daylight saving.
    **Make sure the RPi has its timezone set to UTC:**
+
    ```bash
    sudo raspi-config
    ```
-   Choose **Localisation Options** -> **Timezone**. At the bottom of the list of available timezones the option *'None of the above'* exists, choose this and then **'UTC'**
 
-4. ## Enable Hardware Serial
+   Choose **Localisation Options** -> **Timezone**. At the bottom of the list of available timezones the option *'None of the above'* exists, choose this and then **'UTC'**
+4. **Enable Hardware Serial**
+
    The GPS Module is intended to be connected
    to the hardware serial of the RPI (Header pins 8 \& 10 which correspond to GPIO 14 \& 15 - UART TX \& UART RX)
+
    ```bash
    sudo raspi-config
    ```
-   Choose **Interface Options** -> ** **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
 
+   Choose **Interface Options** -> **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
+
+   **RPi Zero**
+
+   On the Raspberry Pi Zero, the UART (serial) interface is shared with Bluetooth by default. This can cause conflicts if your GPS module is connected to the `UART TX` and `UART RX` pins.
+
+   To disable Bluetooth and free up the serial interface for your GPS:
+
+   1. Open the file `/boot/firmware/config.txt` with root privileges:
+
+      ```bash
+      sudo nano /boot/firmware/config.txt
+      ```
+
+      *On Raspberry Pi os versions earlier than bookworm, this file resides in `/boot/config.txt`*
+   2. Scroll to the bottom and add the following line:
+
+      ```
+      dtoverlay=disable-bt
+      ```
+   3. Save and exit (`Ctrl+X`, then `Y`, then `Enter`).
+   4. Reboot the Pi:
+
+      ```bash
+      sudo reboot
+      ```
+
+   After rebooting, the serial port will be dedicated to your GPS module.
 5. **Disable Unnecessary Services**
 
    Certain system services are not required and should be disabled to improve boot time and reduce resource usage.
 
    See the section **Disabling Unnecessary Services** later in this document for recommended services to disable.
-
 6. **Install System Packages**
 
    ```bash
@@ -199,25 +272,31 @@ CREATE TRIGGER update_light_schedules_updated_at
 This system is written **Python 3** and is intended to run on Raspberry Pi Zero (or similar) with python version >= **3.11**.
 
 ### Grab the source
+
 Grab the source for the application from the git repository with:
+
 ```bash
-git clone https://WillBickerstaff/shelterlight
+git clone https://WillBickerstaff/shelterlight.git
 ```
 
 ### Required Python Libraries
 
 The following Python packages are required:
+
 - `numpy` — Use the `--prefer-binary` flag to avoid compiling on the Pi, which is very slow and prone to errors:
+
 ```bash
 pip install --prefer-binary numpy
 ```
+
 - `RPi.GPIO` —  Used for light control output and other GPIO until full migration to lgpio is complete
-- `serial` — Serial communication for GPS module
+- `pyserial` — Serial communication for GPS module
 - `lightgbm` — Machine learning for schedule prediction
 - `psycopg2` — PostgreSQL database driver
 - `pandas` — Data manipulation (should also install numpy)
 - `timezonefinder` — Determine location timezone
-> **Note:** Although all scheduling and system operations use UTC internally, `timezonefinder` is retained to support future features such as a local display. This would allow sunrise, sunset, and schedule times to present in a human readable local time to avoid confusion.
+
+**Note:** *Although all scheduling and system operations use UTC internally, `timezonefinder` is retained to support future features such as a local display. This would allow sunrise, sunset, and schedule times to present in a human readable local time to avoid confusion.*
 
 A complete list is provided in `req_modules.txt`:
 
@@ -339,7 +418,7 @@ After a valid fix, the system executes:
 
 ```bash
 sudo /bin/date -s <utc_time>
-``
+```
 
 This will synchronise the Raspberry Pi system time to UTC.
 
@@ -406,15 +485,15 @@ Example content:
 
 **Explanation:**
 
-| Option          | Description                                           |
-| --------------- | ----------------------------------------------------- |
-| `daily`         | Rotate the log file daily.                            |
-| `rotate 7`      | Keep the last 7 rotated log files.                    |
-| `compress`      | Compress old log files to save space.                 |
-| `missingok`     | Do not raise an error if the log file is missing.     |
-| `notifempty`    | Do not rotate if the log file is empty.               |
-| `delaycompress` | Compress the previous log file, not the current one.  |
-| `copytruncate`  | Truncate the original log file after creating a copy. |
+| Option            | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `daily`         | Rotate the log file daily.                              |
+| `rotate 7`      | Keep the last 7 rotated log files.                      |
+| `compress`      | Compress old log files to save space.                   |
+| `missingok`     | Do not raise an error if the log file is missing.       |
+| `notifempty`    | Do not rotate if the log file is empty.                 |
+| `delaycompress` | Compress the previous log file, not the current one.    |
+| `copytruncate`  | Truncate the original log file after creating a copy.   |
 
 ---
 
@@ -527,13 +606,13 @@ sudo systemctl disable ssh.service
 
 The Shelter Light Control System is designed to run unattended. However, minimal periodic maintenance is recommended to ensure long-term reliability.
 
-| Task                   | Frequency                        | Reason                                                      | Commands / Actions                                                                                                           |
-| ---------------------- | -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| USB Backup Retrieval   | Monthly or after unusual weather | Back up logs & configuration, and check for errors          | Insert USB and check ``/media/usb/smartlight/logs/``                                                                         |
-| Log File Storage Check | Quarterly                        | Ensure log rotation is working and storage space is healthy | ``sudo du -sh /home/pi/shelterlight/*.log```<br>```sudo df -h /``                                                          |
-| Database Health Check  | Every 6 months                   | Verify database integrity and storage                       | ``sudo -u postgres psql -c "\l"```<br>```psql -U pi -d smartlight -c "\dt"```<br>```du -sh /var/lib/postgresql/14/main`` |
-| Hardware Inspection    | Annually / after severe weather  | Ensure cables, sensors & hardware are intact                | Visual check                                                                                                                 |
-| SD Card Health         | Annually                         | SD cards wear out over time                                 | ``sudo smartctl -a /dev/mmcblk0```<br>` (Requires smartmontools)`<br>`Consider cloning the SD card                       |
+| Task                   | Frequency                        | Reason                                                      | Commands / Actions                                                                                                   |
+| ---------------------- | -------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| USB Backup Retrieval   | Monthly or after unusual weather | Back up logs & configuration, and check for errors          | Insert USB and check `/media/usb/smartlight/logs/`                                                                   |
+| Log File Storage Check | Quarterly                        | Ensure log rotation is working and storage space is healthy | `sudo du -sh /home/pi/shelterlight/log`<br>`sudo df -h /`                                                            |
+| Database Health Check  | Every 6 months                   | Verify database integrity and storage                       | `sudo -u postgres psql -c "\l"`<br>`psql -U pi -d smartlight -c "\dt"`<br>`du -sh /var/lib/postgresql/14/main`       |
+| Hardware Inspection    | Annually / after severe weather  | Ensure cables, sensors & hardware are intact                | Visual check                                                                                                         |
+| SD Card Health         | Annually                         | SD cards wear out over time (Consider cloning)              | `sudo smartctl -a /dev/mmcblk0`<br>(Requires smartmontools)<br>`sudo apt install smartmontools`                      |
 
 ---
 
