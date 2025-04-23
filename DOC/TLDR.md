@@ -5,7 +5,7 @@
 1.  **Flash the OS**
 
     Using  Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd`
-    - **Raspberry Pi OS Lite (32-bit)**
+    - **Raspberry Pi OS Lite**
 
 2. **Enable SSH (optional but recommended)**
 

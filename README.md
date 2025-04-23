@@ -68,12 +68,8 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 
 ### Recommended OS
 
-- **Raspberry Pi OS Lite (32-bit)**
+- **Raspberry Pi OS Lite**
   *(Debian Bookworm based, headless, no desktop)*
-- This project relies on `RPi.GPIO` edge detection for activity sensing.
-- **Kernels 6.2 and above are currently not compatible** due to known issues with GPIO edge detection on newer kernel versions.
-- To ensure compatibility:
-- Use kernel **6.1.x** (e.g., `Linux ... 6.1.21-v8+`) or earlier
 
 ### Minimal Setup Steps
 
@@ -99,7 +95,7 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 4. **Enable Hardware Serial**
 
    The GPS Module is intended to be connected
-   to the hardware serial of the RPI (Header pins 8 \& 10 which correspond to GPIO 14 \& 15 - UART TX \& UART RX)
+   to the hardware serial of the RPI (Header pins 8 & 10 which correspond to GPIO 14 & 15 - UART TX & UART RX)
 
    ```bash
    sudo raspi-config
