@@ -101,6 +101,26 @@ class PersistentData:
         self._populate_locals_from_file()
         self.__initialized = True
 
+    @staticmethod
+    def _get_empty_schema(version: int = 1) -> dict:
+        """Return the default empty JSON structure for persistent data."""
+        match version:
+            case 1:
+                return {
+                    "schema_version": 1,
+                    "missed_fixes": 0,
+                    "last_latitude": None,
+                    "last_longitude": None,
+                    "altitude": None,
+                    "sunrise_times": [],
+                    "sunset_times": [],
+                    "last_updated": None
+                }
+            case _:
+                logging.error("Unsupported schema version %s, falling back "
+                              "to version 1", version)
+                return PersistentData._get_empty_schema(1)
+
     def _initialize_file(self) -> None:
         """Init JSON file if doesn't exist, create an empty data structure."""
         try:
@@ -111,16 +131,8 @@ class PersistentData:
             with open(ConfigLoader().persistent_data_json, 'a+') as file:
                 file.seek(0)
                 if file.read().strip() == "":
-                    empty_data = {
-                        "missed_fixes": 0,
-                        "last_latitude": None,
-                        "last_longitude": None,
-                        "altitude": None,
-                        "sunrise_times": [],
-                        "sunset_times": [],
-                        "last_updated": None
-                    }
-                    json.dump(empty_data, file, indent=2, sort_keys=True,)
+                    json.dump(self._get_empty_schema(), file,
+                              indent=2, sort_keys=True)
                     logging.info("GPSDataStore JSON file initialized at %s",
                                  ConfigLoader().persistent_data_json)
         except IOError as e:
@@ -135,20 +147,22 @@ class PersistentData:
             DataStorageError: If storing data in the JSON file fails.
         """
         try:
-            data = {
+            data = self._get_empty_schema()
+            data.update({
                 "missed_fixes": self.missed_fix_days,
                 "latitude": self.current_latitude,
                 "longitude": self.current_longitude,
                 "altitude": self.current_altitude,
-                "sunrise_times": [datetime_to_iso(t) for
-                                  t in self._sunrise_times],
-                "sunset_times": [datetime_to_iso(t) for
-                                 t in self._sunset_times],
+                "sunrise_times":
+                    [datetime_to_iso(t) for t in self._sunrise_times],
+                "sunset_times":
+                    [datetime_to_iso(t) for t in self._sunset_times],
                 "last_updated": datetime_to_iso(dt.datetime.now())
-            }
+            })
+
             with open(ConfigLoader().persistent_data_json, 'w') as file:
                 json.dump(data, file, indent=2, sort_keys=True)
-            logging.info("GPS data stored successfully in JSON file.")
+                logging.info("GPS data stored successfully in JSON file.")
         except IOError as e:
             logging.error("Failed to store GPS data in JSON: %s", e)
             raise DataStorageError("Failed to store data in JSON.") from e
