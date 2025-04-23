@@ -611,6 +611,7 @@ class SunTimes:
         PersistentData().add_sunrise_time(self.UTC_sunrise_today)
         PersistentData().add_sunrise_time(self.UTC_sunrise_tomorrow)
         PersistentData().add_sunset_time(self.UTC_sunset_today)
+        PersistentData().add_sunset_time(self.UTC_sunset_tomorrow)
         PersistentData().store_data()
 
     @staticmethod

@@ -15,6 +15,9 @@ Configuration updates and system logs can be managed via **USB device insertion*
 The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Python 3** with minimal external dependencies.
 
 ---
+## Additional guides
+- [Configuration Guide](./DOC/config_README.md)
+- [Quick Start TLDR](./DOC/TLDR.md)
 
 ## Table of Contents
 
@@ -711,4 +714,4 @@ sudo systemctl restart postgresql
 
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
 
-Full configuration documentation is provided in **[config.readme.md](./DOC/config.readme.md)**
+Full configuration documentation is provided in **[config_README.md](./DOC/config_README.md)**
