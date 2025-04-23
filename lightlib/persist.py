@@ -95,6 +95,7 @@ class PersistentData:
         self._current_latitude = None
         self._current_longitude = None
         self._current_altitude = None
+        self._missed_fixes = 0
         self._initialize_file()
         # Mark as initialized
         self._populate_locals_from_file()
@@ -111,6 +112,7 @@ class PersistentData:
                 file.seek(0)
                 if file.read().strip() == "":
                     empty_data = {
+                        "missed_fixes": 0,
                         "last_latitude": None,
                         "last_longitude": None,
                         "altitude": None,
@@ -118,7 +120,7 @@ class PersistentData:
                         "sunset_times": [],
                         "last_updated": None
                     }
-                    json.dump(empty_data, file)
+                    json.dump(empty_data, file, indent=2, sort_keys=True,)
                     logging.info("GPSDataStore JSON file initialized at %s",
                                  ConfigLoader().persistent_data_json)
         except IOError as e:
@@ -134,6 +136,7 @@ class PersistentData:
         """
         try:
             data = {
+                "missed_fixes": self.missed_fix_days,
                 "latitude": self.current_latitude,
                 "longitude": self.current_longitude,
                 "altitude": self.current_altitude,
@@ -144,7 +147,7 @@ class PersistentData:
                 "last_updated": datetime_to_iso(dt.datetime.now())
             }
             with open(ConfigLoader().persistent_data_json, 'w') as file:
-                json.dump(data, file)
+                json.dump(data, file, indent=2, sort_keys=True)
             logging.info("GPS data stored successfully in JSON file.")
         except IOError as e:
             logging.error("Failed to store GPS data in JSON: %s", e)
@@ -191,6 +194,15 @@ class PersistentData:
     @current_longitude.setter
     def current_longitude(self, lng: float) -> None:
         self._current_longitude = lng
+
+    @property
+    def missed_fix_days(self) -> int:
+        """Number of days a fix has been unobtainable."""
+        return self._missed_fixes
+
+    @missed_fix_days.setter
+    def missed_fix_days(self, missed_days: int) -> None:
+        self._missed_fixes = missed_days
 
     @property
     def sunrise_times(self) -> List[dt.datetime]:
@@ -257,12 +269,19 @@ class PersistentData:
             f"Date {datetime_to_iso(check_date)} not found in list")
 
     def _add_date(self, dt_obj: dt.datetime, is_sunrise: bool = False) -> None:
-        # Remove any outdated datetimes before adding new ones
+        """Add a sunrise/sunset datetime, replace existing entries for date."""
+        # Strip microseconds (don't need that accuracy)
+        dt_obj = dt_obj.replace(microsecond=0)
+        # Remove outdated entries
         self._clear_past_times()
-        if is_sunrise:
-            self._sunrise_times.append(dt_obj)
-        else:
-            self._sunset_times.append(dt_obj)
+        # Get date portion for comparison
+        dt_date = dt_obj.date()
+        # Select the correct list
+        target_list = self._sunrise_times if is_sunrise else self._sunset_times
+        # Remove any entries for the same date
+        target_list[:] = [d for d in target_list if d.date() != dt_date]
+        # Add the new datetime
+        target_list.append(dt_obj)
 
     def add_sunrise_time(self, datetime_instance: dt.datetime) -> None:
         """Add a sunrise time to persistent data."""
@@ -311,6 +330,10 @@ class PersistentData:
                 if self._current_altitude is None:
                     key = "altitude"
                     self._current_altitude = data.get(key)
+
+                if self._missed_fixes is None:
+                    key = "missed_fixes"
+                    self._missed_fixes = data.get(key)
 
                 # Populate sunrise and sunset times if they are empty
                 if not self._sunrise_times:

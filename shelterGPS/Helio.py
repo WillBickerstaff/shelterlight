@@ -47,7 +47,7 @@ class SunTimes:
         self.sunrise_offset: int = ConfigLoader().sunrise_offset
         self.sunset_offset: int = ConfigLoader().sunset_offset
         self._init_dt()
-        self._fix_err_day: int = 0
+        self._fix_err_day: int = PersistentData().missed_fix_days
         self._fixed_today: bool = False
         self._gps_fix_running: threading.Event = threading.Event()
         self._gps_fix_thread: Optional[threading.Thread] = None
@@ -311,12 +311,12 @@ class SunTimes:
                    self._gps.position_established:
                     self._set_system_time()
                     self._fixed_today = dt.datetime.now().date()
-                    logging.info("GPS Fix succeeded, position & time established")
+                    logging.info("GPS Fix succeeded, position & "
+                                 "time established")
                     #  Update solar times and fix window based on GPS
                     #  coordinates
                     self._set_solar_times_and_fix_window()
                     self._store_persistent_data()
-                    logging.info("GPS Data stored in JSON file")
                     self._gps.pwr_off()
                     break
 
@@ -600,15 +600,18 @@ class SunTimes:
         -------
             None
         """
+        logging.debug("Populating persistent Data for JSON storage")
         # Save GPS location data
         PersistentData().current_latitude = self._gps.latitude
         PersistentData().current_longitude = self._gps.longitude
         PersistentData().current_altitude = self._gps.altitude
+        PersistentData().missed_fix_days = self.failed_fix_days
 
         # Save today's and tomorrow's solar event times
         PersistentData().add_sunrise_time(self.UTC_sunrise_today)
         PersistentData().add_sunrise_time(self.UTC_sunrise_tomorrow)
         PersistentData().add_sunset_time(self.UTC_sunset_today)
+        PersistentData().store_data()
 
     @staticmethod
     def calculate_solar_times(
