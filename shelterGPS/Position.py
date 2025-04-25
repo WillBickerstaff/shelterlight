@@ -658,9 +658,9 @@ class GPS:
                               for i in range(0, len(date_str), 2)]
                 logging.debug("GPS: Date string contains (YY)%s-(MM)%s-(DD)%s",
                               date_parts[0], date_parts[1], date_parts[2],)
-                date_obj = dt.date(int("20" + date_parts[0]),
+                date_obj = dt.date(int("20" + date_parts[2]),
                                    int(date_parts[1]),
-                                   int(date_parts[2]))
+                                   int(date_parts[0]))
             else:
                 date_obj = dt.date.today()
 
