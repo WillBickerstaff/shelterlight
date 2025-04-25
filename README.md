@@ -53,6 +53,8 @@ The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Pyt
   - [Recommended Services to Disable](#recommended-services-to-disable)
   - [Disable Services](#disable-services)
   - [Other Services to consider](#other-services-to-consider)
+- [Optional Redundant Package Removal](#optional-redundant-package-removal)
+  - [Commands to Remove Redundant Packages](#commands-to-remove-redundant-packages)
 - [Maintenance &amp; Monitoring](#maintenance--monitoring)
 - [Database Cleanup](#database-cleanup)
   - [Passwordless Database Access for Automation](#passwordless-database-access-for-automation)
@@ -140,6 +142,19 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
    sudo apt update
    sudo apt install -y python3 python3-venv python3-pip python3-lgpio python3-dev libpq-dev postgresql libopenblas-dev build-essential git
    ```
+   **Why are these packages needed?**
+
+   | Package                            | Needed for                                                                          |
+   |------------------------------------|-------------------------------------------------------------------------------------|
+   | python3, python3-venv, python3-pip | Core Python installation                                                            |
+   | python3-lgpio                      | GPIO Control library (replaces RPi.GPIO)                                            |
+   | python3-dev                        | Headers for building Python C extensions (critical for psycopg2, etc.)              |
+   | libpq-dev                          | PostgreSQL C client libraries needed for psycopg2.                                  |
+   | postgresql                         | Activity database backend.                                                          |
+   | libopenblas-dev                    | Needed by LightGBM for fast matrix math                                             |
+   | build-essential                    | Compiler toolchain (gcc, g++, make) needed for pip installing C/C++-based packages. |
+   | git                                | For pulling code if needed.                                                         |
+
 7. **Optional Configuration Tweaks**
 
    - Disable HDMI output to save power:
@@ -485,15 +500,15 @@ Example content:
 
 **Explanation:**
 
-| Option            | Description                                           |
-| ----------------- | ----------------------------------------------------- |
-| `daily`         | Rotate the log file daily.                              |
-| `rotate 7`      | Keep the last 7 rotated log files.                      |
-| `compress`      | Compress old log files to save space.                   |
-| `missingok`     | Do not raise an error if the log file is missing.       |
-| `notifempty`    | Do not rotate if the log file is empty.                 |
-| `delaycompress` | Compress the previous log file, not the current one.    |
-| `copytruncate`  | Truncate the original log file after creating a copy.   |
+| Option            | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `daily`           | Rotate the log file daily.                              |
+| `rotate 7`        | Keep the last 7 rotated log files.                      |
+| `compress`        | Compress old log files to save space.                   |
+| `missingok`       | Do not raise an error if the log file is missing.       |
+| `notifempty`      | Do not rotate if the log file is empty.                 |
+| `delaycompress`   | Compress the previous log file, not the current one.    |
+| `copytruncate`    | Truncate the original log file after creating a copy.   |
 
 ---
 
@@ -598,6 +613,38 @@ Each of these can be disabled with:
 sudo systemctl disable networking.service
 sudo systemctl disable network-manager.service
 sudo systemctl disable ssh.service
+```
+---
+
+## Optional redundant package removal
+
+The following packages can be considered as candidates for complete removal from the system to further minimize disk usage, memory footprint, and boot times.
+
+These packages are not required for operation of the Shelter Light Control system and are safe to purge if the system's use case does not depend on them:
+
+| Package Group        | Packages                                 | Reason for Removal |
+|:---------------------|:-----------------------------------------|:-------------------|
+| **Bluetooth Stack**  | `pi-bluetooth`, `bluez`, `bluez-firmware` | Unused if no Bluetooth devices are required. |
+| **Modem/PPP Support** | `modemmanager`, `ppp`                   | Dial-up or cellular modems are not used. |
+| **Network Filesystem (NFS)** | `rpcbind`, `nfs-common`, `rpcsvc-proto` | No NFS file shares are required. |
+| **Audio Stack**      | `alsa-utils`, `alsa-topology-conf`, `alsa-ucm-conf` | No audio playback or input needed. |
+| **Hotkey Event Daemon** | `triggerhappy`                        | Not required unless using extra keyboard buttons or hardware keys. |
+| **Swap Management**  | `dphys-swapfile`                         | Swapfile is not needed with sufficient RAM and light workload. |
+| **Network Time Synchronization** | `systemd-timesyncd`          | GPS module provides accurate UTC time; NTP synchronization is not used. |
+
+### Commands to remove redundant packages
+
+```bash
+sudo apt purge -y \
+pi-bluetooth bluez bluez-firmware \
+modemmanager ppp \
+rpcbind nfs-common rpcsvc-proto \
+alsa-utils alsa-topology-conf alsa-ucm-conf \
+triggerhappy dphys-swapfile \
+systemd-timesyncd
+
+sudo apt autoremove --purge
+sudo apt clean
 ```
 
 ---
