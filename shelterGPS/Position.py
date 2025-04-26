@@ -1,3 +1,4 @@
+
 """shelterGPS.Position.
 
 Copyright (c) 2025 Will Bickerstaff
@@ -14,6 +15,7 @@ import logging
 import re
 import serial
 import subprocess
+import time
 import glob
 from threading import Lock
 from typing import Union, Optional
@@ -326,26 +328,37 @@ class GPS:
             log_caller(module="GPS")
             return False
 
-    def pwr_on(self, wait_after: Optional[float]) -> None:
+    def pwr_on(self, wait_after: Optional[float] = None) -> None:
         """Power up the GPS module by enabling its power pin.
 
         Args
         ----
-            wait_after (Optional[float]): Time to wait after power on
-                                          before continuing
+           wait_after (Optional[float]): Time to wait after power on
+                                         before continuing
         """
         try:
+            # Open gpiochip0 if not already
+            if not hasattr(self, '_gpio_handle') or self._gpio_handle is None:
+                self._gpio_handle = lgpio.gpiochip_open(0)
+
+            # Claim the GPS pin as OUTPUT
+            lgpio.gpio_claim_output(
+                self._gpio_handle, self.__pwr_pin, lgpio.LOW)
+
+            # Drive it HIGH to turn GPS ON
+            lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.HIGH)
+            logging.info("GPS powered ON (GPIO %s set HIGH)", self.__pwr_pin)
+
+            # Optional wait to stabilize power
+            if wait_after:
+                time.sleep(wait_after)
+
+        except Exception as e:
+            logging.error("Failed to power ON GPS: %s", e)
             if hasattr(self, '_gpio_handle') and self._gpio_handle is not None:
-                lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.LOW)
                 lgpio.gpiochip_close(self._gpio_handle)
                 logging.info("GPS Powered off.")
                 self._gpio_handle = None
-            else:
-                logging.warning("GPS power off called but "
-                                "no valid GPIO handle.")
-        except Exception as e:
-            logging.error("Failed to power off GPS: %s", e)
-        self._gpio_handle = None
 
     def pwr_off(self) -> None:
         """Disable the GPS module by setting its power control pin to LOW."""
@@ -356,7 +369,7 @@ class GPS:
                 logging.info("GPS Powered off.")
                 self._gpio_handle = None
             else:
-                logging.debug("GPS power off called, no valid GPIO handle")
+                logging.debug("GPS power off called no valid GPIO handle")
         except Exception as e:
             logging.error("Failed to power off GPS: %s", e)
             self._gpio_handle = None
