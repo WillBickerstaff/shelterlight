@@ -480,7 +480,7 @@ class LightScheduler:
 
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
         """Generate a light schedule for a date based on model predictions.
-
+    
         Create a daily schedule of when lights should be turned on,
         make sure predictions only fall within darkness hours.
 
@@ -524,15 +524,30 @@ class LightScheduler:
         # Compute necessary features (includes interval_number correctly)
         df = self._create_base_features(df)
 
+        # Calculate is_dark field based on darkness window
+        df['is_dark'] = df['timestamp'].dt.time.apply(
+            lambda t: self.is_dark(t, darkness_start, darkness_end)
+        )
+
+        # Filter to only darkness intervals
+        df = df[df['is_dark'] == 1]
+
         logging.debug(
-            "Prediction DataFrame after base features: \n%s", df.head())
+            "Prediction DataFrame after darkness filter: \n%s", df.head())
+
+        if df.empty:
+            logging.warning(
+                "No darkness intervals found for %s. Empty schedule.",
+                schedule_date)
+            return {}
 
         if self.model is None:
             logging.error("No trained model found. Cannot generate schedule.")
             return {}
 
         predictions, probabilities = self._predict_schedule(df)
-        logging.debug("Predictions: %s", predictions)
+        logging.debug("Predictions: %s", predictions.tolist())
+        logging.debug("Prediction probabilities: %s", probabilities.tolist())
 
         return self.store_schedule(schedule_date, df,
                                    predictions, probabilities)
