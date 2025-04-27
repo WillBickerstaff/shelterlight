@@ -410,6 +410,21 @@ class GPS:
             if self.__gps_ser is None:
                 logging.error("GPS Serial connection not initialized is %s"
                               "the correct serial port?", self.__serial_port)
+
+                # Try alternative ports
+                if self.__gps_ser.port == "/dev/ttyAMA0":
+                    logging.info("Retrying with /dev/serial0")
+                    self.__gps_ser.port = "/dev/serial0"
+                    self.pwr_on(pwr_up_wait)
+                else:
+                    logging.info("Retrying with /dev/ttyAMA0")
+                    self.__gps_ser.port = "/dev/ttyAMA0"
+                    self.pwr_on(pwr_up_wait)
+
+            # Still None serial probably not configured
+            if self.__gps_ser is None:
+                logging.error("Couldn't open the serial port - "
+                              "Check hardware serial config with raspi-config")
                 raise GPSInvalid
             self._get_coordinates(max_fix_time)
             self._get_datetime(max_fix_time)

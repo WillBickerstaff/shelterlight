@@ -353,12 +353,17 @@ class LightScheduler:
             None
         """
         #   1-Retrieve & prepare training data
-        df = self._prepare_training_data(days_history)
+        fetched_data = self._prepare_training_data(days_history)
         # If there is no training data then exit
-        if df is None:
-            logging.warning("No training data available, skipping model training")
+        if fetched_data is None:
+            logging.warning(
+                "No training data available, skipping model training")
             return
-            
+
+        df_activity, df_schedules = fetched_data
+        df = self._create_base_features(df_activity)
+        df = self._add_schedule_accuracy_features(df, df_schedules)
+
         # 2-Select features for training
         feature_cols = self._get_feature_columns()
         x = df[feature_cols]
@@ -367,13 +372,26 @@ class LightScheduler:
         # 4-Create the dataset
         train_data = lgb.Dataset(x, label=y)
         # 5-Train the model
-        self.model = lgb.train(
-            self.model_params,
-            train_data,
-            num_boost_round=100,
-            valid_sets=[train_data],
-            early_stopping_rounds=10
-        )
+        try:
+            # Attempt with newer LightGBM API
+            self.model = lgb.train(
+                self.model_params,
+                train_data,
+                num_boost_round=100,
+                valid_sets=[train_data],
+                early_stopping_rounds=10
+            )
+        except TypeError:
+            # Fallback to callbacks on older LightGBM versions
+            logging.warning("LightGBM Unsupported kwarg early_stopping_rounds"
+                            "falling back to callbacks API")
+            self.model = lgb.train(
+                self.model_params,
+                train_data,
+                num_boost_round=100,
+                valid_sets=[train_data],
+                callbacks=[lgb.early_stopping(stopping_rounds=10)]
+            )
         # 6-log feature importance
         importance = pd.DataFrame({
             'feature': feature_cols,
