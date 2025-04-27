@@ -97,6 +97,7 @@ GPS module settings.
 | `fix_retry_interval` | float | `600.0`        | Interval between GPS fix attempts.              |
 | `max_fix_time`       | float | `120.0`        | Max time to attempt GPS fix.                    |
 | `failed_fix_days`    | int   | `14`           | Days of repeated fix failure before fault.      |
+| `bypass_fix_window`  | bool  | `False`        | Allow GPS fixing at any time.                   |
 
 ---
 
