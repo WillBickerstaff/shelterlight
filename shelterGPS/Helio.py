@@ -606,18 +606,19 @@ class SunTimes:
             None
         """
         logging.debug("Populating persistent Data for JSON storage")
+        persist = PersistentData
         # Save GPS location data
-        PersistentData().current_latitude = self._gps.latitude
-        PersistentData().current_longitude = self._gps.longitude
-        PersistentData().current_altitude = self._gps.altitude
-        PersistentData().missed_fix_days = self.failed_fix_days
+        persist.current_latitude = self._gps.latitude
+        persist.current_longitude = self._gps.longitude
+        persist.current_altitude = self._gps.altitude
+        persist.missed_fix_days = self.failed_fix_days
 
         # Save today's and tomorrow's solar event times
-        PersistentData().add_sunrise_time(self.UTC_sunrise_today)
-        PersistentData().add_sunrise_time(self.UTC_sunrise_tomorrow)
-        PersistentData().add_sunset_time(self.UTC_sunset_today)
-        PersistentData().add_sunset_time(self.UTC_sunset_tomorrow)
-        PersistentData().store_data()
+        persist.add_sunrise_time(self.UTC_sunrise_today)
+        persist.add_sunrise_time(self.UTC_sunrise_tomorrow)
+        persist.add_sunset_time(self.UTC_sunset_today)
+        persist.add_sunset_time(self.UTC_sunset_tomorrow)
+        persist.store_data()
 
     @staticmethod
     def calculate_solar_times(

@@ -162,9 +162,12 @@ class PersistentData:
 
             with open(ConfigLoader().persistent_data_json, 'w') as file:
                 json.dump(data, file, indent=2, sort_keys=True)
-                logging.info("GPS data stored successfully in JSON file.")
+                logging.info("Data stored successfully in JSON file.")
+
+            # Refresh local convenience attributes
+            self._populate_locals_from_file
         except IOError as e:
-            logging.error("Failed to store GPS data in JSON: %s", e)
+            logging.error("Failed to store Data in JSON: %s", e)
             raise DataStorageError("Failed to store data in JSON.") from e
 
     def _warn_once(self, flag_attr: str, missing_date: dt.date, message: str):
@@ -226,7 +229,7 @@ class PersistentData:
     @property
     def sunset_times(self) -> List[dt.datetime]:
         """Datetime object list of sunset times from persistent data."""
-        return self._sunrise_times
+        return self._sunset_times
 
     @property
     def sunrise_today(self) -> Optional[dt.datetime]:
@@ -313,8 +316,9 @@ class PersistentData:
         for srt in iso_datetimes:
             self._add_date(dt_obj=iso_to_datetime(srt),
                            is_sunrise=is_sunrise)
+        times_list = self._sunrise_times if is_sunrise else self._sunset_times
         logging.debug("JSON: Converted %s times to date.datetimes: \n  %s",
-                      sr_ss_str, self._sunrise_times)
+                      sr_ss_str, times_list)
 
     def _clear_past_times(self) -> None:
         """Remove any sunrise or sunset times that are in the past."""
@@ -363,7 +367,10 @@ class PersistentData:
                         iso_datetimes=data.get(key, []),
                         is_sunrise=False
                     )
-
+                logging.debug("Memory AFTER JSON load\n"
+                              "\tsunrise_times: %s\n"
+                              "\tsunset_times: %s",
+                              self._sunrise_times, self._sunset_times)
         except IOError as e:
             logging.error(
                 "Failed to read persistent data from file %s : %s",

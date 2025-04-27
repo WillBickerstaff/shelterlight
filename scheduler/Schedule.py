@@ -12,7 +12,7 @@ Version: 0.1
 from threading import Lock
 from lightlib.persist import PersistentData
 from lightlib.db import DB
-from lightlib.common import DATE_TODAY
+from lightlib.common import DATE_TODAY, DATE_TOMORROW
 from typing import Optional
 import psycopg2
 import pandas as pd
@@ -241,16 +241,31 @@ class LightScheduler:
         logging.info("Activity data processed successfully")
         return df
 
-    def _get_darkness_times(self) -> tuple[dt.time, dt.time]:
+    def _get_darkness_times(self, date: dt.date) -> tuple[dt.time, dt.time]:
         """Retrieve stored sunset and sunrise times from PersistentData.
 
+        Args
+        ----
+            date (dt.date): The date for which to retrieve the dark period:
+                            Typically today or tomorrow.
+                            For tomorrow, the start time is accurate, but the
+                            end is approximated based on today's sunris
+                            (+1 day)
         Returns
         -------
             tuple[dt.time, dt.time]: (darkness_start, darkness_end)
         """
         persistent_data = PersistentData()
-        darkness_start = persistent_data.sunset_today
-        darkness_end = persistent_data.sunrise_tomorrow
+        if date == DATE_TODAY:
+            darkness_start = persistent_data.sunset_today
+            darkness_end = persistent_data.sunrise_tomorrow
+        elif date == DATE_TOMORROW:
+            darkness_start = persistent_data.sunset_tomorrow
+            darkness_end = persistent_data.sunrise_tomorrow + \
+                dt.timedelta(days=1)
+        else:
+            darkness_start = None
+            darkness_end = None
 
         # Create a tracking attribute for the logged warning
         # (Removes multiple log entries)
@@ -287,11 +302,11 @@ class LightScheduler:
         """
         if darkness_start < darkness_end:
             # Darkness is within a single day (e.g., 18:00 - 06:00)
-            return 1 if darkness_start <= time_obj <= darkness_end else 0
+            return 1 if darkness_start <= time_obj < darkness_end else 0
         else:
             # Darkness spans midnight (e.g., 21:00 - 05:00)
             return 1 if (time_obj >= darkness_start or
-                         time_obj <= darkness_end) else 0
+                         time_obj < darkness_end) else 0
 
     def _add_schedule_accuracy_features(
                                 self, df: pd.DataFrame,
@@ -530,6 +545,10 @@ class LightScheduler:
         # Compute necessary features (includes interval_number correctly)
         df = self._create_base_features(df)
 
+        logging.debug("Using darkness windows on %s: start=%s, end=%s",
+                      schedule_date,
+                      darkness_start.strftime("%H:%M"),
+                      darkness_end.strftime("%H:%M"))
         # Calculate is_dark field based on darkness window
         df['is_dark'] = df['timestamp'].dt.time.apply(
             lambda t: self.is_dark(t, darkness_start, darkness_end)
@@ -649,7 +668,7 @@ class LightScheduler:
                         ON CONFLICT (date, interval_number) DO UPDATE
                         SET prediction = EXCLUDED.prediction;
                     """, (schedule_date, int(interval), info["start"],
-                          info["end"],int(info["prediction"])))
+                          info["end"],info["prediction"]))
 
             self.db.conn.commit()  # Commit transaction
             logging.info(f"Stored schedule for {schedule_date} in database.")
@@ -876,11 +895,11 @@ class LightScheduler:
                 # Retrain the model using updated accuracy data
                 self.train_model(days_history=self._progressive_history())
                 # Get tomorrow's date and darkness period
-                tomorrow = dt.datetime.now().date() + dt.timedelta(days=1)
-                darkness_start, darkness_end = self._get_darkness_times()
+                darkness_start, darkness_end = \
+                    self._get_darkness_times(DATE_TOMORROW)
                 # Generate a new schedule for tomorrow
                 new_schedule = self.generate_daily_schedule(
-                    tomorrow.strftime("%Y-%m-%d"),
+                    DATE_TOMORROW.strftime("%Y-%m-%d"),
                     darkness_start.strftime("%H:%M"),
                     darkness_end.strftime("%H:%M")
                 )
@@ -890,12 +909,12 @@ class LightScheduler:
                 if not new_schedule:
                     # Empty schedule
                     logging.warning("Empty schedule generated for %s",
-                                    tomorrow)
+                                    DATE_TOMORROW)
                 else:
                     # Log the successful update and return the new schedule
                     logging.info("Successfully updated schedule for %s",
-                                 tomorrow)
-                self._log_schedule(new_schedule, tomorrow)
+                                 DATE_TOMORROW)
+                self._log_schedule(new_schedule, DATE_TOMORROW)
                 return new_schedule
 
         except Exception as e:
@@ -957,7 +976,7 @@ class LightScheduler:
         now = current_time or dt.datetime.now(dt.UTC)
         # Identify the relevant schedule date (yesterday or today)
         # Get darkness times for today (could span two dates)
-        darkness_start, darkness_end = self._get_darkness_times()
+        darkness_start, darkness_end = self._get_darkness_times(DATE_TODAY)
 
         # Determine if this moment falls in today's or yesterday's schedule
         if darkness_start < darkness_end:
@@ -1131,7 +1150,8 @@ class LightScheduler:
         month_cos = np.cos(2 * np.pi * month / 12)
 
         # Determine if the timestamp is within darkness hours
-        darkness_start, darkness_end = self._get_darkness_times()
+        darkness_start, darkness_end = \
+            self._get_darkness_times(timestamp.date())
         is_dark = self.is_dark(timestamp.time(), darkness_start, darkness_end)
 
         # Calculate interval number

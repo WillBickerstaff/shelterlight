@@ -46,13 +46,9 @@ class LightController:
             bool: True if it is dark now, otherwise false
         """
         now = dt.datetime.now(dt.timezone.utc).time()
-        darkness_start, darkness_end = self.schedule._get_darkness_times()
-
-        if darkness_start < darkness_end:
-            return darkness_start <= now <= darkness_end
-        else:
-            # darkness spans midnight
-            return now >= darkness_start or now <= darkness_end
+        darkness_start, darkness_end = \
+            self.schedule._get_darkness_times(DATE_TODAY)
+        return self.schedule.is_dark(now, darkness_start, darkness_end) == 1
 
     def set_lights(self) -> bool:
         """Set the light output.
