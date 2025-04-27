@@ -149,9 +149,6 @@ class DB:
                 confidence DECIMAL(5,4),
                 created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-
-                CONSTRAINT valid_interval CHECK (interval_number >= 0 AND
-                                                 interval_number <= 47),
                 CONSTRAINT valid_confidence CHECK (confidence >= 0 AND
                                                    confidence <= 1),
                 CONSTRAINT unique_schedule_interval UNIQUE (
