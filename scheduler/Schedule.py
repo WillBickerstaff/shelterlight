@@ -598,7 +598,7 @@ class LightScheduler:
                 "end": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
                         dt.timedelta(minutes=(interval+1) *
                                      self.interval_minutes)).time(),
-                "prediction": int(predictions[idx]),
+                "prediction": True if int(predictions[idx]) > 0 else False,
                 "confidence": float(probabilities[idx])
             }
 
@@ -628,7 +628,7 @@ class LightScheduler:
                         ON CONFLICT (date, interval_number) DO UPDATE
                         SET prediction = EXCLUDED.prediction;
                     """, (schedule_date, int(interval), info["start"],
-                          info["end"], int(info["prediction"])))
+                          info["end"], info["prediction"]))
 
             self.db.conn.commit()  # Commit transaction
             logging.info(f"Stored schedule for {schedule_date} in database.")
