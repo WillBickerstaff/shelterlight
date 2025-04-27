@@ -425,6 +425,59 @@ class LightScheduler:
                                            # schedules
         ]
 
+    def _progressive_history(self) -> int:
+        """Return the maximum available number of days for training.
+
+        Allow the model to adjust its training history dynamically based on
+        how much data is available in the activity log. Starts small and
+        grows progressively up to a maximum.
+
+        Returns
+        -------
+        int
+            The number of days to use for training, capped at MAX_DAYS_HISTORY.
+        """
+        MAX_DAYS_HISTORY = 30   # Cap at 30 days
+        MIN_DAYS_HISTORY = 2    # Minimum to avoid meaningless tiny training
+
+        try:
+            # Check database connection
+            if self.db is None or self.db.conn.closed:
+                self.set_db_connection()
+                if self.db is None:
+                    logging.error(
+                        "No database connection available to check history.")
+                    return MIN_DAYS_HISTORY
+
+            # Query for the oldest timestamp in activity_log
+            query = "SELECT MIN(timestamp) FROM activity_log;"
+            with self.db.conn.cursor() as cursor:
+                cursor.execute(query)
+                result = cursor.fetchone()
+                oldest_timestamp = result[0]
+
+            if oldest_timestamp is None:
+                # No data at all yet
+                logging.warning(
+                    "0 activity records found. Using minimum training window.")
+                return MIN_DAYS_HISTORY
+
+            today = dt.datetime.now(dt.UTC)
+            history_days = (today - oldest_timestamp).days
+            effective_days = max(MIN_DAYS_HISTORY,
+                                 min(history_days, MAX_DAYS_HISTORY))
+
+            logging.info("Progressive training window determined: %d days "
+                         "(raw history: %d days)",
+                         effective_days, history_days)
+
+            return effective_days
+
+        except Exception as e:
+            logging.error(
+                "Failed to calculate progressive training history: %s", e)
+            return MIN_DAYS_HISTORY
+
     def generate_daily_schedule(self, date, darkness_start, darkness_end):
         """Generate a light schedule for a date based on model predictions.
 
@@ -799,7 +852,7 @@ class LightScheduler:
                 yesterday = dt.datetime.now().date() - dt.timedelta(days=1)
                 self.evaluate_previous_schedule(yesterday)
                 # Retrain the model using updated accuracy data
-                self.train_model()
+                self.train_model(days_history=self._progressive_history())
                 # Get tomorrow's date and darkness period
                 tomorrow = dt.datetime.now().date() + dt.timedelta(days=1)
                 darkness_start, darkness_end = self._get_darkness_times()
