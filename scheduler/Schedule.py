@@ -353,12 +353,17 @@ class LightScheduler:
             None
         """
         #   1-Retrieve & prepare training data
-        df = self._prepare_training_data(days_history)
+        fetched_data = self._prepare_training_data(days_history)
         # If there is no training data then exit
-        if df is None:
-            logging.warning("No training data available, skipping model training")
+        if fetched_data is None:
+            logging.warning(
+                "No training data available, skipping model training")
             return
-            
+
+        df_activity, df_schedules = fetched_data
+        df = self._create_base_features(df_activity)
+        df = self._add_schedule_accuracy_features(df, df_schedules)
+
         # 2-Select features for training
         feature_cols = self._get_feature_columns()
         x = df[feature_cols]
@@ -367,13 +372,26 @@ class LightScheduler:
         # 4-Create the dataset
         train_data = lgb.Dataset(x, label=y)
         # 5-Train the model
-        self.model = lgb.train(
-            self.model_params,
-            train_data,
-            num_boost_round=100,
-            valid_sets=[train_data],
-            early_stopping_rounds=10
-        )
+        try:
+            # Attempt with newer LightGBM API
+            self.model = lgb.train(
+                self.model_params,
+                train_data,
+                num_boost_round=100,
+                valid_sets=[train_data],
+                early_stopping_rounds=10
+            )
+        except TypeError:
+            # Fallback to callbacks on older LightGBM versions
+            logging.warning("LightGBM Unsupported kwarg early_stopping_rounds"
+                            "falling back to callbacks API")
+            self.model = lgb.train(
+                self.model_params,
+                train_data,
+                num_boost_round=100,
+                valid_sets=[train_data],
+                callbacks=[lgb.early_stopping(stopping_rounds=10)]
+            )
         # 6-log feature importance
         importance = pd.DataFrame({
             'feature': feature_cols,
@@ -427,48 +445,35 @@ class LightScheduler:
         """
         # Validate input parameters
         try:
-            schedule_date = dt.datetime.strptime(date, "%Y-%m-%d").date()
+            schedule_date = dt.datetime.strptime(
+                date, "%Y-%m-%d").date()
             darkness_start = dt.datetime.strptime(
                 darkness_start, "%H:%M").time()
-            darkness_end = dt.datetime.strptime(darkness_end, "%H:%M").time()
+            darkness_end = dt.datetime.strptime(
+                darkness_end, "%H:%M").time()
         except ValueError as e:
             logging.error("Invalid date or time format: %s", e)
             return {}
 
-        # Prepare prediction data
-        interval_times = [
-            (schedule_date, i) for
-            i in range((24 * 60) // self.interval_minutes)]
-        df = pd.DataFrame(interval_times, columns=["date", "interval_number"])
+        # Build empty df with just date
+        num_intervals = (24 * 60) // self.interval_minutes
+        df = pd.DataFrame({'date': [schedule_date] * num_intervals})
 
-        # Add a timestamp column
-        df["timestamp"] = df.apply(
-            lambda row: dt.datetime.combine(
-                row["date"],
-                dt.time(
-                    hour=(row["interval_number"] *
-                          self.interval_minutes) // 60,
-                    minute=(row["interval_number"] *
-                            self.interval_minutes) % 60,
-                ),
-            ),
-            axis=1,
-        )
+        # Add timestamp for each interval
+        df['timestamp'] = [
+            dt.datetime.combine(schedule_date, dt.time(
+                hour=(i * self.interval_minutes) // 60,
+                minute=(i * self.interval_minutes) % 60
+            ))
+            for i in range(num_intervals)
+        ]
 
-        # Compute necessary features for each interval
+        # Compute necessary features (includes interval_number correctly)
         df = self._create_base_features(df)
 
-        # Pass darkness_start and darkness_end to is_dark()
-        df["is_dark"] = df["timestamp"].dt.time.apply(
-            lambda t: self.is_dark(t, darkness_start, darkness_end)
-        )
+        logging.debug(
+            "Prediction DataFrame after base features: \n%s", df.head())
 
-        # Keep only dark intervals
-        df = df[df["is_dark"] == 1]
-
-        logging.debug("Prediction DataFrame: \n%s", df.head())
-
-        # Make predictions using the trained model
         if self.model is None:
             logging.error("No trained model found. Cannot generate schedule.")
             return {}
@@ -476,15 +481,40 @@ class LightScheduler:
         predictions = self._predict_schedule(df)
         logging.debug("Predictions: %s", predictions)
 
-        # Store and return the generated schedule
-        logging.debug(
-            "Calling store_schedule with schedule_date: "
-            "%s, df: %s, predictions: %s",
-            schedule_date,
-            df,
-            predictions,
-        )
         return self.store_schedule(schedule_date, df, predictions)
+
+    def _predict_schedule(self, df: pd.DataFrame) -> np.ndarray:
+        """Generate predictions for the given schedule DataFrame.
+
+        Args
+        ----
+            df (pd.DataFrame): DataFrame containing feature columns
+            for prediction.
+
+        Returns
+        -------
+            np.ndarray: Array of predicted labels (0 or 1).
+        """
+        if self.model is None:
+            logging.error("No trained model found. Cannot make predictions.")
+            return np.array([])
+
+        feature_cols = self._get_feature_columns()
+
+        # Drop polluting non-feature columns BEFORE selecting feature columns
+        drop_cols = ['date', 'timestamp']
+        df = df.drop(columns=[col for col in drop_cols if col in df.columns])
+
+        logging.debug("After dropping non-features, DataFrame columns: %s",
+                      df.columns.tolist())
+        logging.debug("Expected feature columns: %s", feature_cols)
+        # Always slice the DataFrame cleanly
+        x_predict = df[feature_cols].copy()
+
+        y_pred = self.model.predict(x_predict)
+        predictions = (y_pred > self.min_confidence).astype(int)
+
+        return predictions
 
     def store_schedule(self, schedule_date: dt.date,
                        df: pd.DataFrame, predictions: list[int]) -> dict:

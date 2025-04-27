@@ -103,13 +103,15 @@ source .venv/bin/activate
 
 **Install Dependencies**
 
-```bash
-pip install -r req_modules.txt
-```
-
-if you get errors during numpy install try:
+First numpy
 ```bash
 pip install --prefer-binary numpy
+```
+
+Then the remaining dependencies:
+
+```bash
+pip install -r req_modules.txt
 ```
 
 ---
