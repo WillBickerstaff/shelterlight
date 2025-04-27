@@ -188,6 +188,11 @@ class SunTimes:
             bool: `True` if the current time is within today's or tomorrow's
             fixing window; `False` otherwise.
         """
+        if ConfigLoader().bypass_fix_window:
+            logging.warning(
+                "Bypassing GPS fix window (bypass_fix_window=True)")
+            return True
+
         dt_now = dt.datetime.now(dt.timezone.utc)
         return ((self._fix_window["start_today"] <= dt_now <=
                  self._fix_window["end_today"]) or

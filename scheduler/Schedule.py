@@ -329,6 +329,12 @@ class LightScheduler:
 
         # Handle missing values for intervals with no recorded accuracy
         #   Default accuracy: Assume 50% accuracy for unseen intervals
+        # cast columns before filling
+        df['was_correct'] = df['was_correct'].astype(float)
+        df['confidence'] = df['confidence'].astype(float)
+        df['false_positive'] = df['false_positive'].astype(int)
+        df['false_negative'] = df['false_negative'].astype(int)
+
         df['historical_accuracy'] = df['was_correct'].fillna(0.5)
         # - Default false positive & false negative counts: Assume zero
         df['historical_false_positives'] = df['false_positive'].fillna(0)
@@ -546,9 +552,8 @@ class LightScheduler:
             return {}
 
         predictions, probabilities = self._predict_schedule(df)
-
-        logging.debug("Predictions: %s", predictions.tolist())
-        logging.debug("Prediction probabilities: %s", probabilities.tolist())
+        # logging.debug("Predictions: %s", predictions.tolist())
+        # logging.debug("Prediction probabilities: %s", probabilities.tolist())
 
         return self.store_schedule(schedule_date, df,
                                    predictions, probabilities)
@@ -575,9 +580,9 @@ class LightScheduler:
         drop_cols = ['date', 'timestamp']
         df = df.drop(columns=[col for col in drop_cols if col in df.columns])
 
-        logging.debug("After dropping non-features, DataFrame columns: %s",
-                      df.columns.tolist())
-        logging.debug("Expected feature columns: %s", feature_cols)
+        # logging.debug("After dropping non-features, DataFrame columns: %s",
+        #              df.columns.tolist())
+        # logging.debug("Expected feature columns: %s", feature_cols)
         # Always slice the DataFrame cleanly
         x_predict = df[feature_cols].copy()
 
@@ -605,8 +610,8 @@ class LightScheduler:
         """
         # Store in cache
         schedule = {}
-        for idx, row in df.iterrows():
-            interval = int(row['interval_number'])
+        for idx, row in enumerate(df.itertuples(index=False)):
+            interval = int(row.interval_number)
             schedule[interval] = {
                 "start": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
                           dt.timedelta(minutes=interval *
@@ -690,7 +695,8 @@ class LightScheduler:
                     WHERE date = %s
                 """, (target_date,))
                 rows = cur.fetchall()
-                logging.debug("get_schedule fetched rows: %s", rows)
+                logging.debug("get_schedule fetched %i rows for %s",
+                              len(rows), target_date)
             # Convert results to a dictionary
             schedule = {}
             for row in rows:

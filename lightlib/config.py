@@ -114,6 +114,11 @@ class ConfigLoader:
                                          "type": int,
                                          "is_pin": False,
                                          "accepts_list": False},
+
+            "bypass_fix_window":        {"value": False,
+                                         "type": bool,
+                                         "is_pin": False,
+                                         "accepts_list": False}
         },
         # ------------------------------------------------------------#
         "IO": {
@@ -256,6 +261,12 @@ class ConfigLoader:
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
+
+    @property
+    def bypass_fix_window(self) -> bool:
+        """bool: True if GPS fix can be attempted at any time."""
+        return self.get_config_value(config=self.config, section="GPS",
+                                     option="bypass_fix_window")
 
     @property
     def max_activity_time(self) -> int:
@@ -646,7 +657,7 @@ class ConfigLoader:
             raw_value = self.config.get(
                 section, option, fallback=default_value)
             # Convert the raw value to the correct type
-            logging.info("CONFIG: Option %s.%s set with value from config "
+            logging.debug("CONFIG: Option %s.%s set with value from config "
                          "file, type is [%s], value is %s, (%s accept lists)",
                          section, option, str(specified_type), raw_value,
                          "does" if accepts_list else "doesn't")
