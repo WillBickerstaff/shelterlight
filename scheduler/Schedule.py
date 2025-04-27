@@ -478,10 +478,11 @@ class LightScheduler:
             logging.error("No trained model found. Cannot generate schedule.")
             return {}
 
-        predictions = self._predict_schedule(df)
+        predictions, probabilities = self._predict_schedule(df)
         logging.debug("Predictions: %s", predictions)
 
-        return self.store_schedule(schedule_date, df, predictions)
+        return self.store_schedule(schedule_date, df,
+                                   predictions, probabilities)
 
     def _predict_schedule(self, df: pd.DataFrame) -> np.ndarray:
         """Generate predictions for the given schedule DataFrame.
@@ -512,12 +513,14 @@ class LightScheduler:
         x_predict = df[feature_cols].copy()
 
         y_pred = self.model.predict(x_predict)
-        predictions = (y_pred > self.min_confidence).astype(int)
+        probabilities = self.model.predict(x_predict, raw_score=False)
+        predictions = (y_pred >= self.min_confidence).astype(int)
 
-        return predictions
+        return predictions, probabilities
 
-    def store_schedule(self, schedule_date: dt.date,
-                       df: pd.DataFrame, predictions: list[int]) -> dict:
+    def store_schedule(self, schedule_date: dt.date, df: pd.DataFrame,
+                       predictions: np.ndarray,
+                       probabilities: np.ndarray) -> dict:
         """Store the generated schedule in cache and database.
 
         Args
@@ -532,7 +535,20 @@ class LightScheduler:
             dict: The stored schedule mapping interval numbers to light status.
         """
         # Store in cache
-        schedule = dict(zip(df["interval_number"], predictions))
+        schedule = {}
+        for idx, row in df.iterrows():
+            interval = int(row['interval_number'])
+            schedule[interval] = {
+                "start": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
+                          dt.timedelta(minutes=interval *
+                                       self.interval_minutes)).time(),
+                "end": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
+                        dt.timedelta(minutes=(interval+1) *
+                                     self.interval_minutes)).time(),
+                "prediction": int(predictions[idx]),
+                "confidence": float(probabilities[idx])
+            }
+
         self.schedule_cache[schedule_date] = schedule
 
         # Store in database
@@ -550,15 +566,7 @@ class LightScheduler:
         # If we get here, database is healthy, Store in database
         try:
             with self.db.conn.cursor() as cursor:
-                for interval, prediction in schedule.items():
-                    start_time = (dt.datetime.combine(
-                        schedule_date, dt.time(0, 0)) + dt.timedelta(
-                            minutes=interval * self.interval_minutes)).time()
-                    end_time = (dt.datetime.combine(
-                        schedule_date, dt.time(0, 0)) + dt.timedelta(
-                            minutes=(interval + 1) *
-                            self.interval_minutes)).time()
-
+                for interval, info in schedule.items():
                     cursor.execute("""
                         INSERT INTO light_schedules (date, interval_number,
                                                      start_time, end_time,
@@ -566,8 +574,8 @@ class LightScheduler:
                         VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (date, interval_number) DO UPDATE
                         SET prediction = EXCLUDED.prediction;
-                    """, (schedule_date, interval, start_time, end_time,
-                          prediction))
+                    """, (schedule_date, int(interval), info["start"],
+                          info["end"], int(info["prediction"])))
 
             self.db.conn.commit()  # Commit transaction
             logging.info(f"Stored schedule for {schedule_date} in database.")
@@ -607,15 +615,22 @@ class LightScheduler:
         try:
             with self.db.conn.cursor() as cur:
                 cur.execute("""
-                    SELECT interval_number, prediction
+                    SELECT interval_number, start_time, end_time, prediction,
+                confidence
                     FROM light_schedules
                     WHERE date = %s
                 """, (target_date,))
                 rows = cur.fetchall()
                 logging.debug("get_schedule fetched rows: %s", rows)
-        # Convert results to a dictionary
-            schedule = {interval: prediction for interval, prediction in rows}
-
+            # Convert results to a dictionary
+            schedule = {}
+            for row in rows:
+                schedule[row[0]] = {
+                    "start": row[1],
+                    "end": row[2],
+                    "prediction": row[3],
+                    "confidence": row[4] if row[4] is not None else 0.5
+                }
         # If retrieved from the database, store it in cache
             self.schedule_cache = {
                 'date': target_date,
