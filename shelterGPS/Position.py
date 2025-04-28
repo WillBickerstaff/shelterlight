@@ -408,24 +408,10 @@ class GPS:
 
         try:
             if self.__gps_ser is None:
-                logging.error("GPS Serial connection not initialized is %s"
+                logging.error("GPS Serial connection not initialized is %s "
                               "the correct serial port?", self.__serial_port)
+                self._initialise_serial()
 
-                # Try alternative ports
-                if self.__gps_ser.port == "/dev/ttyAMA0":
-                    logging.info("Retrying with /dev/serial0")
-                    self.__gps_ser.port = "/dev/serial0"
-                    self.pwr_on(pwr_up_wait)
-                else:
-                    logging.info("Retrying with /dev/ttyAMA0")
-                    self.__gps_ser.port = "/dev/ttyAMA0"
-                    self.pwr_on(pwr_up_wait)
-
-            # Still None serial probably not configured
-            if self.__gps_ser is None:
-                logging.error("Couldn't open the serial port - "
-                              "Check hardware serial config with raspi-config")
-                raise GPSInvalid
             self._get_coordinates(max_fix_time)
             self._get_datetime(max_fix_time)
         except GPSInvalid:
@@ -433,6 +419,28 @@ class GPS:
             raise
         finally:
             self.pwr_off()
+
+    def _initialise_serial(self) -> None:
+        """Attempt to initialse the GPS serial connection."""
+        ports_to_try = ["/dev/ttyAMA0", "/dev/serial0", "/dev/s0"]
+        for port in ports_to_try:
+            try:
+                logging.info("Attempting to open GPS serial port %s", port)
+                self.__gps_ser = serial.Serial(
+                    port=port,
+                    baudrate=ConfigLoader().gps_baudrate,
+                    timeout=ConfigLoader().gps_timeout)
+                if self.__gps_ser.is_open:
+                    logging.info("GPS serial port %s opened successfuly", port)
+                    return
+            except (serial.SerialException, AttributeError) as e:
+                logging.warning (
+                    "Failed to open GPS srial port %s: %s", port, e)
+                self.__gps_ser = None
+
+        logging.error("Unable to find GPS module on any serial port.")
+        raise GPSInvalid("Could not establish a serial connection with the "
+                         "GPS module.")
 
     def _get_msg(self, msg: str = "RMC", max_time: float = None) -> None:
         """Read and validate GPS messages, storing if correct.

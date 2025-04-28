@@ -16,13 +16,12 @@ import socket
 import threading
 import datetime as dt
 import time
-import RPi.GPIO as GPIO
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
 from scheduler.Schedule import LightScheduler
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
-from lightlib.common import ConfigReloaded, gpio_init, gpio_cleanup
+from lightlib.common import ConfigReloaded
 from lightlib.lightcontrol import LightController
 
 
@@ -31,7 +30,6 @@ def cleanup_resources(gps: SunTimes, light_control: LightController) -> None:
     logging.info("Performing resource cleanup...")
     gps.cleanup()  # Stops GPS fix process thread, if any
     light_control.cleanup()  # Clean up light output GPIO
-    gpio_cleanup()
     logging.info("Resources cleaned up successfully.")
 
 
@@ -134,8 +132,7 @@ def main_loop():
             break
         finally:
             # Let systemd handle restarting to avoid zombie process
-            GPIO.cleanup()
-            logging.info("GPIO cleanup complete. Exiting.")
+            logging.info("\n%s\n%sMAIN LOOP ENDED\n%s", "-"*79, " "*32, "-"*79)
 
 
 def main():
@@ -147,7 +144,6 @@ def main():
     args = parser.parse_args()
     init_log(args.log_level)
     stop_event = threading.Event()
-    gpio_init()  # Set GPIO mode globally if not already set
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()

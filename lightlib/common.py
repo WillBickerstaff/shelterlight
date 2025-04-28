@@ -65,56 +65,12 @@ def datetime_to_iso(dt_obj: dt.datetime) -> str:
 
 
 def gpio_init(mode: Optional[int] = GPIO.BCM) -> None:
-    """Set the global GPIO mode to BOARD, unless already set correctly.
-
-    Safely initialize GPIO pin numbering mode for consistency across the
-    application. Allows GPIO mode to be set once, and prevents runtime errors
-    from conflicting mode assignments.
-
-    Args
-    ----
-    mode : int, optional
-        The desired GPIO numbering mode, either GPIO.BOARD (default) or
-        GPIO.BCM.
-
-    Raises
-    ------
-    RuntimeError
-        If the GPIO mode is already set and differs from the requested mode.
-    """
-    current_mode = GPIO.getmode()
-
-    mode_names = {
-        None: "None",
-        GPIO.BOARD: "BOARD",
-        GPIO.BCM: "BCM"
-    }
-
-    logging.debug("GPIO Mode currently set to: %s",
-                  mode_names.get(current_mode, str(current_mode)))
-
-    if current_mode is None:
-        GPIO.setmode(mode)
-        logging.info("GPIO Mode initialized to: %s",
-                     mode_names.get(mode, str(mode)))
-    elif current_mode != mode:
-        raise RuntimeError(
-            "GPIO mode already set to "
-            f"{mode_names.get(current_mode, str(current_mode))}, "
-            f"expected {mode_names.get(mode, str(mode))}."
-        )
-
+    """Set the global GPIO mode to BOARD."""
+    pass # no-op not required for lgpio
 
 def gpio_cleanup():
     """Global GPIO cleanup."""
-    try:
-        if GPIO.getmode() is not None:
-            GPIO.cleanup()
-            logging.debug("GPIO Resources cleaned up")
-        else:
-            logging.debug("GPIO cleanup skipped: GPIO mode not set.")
-    except RuntimeError as e:
-        logging.warning("GPIO cleanup failed: %s", e)
+    pass  # no-op not required for lgpio
 
 def valid_smallint(value):
     """Check a value can fit within smallint."""
