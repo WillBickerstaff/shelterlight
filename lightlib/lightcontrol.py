@@ -39,7 +39,8 @@ class LightController:
 
         # Open gpiochip0 handle for light output
         self._gpio_handle = lgpio.gpiochip_open(0)
-        lgpio.gpio_claim_output(self._gpio_handle, self._lights_output)
+        for out_pin in self._lights_output:
+            lgpio.gpio_claim_output(self._gpio_handle, out_pin)
         self.turn_off()  # Start with lights off
 
     def _is_dark_now(self) -> bool:
@@ -76,15 +77,24 @@ class LightController:
             self.turn_off()
             return False
 
+    def _set_lights(self, status: int):
+        """Set all light outputs to a given status.
+
+        Args
+        ----
+            status (int): Set all off (0) or all on (1)
+        """
+        if self._gpio_handle is not None:
+            for out_pin in self._lights_output:
+                lgpio.gpio_write(self._gpio_handle, out_pin, status)
+
     def turn_on(self):
         """Turn on lights."""
-        if self._gpio_handle is not None:
-            lgpio.gpio_write(self._gpio_handle, self._lights_output, 1)
+        self._set_lights(1)
 
     def turn_off(self):
         """Turn off lights."""
-        if self._gpio_handle is not None:
-            lgpio.gpio_write(self._gpio_handle, self._lights_output, 0)
+        self._set_lights(0)
 
     def cleanup(self):
         """Cleanup GPIO resources."""
