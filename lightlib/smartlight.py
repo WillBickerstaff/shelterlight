@@ -13,9 +13,9 @@ import logging
 import time
 import sys
 import inspect
+import lgpio
 from enum import Enum
 from typing import Optional
-from RPi import GPIO
 from lightlib.config import ConfigLoader
 
 
@@ -130,17 +130,17 @@ def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
     # Default the wait time to 0 if not provided
     wait_after = wait_after or 0
 
+    handle = lgpio.gpiochip_open(0)
     try:
         # Set up the pin as an output
-        GPIO.setup(pin_number, GPIO.OUT)
+        lgpio.gpio_claim_output(handle, pin_number)
         # Only change the state if it's different from the current state
-        if GPIO.input(pin_number) != state.value:
-            GPIO.output(pin_number, state.value)
-            action = "powered ON" if state == GPIO_PIN_STATE.ON \
-                else "powered OFF"
-            logging.info("Pin %s %s, waiting %s seconds", pin_number,
-                         action, wait_after)
-            time.sleep(wait_after)
+        lgpio.gpio_write(handle, pin_number, state.value)
+        action = "powered ON" if state == GPIO_PIN_STATE.ON \
+            else "powered OFF"
+        logging.info("Pin %s %s, waiting %s seconds", pin_number,
+                     action, wait_after)
+        time.sleep(wait_after)
 
     except RuntimeError as e:
         action = "power ON" if state == GPIO_PIN_STATE.ON else "power OFF"
@@ -150,6 +150,8 @@ def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
         raise RuntimeError(
             "Failed to %s pin %s due to GPIO error." % (action, pin_number)
         ) from e
+    finally:
+        lgpio.gpiochip_close(handle)
 
 
 def init_log(log_level: Optional[str] = None):
@@ -235,38 +237,41 @@ def warn_and_wait(message: str, wait_time: int = 5,
     confirm_pin = confirm_pin or ConfigLoader().confirm_input
 
     # Set up GPIOs for user input
-    GPIO.setup(cancel_pin, GPIO.IN)
-    GPIO.setup(confirm_pin, GPIO.IN)
+    handle = lgpio.gpiochip_open(0)
+    try:
+        lgpio.gpio_claim_input(handle, cancel_pin, lgpio.SET_PULL_DOWN)
+        lgpio.gpio_claim_input(handle, confirm_pin, lgpio.SET_PULL_DOWN)
 
-    print(message)
-    for remaining in range(wait_time, 0, -1):
-        # Display the countdown on the TTY line
-        sys.stdout.write(
-            f"\r{message} in {remaining} seconds... Press to cancel/confirm.")
-        sys.stdout.flush()
+        print(message)
+        for remaining in range(wait_time, 0, -1):
+            # Display the countdown on the TTY line
+            sys.stdout.write(
+                f"\r{message} in {remaining} seconds... "
+                "Press to cancel/confirm.")
+            sys.stdout.flush()
 
-        # Check for GPIO input to cancel
-        if GPIO.input(cancel_pin) == GPIO.HIGH:
-            print("\nCanceled by user.")
-            logging.info(f"{message} canceled by user.")
-            return CANCEL_CONFIRM.CANCEL
+            # Check for GPIO input to cancel
+            if lgpio.gpio_read(handle, cancel_pin):
+                print("\nCanceled by user.")
+                logging.info(f"{message} canceled by user.")
+                return CANCEL_CONFIRM.CANCEL
 
-        # Check for GPIO input to confirm
-        if GPIO.input(confirm_pin) == GPIO.HIGH:
-            print("\nConfirmed by user.")
-            logging.info(f"{message} confirmed by user.")
-            return CANCEL_CONFIRM.CONFIRM
+            # Check for GPIO input to confirm
+            if lgpio.gpio_read(handle, confirm_pin):
+                print("\nConfirmed by user.")
+                logging.info(f"{message} confirmed by user.")
+                return CANCEL_CONFIRM.CONFIRM
 
-        # Wait for 1 second before the next countdown iteration
-        time.sleep(1)
+            # Wait for 1 second before the next countdown iteration
+            time.sleep(1)
 
-    # Return the default based on `cancel_or_confirm` if no user input
-    print("\nNo input received, proceeding.")
-    logging.info(
-        f"{message} - proceeding with default: {default_action.name}.")
+        # Return the default based on `cancel_or_confirm` if no user input
+        print("\nNo input received, proceeding.")
+        logging.info(
+            f"{message} - proceeding with default: {default_action.name}.")
 
-    # Cleanup GPIO resources
-    GPIO.cleanup(cancel_pin)
-    GPIO.cleanup(confirm_pin)
+    finally:
+        # Cleanup GPIO resources
+        lgpio.gpiochip_close(handle)
 
     return default_action
