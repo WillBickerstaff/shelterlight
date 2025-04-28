@@ -9,9 +9,12 @@
 
 2. **Enable SSH (optional but recommended)**
 
-   Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
+   Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging. or once booted through `sudo raspi-config` **Advanced Options** -> **SSH**
 
 3.  **Boot your Raspberry Pi**
+
+4.  **Expand the filesystem**
+    `sudo raspi-config` **Advanced Options** -> **Expand Filesystem** Confirm & `sudo reboot`
 
 ## Set the Timezone
 
@@ -24,7 +27,7 @@ Choose **Localisation Options** -> **Timezone**. At the bottom of the list of av
 ```bash
 sudo raspi-config
 ```
-Choose **Interface Options** -> ** **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
+Choose **Interface Options** -> **I6 Serial Port**, choose **"NO"** when asked if you would like a login shell accessible over serial and **"YES"** when asked if you would like serial port hardware to be enabled
 
 **RPi Zero**
 

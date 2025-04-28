@@ -22,9 +22,17 @@ The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Pyt
 ## Table of Contents
 
 - [Project Overview](#project-overview)
-- [Minimal Raspberry Pi Installation](#minimal-raspberry-pi-installation)
+- [Raspberry Pi Installation](#raspberry-pi-installation)
   - [Recommended OS](#recommended-os)
-  - [Minimal Setup Steps](#minimal-setup-steps)
+  - [Initial operating system configuration](#initial-operating-system-configuration)
+      - [Flash OS Image](#1-flash-os-image)
+      - [Enable SSH *(Optional but recommended)*](#2-enable-ssh-optional-but-recommended)
+      - [Expand the filesystem *(Optional but recommended)*](#2-enable-ssh-optional-but-recommended)
+      - [Set the timezone *(UTC*)](#4set-timezone)
+      - [Enable hardware serial](#5-enable-hardware-serial)
+      - [Disable unnecessary services *(Optional but recommended)*](#6-disable-unnecessary-services)
+      - [Install system packages](#7-install-system-packages)
+      - [Additional optional configuration tweaks](#8-optional-configuration-tweaks)
 - [Initial Database Setup](#initial-database-setup)
   - [Database Configuration](#database-configuration)
   - [Create Database &amp; User](#create-database--user)
@@ -64,7 +72,7 @@ The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Pyt
 
 ---
 
-## Minimal Raspberry Pi Installation
+## Raspberry Pi Installation
 
 The Shelter Light Control System is designed to run efficiently on a **Raspberry Pi Zero** (or similar) with a minimal, headless configuration.
 
@@ -73,17 +81,47 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
 - **Raspberry Pi OS Lite**
   *(Debian Bookworm based, headless, no desktop)*
 
-### Minimal Setup Steps
+### Initial operating system configuration
 
 **TLDR -- Read [TLDR.md](./DOC/TLDR.md)**
 
-1. **Flash OS Image**
+#### 1. Flash OS Image
 
    - Use [Raspberry Pi Imager](https://www.raspberrypi.com/software/) or `dd` to write the OS image to your microSD card.
-2. **Enable SSH (optional but recommended)**
+
+#### 2. Enable SSH (optional but recommended)
 
    - Create an empty file named `ssh` in the `/boot` partition to allow remote access for debugging.
-3. **Set timezone**
+
+   or once booted through `sudo raspi-config`**Advanced Options** -> **SSH**
+
+#### 3. Expand the Filesystem (optional but recommended)
+
+   Expanding ensure the system has access to the full size of the SD Card. This is done by:
+
+   ```bash
+   sudo raspi-config
+   ```
+
+   - Navigate to Advanced Options -> Expand Filesystem
+   - Confirm the action and reboot with:
+
+   ```bash
+   sudo reboot
+   ```
+
+   Full use of the SD Card can be verified by checking the root partition (`\`) is the same size as the SD card
+   After reboot:
+   ```bash
+   df -h
+   ```
+   Will output something like:
+   ```bash
+   Filesystem          Size  Used  Avail Use%  Mounted On
+   /dev/root            29G  1.8G    26G   7%  /
+   ```
+
+#### 4.Set timezone
 
    The application is written to calculate and control using UTC
    as the default timezone throughout the year. This avoids complications with timezone boundaries and daylight saving.
@@ -94,7 +132,8 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
    ```
 
    Choose **Localisation Options** -> **Timezone**. At the bottom of the list of available timezones the option *'None of the above'* exists, choose this and then **'UTC'**
-4. **Enable Hardware Serial**
+
+#### 5. Enable Hardware Serial
 
    The GPS Module is intended to be connected
    to the hardware serial of the RPI (Header pins 8 & 10 which correspond to GPIO 14 & 15 - UART TX & UART RX)
@@ -124,6 +163,7 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
       dtoverlay=disable-bt
       ```
    3. Save and exit (`Ctrl+X`, then `Y`, then `Enter`).
+
    4. Reboot the Pi:
 
       ```bash
@@ -131,12 +171,12 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
       ```
 
    After rebooting, the serial port will be dedicated to your GPS module.
-5. **Disable Unnecessary Services**
+#### 6. Disable Unnecessary Services
 
    Certain system services are not required and should be disabled to improve boot time and reduce resource usage.
 
    See the section **Disabling Unnecessary Services** later in this document for recommended services to disable.
-6. **Install System Packages**
+#### 7. Install System Packages
 
    ```bash
    sudo apt update
@@ -155,7 +195,7 @@ The Shelter Light Control System is designed to run efficiently on a **Raspberry
    | build-essential                    | Compiler toolchain (gcc, g++, make) needed for pip installing C/C++-based packages. |
    | git                                | For pulling code if needed.                                                         |
 
-7. **Optional Configuration Tweaks**
+#### 8. Optional Configuration Tweaks
 
    - Disable HDMI output to save power:
      ```bash
