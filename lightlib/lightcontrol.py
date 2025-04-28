@@ -10,11 +10,12 @@ Version: 0.1
 """
 
 import logging
+import lgpio
 from threading import Lock
+from lightlib.common import DATE_TODAY
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
 from scheduler.Schedule import LightScheduler
-from RPi import GPIO
 from datetime import datetime as dt
 
 
@@ -36,7 +37,10 @@ class LightController:
         self.activity_monitor = Activity()
         self._lights_output = ConfigLoader().lights_output
 
-        GPIO.setup(self._lights_output, GPIO.OUT)
+        # Open gpiochip0 handle for light output
+        self._gpio_handle = lgpio.gpiochip_open(0)
+        lgpio.gpio_claim_output(self._gpio_handle, self._lights_output)
+        self.turn_off()  # Start with lights off
 
     def _is_dark_now(self) -> bool:
         """Determine if it is dark now to enable activity to react.
@@ -74,15 +78,23 @@ class LightController:
 
     def turn_on(self):
         """Turn on lights."""
-        GPIO.output(self._lights_output, GPIO.HIGH)
+        if self._gpio_handle is not None:
+            lgpio.gpio_write(self._gpio_handle, self._lights_output, 1)
 
     def turn_off(self):
         """Turn off lights."""
-        GPIO.output(self._lights_output, GPIO.LOW)
+        if self._gpio_handle is not None:
+            lgpio.gpio_write(self._gpio_handle, self._lights_output, 0)
 
     def cleanup(self):
         """Cleanup GPIO resources."""
-        if GPIO.getmode() is not None:
-            GPIO.cleanup(self._lights_output)
+        if hasattr(self, "_gpio_handle") and self._gpio_handle is not None:
+            try:
+                self.turn_off()
+                lgpio.gpiochip_close(self._gpio_handle)
+                logging.info("LightController GPIO handle closed.")
+            except lgpio.error as e:
+                logging.warning("LightController GPIO cleanup failed: %s", e)
+            self._gpio_handle = None
         self.activity_monitor.cleanup()
-        logging.info("LightController GPIO cleaned up.")
+        logging.info("LightController cleanup complete.")

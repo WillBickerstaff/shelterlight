@@ -162,6 +162,7 @@ class Activity:
             tick : int
                 Timestamp in microseconds (unused).
         """
+        logging.debug("Activity detection state changed pin %i", pin)
         if level == 1:    # High after Risng edge
             self._start_activity_event(pin)
         elif level == 0:  # Low after Falling edge
@@ -243,11 +244,9 @@ class Activity:
                 query=insert_query,
                 params=(start_time, day_of_week, month, year, pin, duration)
             )
-            logging.info(
-                f"Activity event logged for pin {pin} "
-                f"beginning at {start_time}"
-                f" with a duration of {duration} seconds."
-            )
+            logging.info("Activity event logged for pin %i\n"
+                         "\tbeginning at\t%s\n\tduration of\t%i seconds",
+                         pin, start_time, duration)
         except psycopg2.DatabaseError as e:
             logging.error(
                 "Failed to log activity event for pin %s: %s", pin, e)
@@ -261,9 +260,8 @@ class Activity:
                     self._pin_status[pin]["state"] == PinLevel.HIGH:
                 self._pin_status[pin]["status"] = PinHealth.FAULT
                 logging.warning(
-                    f"Pin {pin} set to FAULT status, high for {duration} "
-                    "seconds."
-                )
+                    "Pin %i set to FAULT status, HIGH for %i seconds ",
+                    pin, duration)
             else:
                 self._pin_status[pin]["status"] = PinHealth.OK  # Set OK
 
