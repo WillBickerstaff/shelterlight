@@ -84,8 +84,15 @@ def daily_schedule_generation(stop_event: threading.Event,
     while not stop_event.is_set():
         now = dt.datetime.now(dt.timezone.utc)
 
-        # Check if today's sunrise time is available
-        if solar_times.UTC_sunrise_today:
+        # Wait until solar times are available
+        while (not solar_times.UTC_sunrise_today and \
+               not solar_times.UTC_sunris_tomorrow):
+            logging.info("Waiting for sunrise and sunset times to "
+                         "be esatblished before generating schedule.")
+            stop_event.wait(timeout=20)  # Wait 20s
+            if stop_event.is_set():
+                return
+
             # Set generation time to 1 hour after sunrise
             generation_time = solar_times.UTC_sunrise_today + \
                 dt.timedelta(hours=1)

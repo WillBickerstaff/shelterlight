@@ -606,7 +606,7 @@ class SunTimes:
             None
         """
         logging.debug("Populating persistent Data for JSON storage")
-        persist = PersistentData
+        persist = PersistentData()
         # Save GPS location data
         persist.current_latitude = self._gps.latitude
         persist.current_longitude = self._gps.longitude

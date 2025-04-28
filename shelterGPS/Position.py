@@ -569,6 +569,7 @@ class GPS:
                     "GPS: %s message does not include a validated data "
                     "indicator. (field %s does not contain%s%s)",
                     msg, valid_idx, " any of "if msg == "GGA" else " ",
+                    list(valid_vals) if isinstance(valid_vals, str) else
                     valid_vals)
                 return False
 
