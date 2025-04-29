@@ -148,8 +148,8 @@ class Activity:
         independently of the outer light_loop() call rate. Exits early if all
         inputs remain stable during a polling cycle.
         """
-        debounce_time = ConfigLoader().activity_debounce
-        debounce_interval = 0.05  # 50ms
+        debounce_time = ConfigLoader().activity_debounce_s
+        debounce_interval = 0.005  # 5ms
         start_time = dt.datetime.now(dt.timezone.utc).timestamp()
         end_time = start_time + debounce_time
         loop_start = start_time
@@ -160,7 +160,6 @@ class Activity:
                 break
 
             any_unstable = False
-
             for pin in self._activity_inputs:
                 try:
                     current_level = lgpio.gpio_read(self._gpio_handle, pin)
