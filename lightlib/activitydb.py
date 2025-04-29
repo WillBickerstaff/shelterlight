@@ -12,6 +12,7 @@ Version: 0.1
 import logging
 import datetime as dt
 import threading
+import time
 from typing import List, Dict, Union
 from enum import Enum
 
@@ -135,9 +136,65 @@ class Activity:
                     "Activity monitoring initialized on GPIO pins: %s",
                     self._activity_inputs
                 )
+
             except RuntimeError as e:
                 logging.error("Failed to set edge detection for pin %s: %s",
                               pin, e)
+
+    def update(self):
+        """Poll GPIO inputs for changes if edge detection is unavailable.
+
+        Continuously poll inputs within this call to achieve debounce timing
+        independently of the outer light_loop() call rate. Exits early if all
+        inputs remain stable during a polling cycle.
+        """
+        debounce_time = ConfigLoader().activity_debounce
+        debounce_interval = 0.05  # 50ms
+        start_time = dt.datetime.now(dt.timezone.utc).timestamp()
+        end_time = start_time + debounce_time
+        loop_start = start_time
+
+        while True:
+            now = dt.datetime.now(dt.timezone.utc).timestamp()
+            if now >= end_time:
+                break
+
+            any_unstable = False
+
+            for pin in self._activity_inputs:
+                try:
+                    current_level = lgpio.gpio_read(self._gpio_handle, pin)
+                    last_stable_level = self._pin_status[pin]["state"]
+
+                    current_level_enum = PinLevel.HIGH if current_level\
+                        else PinLevel.LOW
+
+                    if current_level_enum != last_stable_level:
+                        any_unstable = True
+
+                        if current_level != self._debounce_levels[pin]:
+                            # Level changed again, reset debounce timer
+                            self._debounce_timers[pin] = now
+                            self._debounce_levels[pin] = current_level
+                        else:
+                            if now - self._debounce_timers[pin] >= \
+                                    debounce_time:
+                                # Level has been stable (state is updated
+                                # by _activity_event_handler)
+                                self._activity_event_handler(
+                                    self._gpio_handle, pin, current_level, 0)
+                except Exception as e:
+                    logging.error("Polling error on GPIO pin %s: %s", pin, e)
+
+            if not any_unstable:
+                break  # Exit early if all pins are stable
+
+            if now - loop_start >= 3:
+                logging.error("Activity pin inputs unstable: "
+                              "Cannot accurately determine status")
+                break  # Optional: stop if bouncing too long
+
+            time.sleep(debounce_interval)
 
     def _activity_event_handler(
             self, chip: int, pin: int, level: int, tick: int) -> None:
@@ -325,7 +382,7 @@ class Activity:
         -------
             Bool: True if any activity is current and lights should be on.
         """
-        return self.is_activity_detected()
+        return self.activity_detected()
 
     def close(self) -> None:
         """Clean up GPIO resources and close the database connection."""

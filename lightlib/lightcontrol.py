@@ -43,6 +43,11 @@ class LightController:
             lgpio.gpio_claim_output(self._gpio_handle, out_pin)
         self.turn_off()  # Start with lights off
 
+    def update(self):
+        """Update system state: check inputs and control lights."""
+        self.activity_monitor.update()
+        self.set_lights()
+
     def _is_dark_now(self) -> bool:
         """Determine if it is dark now to enable activity to react.
 

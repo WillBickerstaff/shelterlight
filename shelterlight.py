@@ -56,7 +56,7 @@ def light_loop(light_control: LightController,
     """Run light control updates in a tight polling loop."""
     try:
         while not stop_event.is_set():
-            light_control.set_lights()
+            light_control.update()
             time.sleep(1)
     except Exception as e:
         logging.exception("Light control loop encountered an error: %s", e)
@@ -85,7 +85,7 @@ def daily_schedule_generation(stop_event: threading.Event,
         now = dt.datetime.now(dt.timezone.utc)
 
         # Wait until solar times are available
-        while (not solar_times.UTC_sunrise_today and \
+        while (not solar_times.UTC_sunrise_today and
                not solar_times.UTC_sunris_tomorrow):
             logging.info("Waiting for sunrise and sunset times to "
                          "be esatblished before generating schedule.")

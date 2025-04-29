@@ -127,6 +127,10 @@ class ConfigLoader:
                                          "is_pin": True,
                                          "accepts_list": True},
 
+            "activity_debounce":        {"value": 0.15,
+                                         "type": int,
+                                         "Accepts_list": False},
+
             "max_activity_time":        {"value": 1800,
                                          "type": int,
                                          "is_pin": False,
@@ -267,6 +271,12 @@ class ConfigLoader:
         """bool: True if GPS fix can be attempted at any time."""
         return self.get_config_value(config=self.config, section="GPS",
                                      option="bypass_fix_window")
+
+    @property
+    def activity_debounce(self) -> float:
+        """Float: debounce time in seconds for activity inputs when polled."""
+        return self.get_config_value(config=self.config, section="IO",
+                                     option="activity_debounce")
 
     @property
     def max_activity_time(self) -> int:
