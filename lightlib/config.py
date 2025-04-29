@@ -127,7 +127,7 @@ class ConfigLoader:
                                          "is_pin": True,
                                          "accepts_list": True},
 
-            "activity_debounce":        {"value": 0.15,
+            "activity_debounce_ms":     {"value": 15,
                                          "type": int,
                                          "Accepts_list": False},
 
@@ -273,10 +273,10 @@ class ConfigLoader:
                                      option="bypass_fix_window")
 
     @property
-    def activity_debounce(self) -> float:
+    def activity_debounce_ms(self) -> float:
         """Float: debounce time in seconds for activity inputs when polled."""
         return self.get_config_value(config=self.config, section="IO",
-                                     option="activity_debounce")
+                                     option="activity_debounce_ms")
 
     @property
     def max_activity_time(self) -> int:
