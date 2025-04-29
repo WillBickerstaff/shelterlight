@@ -434,7 +434,7 @@ class GPS:
                     logging.info("GPS serial port %s opened successfuly", port)
                     return
             except (serial.SerialException, AttributeError) as e:
-                logging.warning(
+                logging.warning (
                     "Failed to open GPS srial port %s: %s", port, e)
                 self.__gps_ser = None
 

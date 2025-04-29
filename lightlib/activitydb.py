@@ -121,24 +121,21 @@ class Activity:
         low-to-high transition (RISING edge) and `_end_activity_event` on a
         high-to-low transition (FALLING edge).
         """
-        debounce_us = ConfigLoader().activity_debounce_ms * 1000
         for pin in self._activity_inputs:
             try:
                 lgpio.gpio_claim_input(self._gpio_handle, pin,
                                        lgpio.SET_PULL_DOWN)
                 logging.info("GPIO pin %s setup as INPUT, PULL DOWN", pin)
-                # Add debounce
-                logging.debug("Setting debounce on pin %i to %i uS",
-                              pin, debounce_us)
-                lgpio.set_glitch_filter(self._gpio_handle, pin, debounce_us)
                 # Detect rising edge to mark start of activity
-                logging.debug("Adding edge detection to pin %i", pin)
-                logging.debug("pin is type %i", type(pin))
+                logging.debug("Adding edge detection to pin %s", pin)
+                logging.debug("pin is type %s", type(pin))
                 # Register callbacks for both rising and falling edges
                 lgpio.callback(self._gpio_handle, pin, lgpio.BOTH_EDGES,
                                self._activity_event_handler)
                 logging.info(
-                    "Activity monitoring initialized on GPIO pins: %i", pin)
+                    "Activity monitoring initialized on GPIO pins: %s",
+                    self._activity_inputs
+                )
 
             except RuntimeError as e:
                 logging.error("Failed to set edge detection for pin %s: %s",
@@ -151,7 +148,7 @@ class Activity:
         independently of the outer light_loop() call rate. Exits early if all
         inputs remain stable during a polling cycle.
         """
-        debounce_time = ConfigLoader().activity_debounce_ms / 1000
+        debounce_time = ConfigLoader().activity_debounce
         debounce_interval = 0.05  # 50ms
         start_time = dt.datetime.now(dt.timezone.utc).timestamp()
         end_time = start_time + debounce_time
