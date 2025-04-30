@@ -201,7 +201,7 @@ class GPS:
     @property
     def position_str(self) -> str:
         """Format and return position as a string."""
-        return "\n\t".join([f"Lat: {self.lattitude:.2f}",
+        return "\n\t".join([f"Lat: {self.latitude:.2f}",
                             f"Lng: {self.longitude:.2f}",
                             f"Alt: {self.altitude:.2f}m"])
 

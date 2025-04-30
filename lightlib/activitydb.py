@@ -103,10 +103,16 @@ class Activity:
         self._activity_inputs: List[int] = \
             ConfigLoader().activity_digital_inputs
         self._start_times: Dict[int, dt.datetime] = {}
+        # Track status and state of each pin
         self._pin_status: Dict[int, Dict[str, Union[PinHealth, PinLevel]]] = {
             pin: {"status": PinHealth.OK, "state": PinLevel.LOW}
-            for pin in self._activity_inputs
-        }  # Track status and state of each pin
+            for pin in self._activity_inputs}
+        # Track current raw level and debounce timers
+        self._debounce_levels: Dict[int, int] = {
+            pin: 0 for pin in self._activity_inputs}
+        self._debounce_timers: Dict[int, float] = {
+            pin: dt.datetime.now(dt.timezone.utc).timestamp()
+            for pin in self._activity_inputs}
         self._gpio_handle = lgpio.gpiochip_open(0)
         self._setup_activity_inputs()
         self._fault_threshold = ConfigLoader().max_activity_time

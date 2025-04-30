@@ -207,6 +207,7 @@ def init_log(log_level: Optional[str] = None):
         handlers=[file_handler],
         force=True  # Force reset any existing handlers
     )
+    logging.getLogger().setLevel(level)
 
     logging.info("Logging initialized with level %s.",
                  log_level.upper())

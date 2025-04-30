@@ -84,7 +84,7 @@ class test_SolarEvent(unittest.TestCase):
 
     @patch('serial.Serial')
     def test_solar_event_no_sunset(self, mock_serial):
-        """Test for extreme lattitudes (polar day, no sunset)."""
+        """Test for extreme latitudes (polar day, no sunset)."""
         from astral import Observer
         from shelterGPS.common import NoSolarEventError
 

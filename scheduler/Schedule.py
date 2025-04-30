@@ -251,6 +251,7 @@ class LightScheduler:
                             For tomorrow, the start time is accurate, but the
                             end is approximated based on today's sunris
                             (+1 day)
+
         Returns
         -------
             tuple[dt.time, dt.time]: (darkness_start, darkness_end)
