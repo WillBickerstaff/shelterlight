@@ -56,6 +56,13 @@ class LightController:
             bool: True if it is dark now, otherwise false
         """
         sunt = SunTimes()
+        if sunt.UTC_sunset_today is None or sunt.UTC_sunrise_tomorrow is None:
+            logging.warning("Unable to determine if it is dark now\n"
+                            "\tSunset today is:\t%s\n"
+                            "\tSunrise tomorrow is:\t%s\nFailing safe (True)",
+                            sunt.UTC_sunset_today, sunt.UTC_sunrise_tomorrow)
+            return True
+
         return sunt.UTC_sunset_today < DT_NOW < sunt.UTC_sunrise_tomorrow
 
     def set_lights(self) -> bool:
