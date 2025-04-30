@@ -26,6 +26,7 @@ base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
 from scheduler.Schedule import LightScheduler
+from lightlib.common import DT_NOW
 
 
 class TestLightScheduler(unittest.TestCase):
@@ -258,7 +259,7 @@ class TestLightScheduler(unittest.TestCase):
         database update when the schedule date is in the future.
         """
         # Arrange
-        now = dt.datetime.now(dt.UTC)
+        now = DT_NOW
         mock_dt.datetime.utcnow = MagicMock(return_value=now)
 
         # Create a future date 10 days from now

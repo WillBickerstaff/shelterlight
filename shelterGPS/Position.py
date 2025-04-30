@@ -23,8 +23,8 @@ import lgpio
 from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import log_caller
-from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
-
+from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError, DT_NOW
+from lightlib.common import EPOCH_DATETIME
 
 class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.
@@ -133,7 +133,7 @@ class GPS:
         self._lat = Coordinate()
         self._lon = Coordinate()
         self._alt = 0.0
-        self._dt = dt.datetime(1970, 1, 1, 0, 0, 0, 0, tzinfo=dt.timezone.utc)
+        self._dt = EPOCH_DATETIME
         self._last_msg = []
         self._datetime_established = False
         self._position_established = False
@@ -462,10 +462,10 @@ class GPS:
             max_time = self._max_fix_time
         logging.info("GPS: Attempting to read %s message for %s seconds",
                      msg, max_time)
-        start_time: dt.datetime = dt.datetime.now()
+        start_time: dt.datetime = DT_NOW
         # Keep trying until we get the required message and it validates
         # or we reach the defined maximum attempt duration
-        while dt.datetime.now() - start_time < dt.timedelta(seconds=max_time):
+        while DT_NOW - start_time < dt.timedelta(seconds=max_time):
             ser_line: str = self.__gps_ser.readline()
             logging.debug("GPS Raw message received:\n\t%s", ser_line)
             # Check if message is valid and proceed with decoding and

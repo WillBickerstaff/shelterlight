@@ -21,7 +21,7 @@ from psycopg2 import sql
 import lgpio
 
 from lightlib.db import DB, ConfigLoader
-from lightlib.common import valid_smallint
+from lightlib.common import valid_smallint, DT_NOW
 
 
 class PinHealth(Enum):
@@ -111,7 +111,7 @@ class Activity:
         self._debounce_levels: Dict[int, int] = {
             pin: 0 for pin in self._activity_inputs}
         self._debounce_timers: Dict[int, float] = {
-            pin: dt.datetime.now(dt.timezone.utc).timestamp()
+            pin: DT_NOW.timestamp()
             for pin in self._activity_inputs}
         self._gpio_handle = lgpio.gpiochip_open(0)
         self._setup_activity_inputs()
@@ -156,12 +156,12 @@ class Activity:
         """
         debounce_time = ConfigLoader().activity_debounce_s
         debounce_interval = 0.005  # 5ms
-        start_time = dt.datetime.now(dt.timezone.utc).timestamp()
+        start_time = DT_NOW.timestamp()
         end_time = start_time + debounce_time
         loop_start = start_time
 
         while True:
-            now = dt.datetime.now(dt.timezone.utc).timestamp()
+            now = DT_NOW.timestamp()
             if now >= end_time:
                 break
 
@@ -238,7 +238,7 @@ class Activity:
             pin (int): The GPIO pin that triggered the rising edge event.
         """
         # Record start time
-        self._start_times[pin] = dt.datetime.now(dt.timezone.utc)
+        self._start_times[pin] = DT_NOW
         self._pin_status[pin]["status"] = PinHealth.OK  # Set status to OK
         self._pin_status[pin]["state"] = PinLevel.HIGH  # Set state to HIGH
         logging.info(
@@ -274,8 +274,7 @@ class Activity:
                 f"No start time found for pin {pin}, skipping log.")
             return
         try:
-            duration = int((dt.datetime.now(dt.timezone.utc) -
-                            start_time).total_seconds())  # Calc duration
+            duration = int((DT_NOW - start_time).total_seconds())  # Duration
             valid_smallint(duration)
             if duration > self._fault_threshold:
                 logging.warning(
@@ -316,8 +315,7 @@ class Activity:
     def _run_fault_check_cycle(self) -> None:
         """Run one fault detection cycle."""
         for pin, start_time in list(self._start_times.items()):
-            duration = int((dt.datetime.now(dt.timezone.utc) - start_time)
-                           .total_seconds())
+            duration = int((DT_NOW - start_time).total_seconds())
             if duration > self._fault_threshold and \
                     self._pin_status[pin]["state"] == PinLevel.HIGH:
                 self._pin_status[pin]["status"] = PinHealth.FAULT

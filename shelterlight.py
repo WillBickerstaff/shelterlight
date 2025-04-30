@@ -21,7 +21,7 @@ from lightlib import USBManager
 from scheduler.Schedule import LightScheduler
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
-from lightlib.common import ConfigReloaded
+from lightlib.common import ConfigReloaded, DT_NOW
 from lightlib.lightcontrol import LightController
 
 
@@ -82,7 +82,7 @@ def daily_schedule_generation(stop_event: threading.Event,
                               solar_times: SunTimes):
     """Generate the daily schedule 1 hour after sunrise."""
     while not stop_event.is_set():
-        now = dt.datetime.now(dt.timezone.utc)
+        now = DT_NOW
 
         # Wait until solar times are available
         while (not solar_times.UTC_sunrise_today and
@@ -114,8 +114,7 @@ def daily_schedule_generation(stop_event: threading.Event,
 
             # Wait until the next day's schedule generation time
             next_run = generation_time + dt.timedelta(days=1)
-            sleep_duration = (
-                next_run - dt.datetime.now(dt.timezone.utc)).total_seconds()
+            sleep_duration = (next_run - DT_NOW).total_seconds()
             if sleep_duration > 0:
                 stop_event.wait(timeout=sleep_duration)
         else:

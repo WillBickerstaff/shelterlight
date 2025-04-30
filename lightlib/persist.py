@@ -21,7 +21,7 @@ from threading import Lock
 import logging
 from lightlib.config import ConfigLoader
 from lightlib.common import iso_to_datetime, datetime_to_iso, DATE_TODAY, \
-    DATE_TOMORROW
+    DATE_TOMORROW, DT_NOW
 
 
 class DataStoreError(Exception):
@@ -157,7 +157,7 @@ class PersistentData:
                     [datetime_to_iso(t) for t in self._sunrise_times],
                 "sunset_times":
                     [datetime_to_iso(t) for t in self._sunset_times],
-                "last_updated": datetime_to_iso(dt.datetime.now())
+                "last_updated": datetime_to_iso(DT_NOW)
             })
 
             with open(ConfigLoader().persistent_data_json, 'w') as file:

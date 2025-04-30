@@ -12,7 +12,7 @@ Version: 0.1
 from threading import Lock
 from lightlib.persist import PersistentData
 from lightlib.db import DB
-from lightlib.common import DATE_TODAY, DATE_TOMORROW
+from lightlib.common import DATE_TODAY, DATE_TOMORROW, DT_NOW
 from typing import Optional
 import psycopg2
 import pandas as pd
@@ -280,7 +280,7 @@ class LightScheduler:
                 # Track that the warning has been looged today
                 # (reduce log spam)
                 self._warned_missing = DATE_TODAY
-            now = dt.datetime.now(dt.UTC)
+            now = DT_NOW
             darkness_start = now.replace(hour=15, minute=30)
             darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)
 
@@ -484,7 +484,7 @@ class LightScheduler:
                     "0 activity records found. Using minimum training window.")
                 return MIN_DAYS_HISTORY
 
-            today = dt.datetime.now(dt.UTC)
+            today = DT_NOW
             history_days = (today - oldest_timestamp).days
             effective_days = max(MIN_DAYS_HISTORY,
                                  min(history_days, MAX_DAYS_HISTORY))
@@ -784,7 +784,7 @@ class LightScheduler:
                     in scheduled_intervals:
 
                 # Skip evaluation if the interval hasn't ended yet
-                now = dt.datetime.now(dt.UTC)
+                now = DT_NOW
                 if dt.datetime.combine(date, end_time) > now:
                     continue
 
@@ -891,7 +891,7 @@ class LightScheduler:
             # any time
             with self._lock:
                 # Evaluate yesterday's schedule accuracy
-                yesterday = dt.datetime.now().date() - dt.timedelta(days=1)
+                yesterday = DT_NOW.date() - dt.timedelta(days=1)
                 self.evaluate_previous_schedule(yesterday)
                 # Retrain the model using updated accuracy data
                 self.train_model(days_history=self._progressive_history())
@@ -934,7 +934,7 @@ class LightScheduler:
         """
         # Get today's date if no date is given
         if target_date is None:
-            target_date = dt.datetime.now().date()
+            target_date = DT_NOW.date()
 
         # Check if the schedule is already cached and up to date
         logging.debug(
@@ -974,7 +974,7 @@ class LightScheduler:
         -Checks if lights should be ON for that interval.
         """
         # Get the current time (use datetime.now() if None)
-        now = current_time or dt.datetime.now(dt.UTC)
+        now = current_time or DT_NOW
         # Identify the relevant schedule date (yesterday or today)
         # Get darkness times for today (could span two dates)
         darkness_start, darkness_end = self._get_darkness_times(DATE_TODAY)

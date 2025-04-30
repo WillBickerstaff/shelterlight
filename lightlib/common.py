@@ -10,7 +10,6 @@ Version: 0.1
 """
 
 import datetime as dt
-import logging
 import RPi.GPIO as GPIO
 from typing import Union
 from typing import Optional
@@ -20,7 +19,7 @@ EPOCH_DATETIME = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)
 
 def get_today():
     """Return today's date."""
-    return dt.datetime.now().date()
+    return DT_NOW.date()
 
 
 def get_tomorrow():

@@ -22,7 +22,7 @@ from typing import Optional, Tuple, Dict
 from astral import sun, Observer
 from lightlib.config import ConfigLoader
 from lightlib.common import EPOCH_DATETIME
-from lightlib.common import strfdt, DATE_TODAY, DATE_TOMORROW
+from lightlib.common import strfdt, DATE_TODAY, DATE_TOMORROW, DT_NOW
 from lightlib.persist import PersistentData
 from shelterGPS.common import GPSNoFix, NoSolarEventError, InvalidObserverError
 import shelterGPS.Position as pos
@@ -258,7 +258,7 @@ class SunTimes:
                 "Bypassing GPS fix window (bypass_fix_window=True)")
             return True
 
-        dt_now = dt.datetime.now(dt.timezone.utc)
+        dt_now = DT_NOW
         return ((self._fix_window["start_today"] <= dt_now <=
                  self._fix_window["end_today"]) or
                 (self._fix_window["start_tomorrow"] <= dt_now <=
@@ -400,7 +400,7 @@ class SunTimes:
                 if self._gps.datetime_established and \
                    self._gps.position_established:
                     self._set_system_time()
-                    self._fixed_today = dt.datetime.now().date()
+                    self._fixed_today = DT_NOW.date()
                     logging.info("GPS Fix succeeded, position & "
                                  "time established")
                     #  Update solar times and fix window based on GPS

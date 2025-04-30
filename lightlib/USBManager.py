@@ -11,12 +11,11 @@ Version: 0.1
 
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import CANCEL_CONFIRM, warn_and_wait
-from lightlib.common import datetime_to_iso, ConfigReloaded
+from lightlib.common import datetime_to_iso, ConfigReloaded, DT_NOW
 
 import os
 import sys
 import logging
-import datetime as dt
 import shutil
 from typing import Optional
 
@@ -107,7 +106,7 @@ class USBFileManager:
                 "USB drive not inserted or mount point inaccessible.")
 
         logging.debug("Beginning file backup to USB")
-        timestamp = datetime_to_iso(dt.datetime.now())
+        timestamp = datetime_to_iso(DT_NOW)
         usb_backup_dir = os.path.join(
             self.mount_point, "smartlight", "configs")
         usb_log_dir = os.path.join(self.mount_point, "smartlight", "logs")

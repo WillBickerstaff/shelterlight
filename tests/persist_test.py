@@ -23,6 +23,7 @@ base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
 from lightlib.persist import PersistentData
+from lightlib.common import DT_NOW
 
 class TestPersist(unittest.TestCase):
     """Testing persistent data."""
@@ -41,17 +42,14 @@ class TestPersist(unittest.TestCase):
         """Check JSON data storage."""
         PersistentData().current_latitude = 10.6
         PersistentData().current_longitude = -5.2
-        s_time = dt.datetime.now(tz=dt.timezone.utc)
-        s_time = s_time + dt.timedelta(hours=-4)
+        now = DT_NOW
+        s_time = now + dt.timedelta(hours=-4)
         PersistentData().add_sunrise_time(datetime_instance=s_time)
-        s_time = dt.datetime.now(tz=dt.timezone.utc)
-        s_time = s_time + dt.timedelta(hours=+4)
+        s_time = now + dt.timedelta(hours=+4)
         PersistentData().add_sunset_time(datetime_instance=s_time)
-        s_time = dt.datetime.now(tz=dt.timezone.utc)
-        s_time = s_time + dt.timedelta(hours=-4, minutes=3, days=1)
+        s_time = now + dt.timedelta(hours=-4, minutes=3, days=1)
         PersistentData().add_sunrise_time(datetime_instance=s_time)
-        s_time = dt.datetime.now(tz=dt.timezone.utc)
-        s_time = s_time + dt.timedelta(hours=4, minutes=-4, days=1)
+        s_time = now + dt.timedelta(hours=4, minutes=-4, days=1)
         PersistentData().add_sunset_time(datetime_instance=s_time)
         PersistentData().store_data()
 
