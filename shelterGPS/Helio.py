@@ -46,6 +46,7 @@ class SunTimes:
         """Init SunTimes with config for solar offsets and GPS tracking."""
         self.sunrise_offset: int = ConfigLoader().sunrise_offset
         self.sunset_offset: int = ConfigLoader().sunset_offset
+        self.__observer = None
         self._init_dt()
         self._fix_err_day: int = PersistentData().missed_fix_days
         self._fixed_today: bool = False
@@ -89,47 +90,105 @@ class SunTimes:
     def UTC_sunrise_today(self) -> Optional[dt.datetime]:
         """Date and time of today's sunrise (UTC).
 
+        This will return the determined sunrise for today provided a valid
+        lat & lng can be established which requires either a GPS fix to
+        have been obtained, valid coordinates in persist.json or a valid
+        location in the config file. If not set calling this property will
+        attempt to populate the lat & lng first from persist.json then from
+        the configured location in config.ini
+
         Returns
         -------
-            dt.datetime: UTC date and time for today's sunrise if set,
-            otherwise None.
+            dt.datetime: UTC date and time for today's sunrise. if not yet
+            calculated the value from if it can be determined otherwise None.
         """
-        return None if self._sr_today == EPOCH_DATETIME else self._sr_today
+        # if not set try and get something in there
+        if self._sr_today == EPOCH_DATETIME:
+            # This first trys to determine a loaction through _get_coordinates
+            # or _use_local_geo
+            self._set_solar_times(self.local_observer)
+
+        # Should be set, if not we are getting None from PersistentData
+        return PersistentData().sunrise_today if  \
+            self._sr_today == EPOCH_DATETIME else self._sr_today
 
     @property
     def UTC_sunset_today(self) -> Optional[dt.datetime]:
         """Date and time of today's sunset (UTC).
 
+        This will return the determined sunset for today provided a valid
+        lat & lng can be established which requires either a GPS fix to
+        have been obtained, valid coordinates in persist.json or a valid
+        location in the config file. If not set calling this property will
+        attempt to populate the lat & lng first from persist.json then from
+        the configured location in config.ini
+
         Returns
         -------
-            dt.datetime: UTC date and time for today's sunset if set,
-            otherwise None.
+            dt.datetime: UTC date and time for today's sunset. if not yet
+            calculated the value from if it can be determined otherwise None.
         """
-        return None if self._ss_today == EPOCH_DATETIME else self._ss_today
+        # if not set try and get something in there
+        if self._ss_today == EPOCH_DATETIME:
+            # This first trys to determine a loaction through _get_coordinates
+            # or _use_local_geo
+            self._set_solar_times(self.local_observer)
+
+        # Should be set, if not we are getting None from PersistentData
+        return PersistentData().sunrise_today if  \
+            self._ss_today == EPOCH_DATETIME else self._ss_today
 
     @property
     def UTC_sunrise_tomorrow(self) -> Optional[dt.datetime]:
         """Date and time of tomorrow's sunrise (UTC).
 
+        This will return the determined sunrise for tomorrow provided a valid
+        lat & lng can be established which requires either a GPS fix to
+        have been obtained, valid coordinates in persist.json or a valid
+        location in the config file. If not set calling this property will
+        attempt to populate the lat & lng first from persist.json then from
+        the configured location in config.ini
+
         Returns
         -------
-            dt.datetime: UTC date and time for tomorrow's sunrise if set,
-            otherwise None.
+            dt.datetime: UTC date and time for tomorrow's sunrise. if not yet
+            calculated the value from if it can be determined otherwise None.
         """
-        return None if self._sr_tomorrow == EPOCH_DATETIME \
-            else self._sr_tomorrow
+        # if not set try and get something in there
+        if self._sr_tomorrow == EPOCH_DATETIME:
+            # This first trys to determine a loaction through _get_coordinates
+            # or _use_local_geo
+            self._set_solar_times(self.local_observer)
+
+        # Should be set, if not we are getting None from PersistentData
+        return PersistentData().sunrise_today if  \
+            self._sr_tomorrow == EPOCH_DATETIME else self._sr_tomorrow
 
     @property
     def UTC_sunset_tomorrow(self) -> Optional[dt.datetime]:
         """Date and time of tomorrow's sunset (UTC).
 
+        This will return the determined sunset for tomorrow provided a valid
+        lat & lng can be established which requires either a GPS fix to
+        have been obtained, valid coordinates in persist.json or a valid
+        location in the config file. If not set calling this property will
+        attempt to populate the lat & lng first from persist.json then from
+        the configured location in config.ini
+
         Returns
         -------
-            dt.datetime: UTC date and time for tomorrow's sunset if set,
-            otherwise None.
+            dt.datetime: UTC date and time for tomorrow's sunset. if not yet
+            calculated the value from if it can be determined otherwise None.
         """
-        return None if self._ss_tomorrow == EPOCH_DATETIME \
-            else self._ss_tomorrow
+        # if not set try and get something in there
+        if self._ss_tomorrow == EPOCH_DATETIME:
+            # This first trys to determine a loaction through _get_coordinates
+            # or _use_local_geo
+            self._set_solar_times(self.local_observer)
+
+        # Should be set, if not we are getting None from PersistentData
+        return PersistentData().sunrise_today if  \
+            self._ss_tomorrow == EPOCH_DATETIME else self._ss_tomorrow
 
     @property
     def local_tz(self) -> pytz.timezone:
@@ -176,6 +235,12 @@ class SunTimes:
         return self._fixed_today == DATE_TODAY
 
     @property
+    def todays_window_is_set(self) -> bool:
+        """Return True if today's solar fix window is set."""
+        return (self.UTC_sunrise_today is not None and
+                self.UTC_sunset_today is not None)
+
+    @property
     def in_fix_window(self) -> bool:
         """Determine if the current time is within the GPS fixing window.
 
@@ -198,6 +263,26 @@ class SunTimes:
                  self._fix_window["end_today"]) or
                 (self._fix_window["start_tomorrow"] <= dt_now <=
                  self._fix_window["end_tomorrow"]))
+
+    @property
+    def local_observer(self) -> Observer:
+        """Get an astral.Observer for use in position and solar calcs.
+
+        Returns
+        -------
+        astral.Observer - Containing the current latitude, longitude and
+                          altitude if known, otherwis None
+        """
+        if self.__observer is not None:
+            return self.__observer
+        try:
+            lat, lng, alt = self._get_coordinates()
+            self.__observer = Observer(latitude=lat, longitude=lng,
+                                       elevation=alt)
+            return self.__observer
+        except InvalidLocationError:
+            logging.error("Observer can not be created")
+            return None
 
     # --------------------- Core Methods for GPS Fixing -----------------------
 
@@ -270,7 +355,7 @@ class SunTimes:
 
     def _attempt_fix_for_today(self) -> None:
         """Attempt GPS fix if not already fixed for today."""
-        if self.fixed_today and self.todays_window_is_set():
+        if self.fixed_today and self.todays_window_is_set:
             logging.debug("GPS fix and solar times already set for today.")
             return
 
@@ -358,9 +443,7 @@ class SunTimes:
         stored data. Returns True if successful, False otherwise.
         """
         try:
-            lat, lng, alt = self._use_local_geo()
-            observer = Observer(latitude=lat, longitude=lng, elevation=alt)
-            self._set_solar_times(observer)
+            self._set_solar_times(self.local_observer)
             self._set_fix_window()
             return True
         except InvalidLocationError:
@@ -388,9 +471,8 @@ class SunTimes:
         """
         # Use the updated coordinates or fallback coordinates
         lat, lng, alt = self._get_coordinates()
-        observer = Observer(latitude=lat, longitude=lng, elevation=alt)
 
-        self._set_solar_times(observer)
+        self._set_solar_times(self.local_observer)
         self._set_fix_window()
 
         # Determine the local timezone:
@@ -533,6 +615,8 @@ class SunTimes:
             Tuple[float, float, float]: A tuple containing latitude, longitude,
                                         and altitude.
         """
+        # Prefer persistent data over config defined location as this
+        # pobably contains an actual GPS fix
         lat = PersistentData().current_latitude or Location().latitude
         lng = PersistentData().current_longitude or Location().longitude
         alt = PersistentData().current_altitude or 0.0

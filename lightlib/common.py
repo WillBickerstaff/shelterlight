@@ -28,8 +28,14 @@ def get_tomorrow():
     return DATE_TODAY + dt.timedelta(days=1)
 
 
+def get_now():
+    """Return a datetime.datetime object representing now."""
+    return dt.datetime.now(dt.timezone.utc)
+
+
 DATE_TODAY = get_today()
 DATE_TOMORROW = get_tomorrow()
+DT_NOW = get_now()
 
 
 class ConfigReloaded(Exception):

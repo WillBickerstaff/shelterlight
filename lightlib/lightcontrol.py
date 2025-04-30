@@ -12,11 +12,11 @@ Version: 0.1
 import logging
 import lgpio
 from threading import Lock
-from lightlib.common import DATE_TODAY
+from lightlib.common import DT_NOW
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
 from scheduler.Schedule import LightScheduler
-from datetime import datetime as dt
+from shelterGPS.Helio import SunTimes
 
 
 class LightController:
@@ -55,10 +55,8 @@ class LightController:
         -------
             bool: True if it is dark now, otherwise false
         """
-        now = dt.datetime.now(dt.timezone.utc).time()
-        darkness_start, darkness_end = \
-            self.schedule._get_darkness_times(DATE_TODAY)
-        return self.schedule.is_dark(now, darkness_start, darkness_end) == 1
+        sunt = SunTimes()
+        return sunt.UTC_sunset_today < DT_NOW < sunt.UTC_sunrise_tomorrow
 
     def set_lights(self) -> bool:
         """Set the light output.
