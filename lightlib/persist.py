@@ -20,8 +20,8 @@ from typing import Union, Optional, List
 from threading import Lock
 import logging
 from lightlib.config import ConfigLoader
-from lightlib.common import iso_to_datetime, datetime_to_iso, DATE_TODAY, \
-    DATE_TOMORROW, DT_NOW
+from lightlib.common import iso_to_datetime, datetime_to_iso, get_today, \
+    get_tomorrow, get_now
 
 
 class DataStoreError(Exception):
@@ -157,7 +157,7 @@ class PersistentData:
                     [datetime_to_iso(t) for t in self._sunrise_times],
                 "sunset_times":
                     [datetime_to_iso(t) for t in self._sunset_times],
-                "last_updated": datetime_to_iso(DT_NOW)
+                "last_updated": datetime_to_iso(get_now())
             })
 
             with open(ConfigLoader().persistent_data_json, 'w') as file:
@@ -181,9 +181,9 @@ class PersistentData:
         """
         if not hasattr(self, flag_attr):
             setattr(self, flag_attr, None)
-        if getattr(self, flag_attr) != DATE_TODAY:
-            logging.error(message, datetime_to_iso(missing_date))
-            setattr(self, flag_attr, DATE_TODAY)
+        if getattr(self, flag_attr) != get_today():
+            logging.error(message, missing_date)
+            setattr(self, flag_attr, get_tomorrow())
 
     @property
     def current_altitude(self) -> float:
@@ -235,10 +235,10 @@ class PersistentData:
     def sunrise_today(self) -> Optional[dt.datetime]:
         """Today's sunrise time from persistent data."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TODAY,
+            return PersistentData._date_in_dates(check_date=get_today(),
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            self._warn_once("_sr_today", DATE_TODAY,
+            self._warn_once("_sr_today", get_today(),
                             "%s not found in persistent data sunrise times")
             return None
 
@@ -246,10 +246,10 @@ class PersistentData:
     def sunset_today(self) -> Optional[dt.datetime]:
         """Today's sunset time from persistent data."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TODAY,
+            return PersistentData._date_in_dates(check_date=get_today(),
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            self._warn_once("_ss_today", DATE_TODAY,
+            self._warn_once("_ss_today", get_today(),
                             "%s not found in persistent data sunset times")
             return None
 
@@ -257,10 +257,10 @@ class PersistentData:
     def sunrise_tomorrow(self) -> Optional[dt.datetime]:
         """Tomorrows sunrise time from persistent."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TOMORROW,
+            return PersistentData._date_in_dates(check_date=get_tomorrow(),
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            self._warn_once("_sr_tmrw", DATE_TOMORROW,
+            self._warn_once("_sr_tmrw", get_tomorrow(),
                             "%s not found in persistent data sunrise times")
             return None
 
@@ -268,7 +268,7 @@ class PersistentData:
     def sunset_tomorrow(self) -> Optional[dt.datetime]:
         """Tomorrows sunset time from persistent data."""
         try:
-            return PersistentData._date_in_dates(check_date=DATE_TOMORROW,
+            return PersistentData._date_in_dates(check_date=get_tomorrow(),
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
             self._warn_once("_ss_tmrw", DATE_TOMORROW,
@@ -322,7 +322,7 @@ class PersistentData:
 
     def _clear_past_times(self) -> None:
         """Remove any sunrise or sunset times that are in the past."""
-        today = DATE_TODAY
+        today = get_today()
         # Filter out times from previous days
         self._sunrise_times = [time for time in self._sunrise_times
                                if time.date() >= today]

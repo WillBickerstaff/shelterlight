@@ -9,6 +9,7 @@ RPi/
 persist.json
 cities*.txt
 mock/
+*.diff
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

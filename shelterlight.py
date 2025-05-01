@@ -21,7 +21,7 @@ from lightlib import USBManager
 from scheduler.Schedule import LightScheduler
 from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
-from lightlib.common import ConfigReloaded, DT_NOW
+from lightlib.common import ConfigReloaded, get_now
 from lightlib.lightcontrol import LightController
 
 
@@ -55,11 +55,17 @@ def light_loop(light_control: LightController,
                stop_event: threading.Event):
     """Run light control updates in a tight polling loop."""
     try:
+        start_tick = get_now()
         while not stop_event.is_set():
             light_control.update()
             time.sleep(1)
+            tick_now = get_now()
+            if tick_now >= start_tick + dt.timedelta(seconds=10):
+                logging.info("[LOOP] Heartbeat tick")
+                start_tick = tick_now
     except Exception as e:
-        logging.exception("Light control loop encountered an error: %s", e)
+        logging.exception("Light control loop encountered an error: %s", e,
+                          exc_info=True)
     finally:
         logging.info("Light loop exited")
 
@@ -72,7 +78,8 @@ def gps_loop(gps: SunTimes, stop_event: threading.Event):
                 gps.start_gps_fix_process()
             time.sleep(ConfigLoader().cycle_time)
     except Exception as e:
-        logging.exception("GPS control loop encountered an error: %s", e)
+        logging.exception("GPS control loop encountered an error: %s", e,
+                          exc_info=True)
     finally:
         logging.info("GPS loop exited")
 
@@ -82,11 +89,11 @@ def daily_schedule_generation(stop_event: threading.Event,
                               solar_times: SunTimes):
     """Generate the daily schedule 1 hour after sunrise."""
     while not stop_event.is_set():
-        now = DT_NOW
+        now = get_now()
 
         # Wait until solar times are available
         while (not solar_times.UTC_sunrise_today and
-               not solar_times.UTC_sunris_tomorrow):
+               not solar_times.UTC_sunrise_tomorrow):
             logging.info("Waiting for sunrise and sunset times to "
                          "be esatblished before generating schedule.")
             stop_event.wait(timeout=20)  # Wait 20s
@@ -114,7 +121,7 @@ def daily_schedule_generation(stop_event: threading.Event,
 
             # Wait until the next day's schedule generation time
             next_run = generation_time + dt.timedelta(days=1)
-            sleep_duration = (next_run - DT_NOW).total_seconds()
+            sleep_duration = (next_run - get_now()).total_seconds()
             if sleep_duration > 0:
                 stop_event.wait(timeout=sleep_duration)
         else:
@@ -134,7 +141,7 @@ def main_loop():
             logging.info("Configuration reloaded; restarting main loop.")
             continue  # Restart the main loop
         except Exception as e:
-            logging.error(f"Fatal error: {e}")
+            logging.error("Fatal error: %s", e, exc_info=True)
             break
         finally:
             # Let systemd handle restarting to avoid zombie process

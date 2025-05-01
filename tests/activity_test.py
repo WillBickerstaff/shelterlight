@@ -31,7 +31,7 @@ except ImportError:
     sys.modules['lgpio'] = fake_lgpio
 
 from lightlib.activitydb import Activity, PinLevel, PinHealth
-from lightlib.common import valid_smallint, DT_NOW
+from lightlib.common import valid_smallint, get_now
 
 class TestActivity(unittest.TestCase):
     """Tests Activity functions."""
@@ -67,7 +67,7 @@ class TestActivity(unittest.TestCase):
 
     def test_end_activity_event_logs_valid_activity(self):
         """_end_activity_event should log activity and reset pin state."""
-        start_time = DT_NOW - dt.timedelta(seconds=10)
+        start_time = get_now() - dt.timedelta(seconds=10)
         self.activity._start_times[self.test_pin] = start_time
 
         self.activity._end_activity_event(self.test_pin)
@@ -94,7 +94,7 @@ class TestActivity(unittest.TestCase):
 
         # Simulate a long HIGH to trigger fault
         self.activity._start_times[self.test_pin] = (
-            DT_NOW - dt.timedelta(seconds=threshold + 5))
+            get_now() - dt.timedelta(seconds=threshold + 5))
         self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
 
         # First fault check (should set FAULT)
@@ -142,7 +142,7 @@ class TestActivity(unittest.TestCase):
         self.activity._fault_threshold = 99999
         sub_time = 32768
         self.activity._start_times[self.test_pin] = (
-           DT_NOW - dt.timedelta(seconds=sub_time))
+           get_now() - dt.timedelta(seconds=sub_time))
         self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
         self.activity._pin_status[self.test_pin]["status"] = PinHealth.FAULT
         logging.debug("Pin %i forced to FAULT with duration %is (invalid)",
@@ -174,7 +174,7 @@ class TestActivity(unittest.TestCase):
         """_end_activity_event should log duration of 32767 seconds."""
         self.activity._fault_threshold = 99999
         duration = 32767  # Max allowed SMALLINT value
-        start_time = DT_NOW - dt.timedelta(seconds=duration)
+        start_time = get_now() - dt.timedelta(seconds=duration)
         self.activity._start_times[self.test_pin] = start_time
         self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
         self.activity._pin_status[self.test_pin]["status"] = PinHealth.OK
@@ -237,7 +237,7 @@ class TestActivity(unittest.TestCase):
         duration = self.activity._fault_threshold + 1
 
         self.activity._start_times[self.test_pin] = (
-           DT_NOW - dt.timedelta(seconds=duration))
+           get_now() - dt.timedelta(seconds=duration))
         self.activity._pin_status[self.test_pin]["state"] = PinLevel.HIGH
         self.activity._pin_status[self.test_pin]["status"] = PinHealth.FAULT
 

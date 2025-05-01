@@ -27,7 +27,7 @@ DT_NOW = get_now()
 
 def get_today():
     """Return today's date."""
-    return DT_NOW.date()
+    return get_now().date()
 
 
 DATE_TODAY = get_today()
@@ -35,7 +35,7 @@ DATE_TODAY = get_today()
 
 def get_tomorrow():
     """Return tomorrows date."""
-    return DATE_TODAY + dt.timedelta(days=1)
+    return get_today() + dt.timedelta(days=1)
 
 
 DATE_TOMORROW = get_tomorrow()
@@ -65,12 +65,20 @@ def strfdt(dt: dt.datetime) -> str:
 
 def iso_to_datetime(iso_str: str) -> dt.datetime:
     """Convert an ISO formatted datetime string into a dt object."""
-    return dt.datetime.fromisoformat(iso_str)
+    try:
+        return dt.datetime.fromisoformat(iso_str)
+    except Exception as e:
+        logging.error("Failed to convert %s to a datetime object",
+                      iso_str, e, exc_info=True)
 
 
 def datetime_to_iso(dt_obj: dt.datetime) -> str:
     """Convert a dt object into an ISO formatted datetime string."""
-    return dt_obj.isoformat()
+    try:
+        return dt_obj.isoformat()
+    except Exception as e:
+        logging.error("Failed to format %s to an ISO formatted "
+                      "datetime string", dt_obj, e, exc_info=True)
 
 
 def gpio_init(mode: Optional[int] = GPIO.BCM) -> None:

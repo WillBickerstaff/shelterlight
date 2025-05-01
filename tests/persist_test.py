@@ -23,7 +23,7 @@ base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(base_path)
 
 from lightlib.persist import PersistentData
-from lightlib.common import DT_NOW
+from lightlib.common import get_now
 
 class TestPersist(unittest.TestCase):
     """Testing persistent data."""
@@ -42,7 +42,7 @@ class TestPersist(unittest.TestCase):
         """Check JSON data storage."""
         PersistentData().current_latitude = 10.6
         PersistentData().current_longitude = -5.2
-        now = DT_NOW
+        now = get_now()
         s_time = now + dt.timedelta(hours=-4)
         PersistentData().add_sunrise_time(datetime_instance=s_time)
         s_time = now + dt.timedelta(hours=+4)

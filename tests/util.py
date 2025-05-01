@@ -7,7 +7,7 @@ import logging
 import os
 import inspect
 import time
-from lightlib.common import DT_NOW
+from lightlib.common import get_now
 
 
 class LoggingTestResult(unittest.TextTestResult):
@@ -143,6 +143,6 @@ def setup_test_logging(name: str = None,
             format="[%(levelname)s] %(message)s"
         )
         logging.debug("%s UTC - Log initialized at:\n\t%s",
-                      DT_NOW.strftime("%Y-%m-%d %H:%M:%S"), log_path)
+                      get_now().strftime("%Y-%m-%d %H:%M:%S"), log_path)
     else:
         logging.debug("Logger already initialized.")

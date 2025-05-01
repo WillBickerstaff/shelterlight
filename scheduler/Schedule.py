@@ -12,7 +12,7 @@ Version: 0.1
 from threading import Lock
 from lightlib.persist import PersistentData
 from lightlib.db import DB
-from lightlib.common import DATE_TODAY, DATE_TOMORROW, DT_NOW
+from lightlib.common import get_today, get_tomorrow, get_now
 from typing import Optional
 import psycopg2
 import pandas as pd
@@ -214,7 +214,8 @@ class LightScheduler:
             df = self._add_schedule_accuracy_features(df, df_schedules)
 
         except Exception as e:
-            logging.error(f"Error retrieving training data: {str(e)}")
+            logging.error("Error retrieving training data: %s", e,
+                          exc_info=True)
             raise
 
         # Return the complete dataset
@@ -257,10 +258,11 @@ class LightScheduler:
             tuple[dt.time, dt.time]: (darkness_start, darkness_end)
         """
         persistent_data = PersistentData()
-        if date == DATE_TODAY:
+        date_today = get_today()
+        if date == date_today:
             darkness_start = persistent_data.sunset_today
             darkness_end = persistent_data.sunrise_tomorrow
-        elif date == DATE_TOMORROW:
+        elif date == get_tomorrow():
             darkness_start = persistent_data.sunset_tomorrow
             darkness_end = persistent_data.sunrise_tomorrow + \
                 dt.timedelta(days=1)
@@ -274,13 +276,13 @@ class LightScheduler:
             self._warned_missing = None
         # Ensure we have valid data, otherwise use default fallback
         if not darkness_start or not darkness_end:
-            if self._warned_missing != DATE_TODAY:
+            if self._warned_missing != date_today:
                 logging.warning("Missing sunrise/sunset data, using default "
                                 "darkness (15:30-09:00).")
                 # Track that the warning has been looged today
                 # (reduce log spam)
-                self._warned_missing = DATE_TODAY
-            now = DT_NOW
+                self._warned_missing = date_today
+            now = get_now()
             darkness_start = now.replace(hour=15, minute=30)
             darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)
 
@@ -484,7 +486,7 @@ class LightScheduler:
                     "0 activity records found. Using minimum training window.")
                 return MIN_DAYS_HISTORY
 
-            today = DT_NOW
+            today = get_now()
             history_days = (today - oldest_timestamp).days
             effective_days = max(MIN_DAYS_HISTORY,
                                  min(history_days, MAX_DAYS_HISTORY))
@@ -556,7 +558,7 @@ class LightScheduler:
         )
 
         # Filter to only darkness intervals
-        df = df[df['is_dark'] == 1]
+        # df = df[df['is_dark'] == 1]
 
         logging.debug(
             "Prediction DataFrame after darkness filter: \n%s", df.head())
@@ -784,7 +786,7 @@ class LightScheduler:
                     in scheduled_intervals:
 
                 # Skip evaluation if the interval hasn't ended yet
-                now = DT_NOW
+                now = get_now()
                 if dt.datetime.combine(date, end_time) > now:
                     continue
 
@@ -889,18 +891,19 @@ class LightScheduler:
         try:
             # Make sure only one thread can try to update the schedule at
             # any time
+            date_tomorrow = get_tomorrow()
             with self._lock:
                 # Evaluate yesterday's schedule accuracy
-                yesterday = DT_NOW.date() - dt.timedelta(days=1)
+                yesterday = get_now().date() - dt.timedelta(days=1)
                 self.evaluate_previous_schedule(yesterday)
                 # Retrain the model using updated accuracy data
                 self.train_model(days_history=self._progressive_history())
                 # Get tomorrow's date and darkness period
                 darkness_start, darkness_end = \
-                    self._get_darkness_times(DATE_TOMORROW)
+                    self._get_darkness_times(date_tomorrow)
                 # Generate a new schedule for tomorrow
                 new_schedule = self.generate_daily_schedule(
-                    DATE_TOMORROW.strftime("%Y-%m-%d"),
+                    date_tomorrow.strftime("%Y-%m-%d"),
                     darkness_start.strftime("%H:%M"),
                     darkness_end.strftime("%H:%M")
                 )
@@ -910,12 +913,12 @@ class LightScheduler:
                 if not new_schedule:
                     # Empty schedule
                     logging.warning("Empty schedule generated for %s",
-                                    DATE_TOMORROW)
+                                    date_tomorrow)
                 else:
                     # Log the successful update and return the new schedule
                     logging.info("Successfully updated schedule for %s",
-                                 DATE_TOMORROW)
-                self._log_schedule(new_schedule, DATE_TOMORROW)
+                                 date_tomorrow)
+                self._log_schedule(new_schedule, date_tomorrow)
                 return new_schedule
 
         except Exception as e:
@@ -934,7 +937,7 @@ class LightScheduler:
         """
         # Get today's date if no date is given
         if target_date is None:
-            target_date = DT_NOW.date()
+            target_date = get_now().date()
 
         # Check if the schedule is already cached and up to date
         logging.debug(
@@ -974,10 +977,10 @@ class LightScheduler:
         -Checks if lights should be ON for that interval.
         """
         # Get the current time (use datetime.now() if None)
-        now = current_time or DT_NOW
+        now = current_time or get_now()
         # Identify the relevant schedule date (yesterday or today)
         # Get darkness times for today (could span two dates)
-        darkness_start, darkness_end = self._get_darkness_times(DATE_TODAY)
+        darkness_start, darkness_end = self._get_darkness_times(get_today())
 
         # Determine if this moment falls in today's or yesterday's schedule
         if darkness_start < darkness_end:

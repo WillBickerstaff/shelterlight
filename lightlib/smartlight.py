@@ -145,8 +145,7 @@ def set_power_pin(pin_number: int, state: GPIO_PIN_STATE,
     except RuntimeError as e:
         action = "power ON" if state == GPIO_PIN_STATE.ON else "power OFF"
         logging.error(
-            "Failed to set pin %s to %s: %s", pin_number, action, e
-        )
+            "Failed to set pin %s to %s: %s", pin_number, action, e)
         raise RuntimeError(
             "Failed to %s pin %s due to GPIO error." % (action, pin_number)
         ) from e

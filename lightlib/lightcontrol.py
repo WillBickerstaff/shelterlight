@@ -12,7 +12,7 @@ Version: 0.1
 import logging
 import lgpio
 from threading import Lock
-from lightlib.common import DT_NOW
+from lightlib.common import get_now
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
 from scheduler.Schedule import LightScheduler
@@ -67,7 +67,8 @@ class LightController:
 
         except Exception as e:
             logging.error("An error occured while attempting to determine if "
-                          "it is dark now, failing safe (True): %s", e)
+                          "it is dark now, failing safe (True): %s", e,
+                          exc_info=True)
             return True
         finally:
             if darkstart is None or darkend is None:
@@ -76,12 +77,12 @@ class LightController:
                                 "\tSunrise tomorrow is:\t%s\n"
                                 "Failing safe (True)", darkstart, darkend)
 
-        if sunt.is_polar_event == PolarEvent().POLARDAY:
+        if sunt.is_polar_event == PolarEvent.POLARDAY:
             return False
-        elif sunt.is_polar_event == PolarEvent().POLARDAY:
+        elif sunt.is_polar_event == PolarEvent.POLARNIGHT:
             return True
         else:
-            return darkstart < DT_NOW < darkend
+            return darkstart < get_now() < darkend
 
     def set_lights(self) -> bool:
         """Set the light output.
