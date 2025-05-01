@@ -15,10 +15,10 @@ import time
 import subprocess
 import logging
 import os
-from timezonefinder import TimezoneFinder
 import pytz
+from timezonefinder import TimezoneFinder
 from enum import Enum
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, Union
 from astral import sun, Observer
 from lightlib.config import ConfigLoader
 from lightlib.common import EPOCH_DATETIME
@@ -39,6 +39,26 @@ class SolarEvent(Enum):
     DUSK = "dusk"
 
 
+class PolarNightError(Exception):
+    """Raised when the sun is always below the horizon."""
+
+    pass
+
+
+class PolarDayError(Exception):
+    """Raised when the sun is always above the horizon."""
+
+    pass
+
+
+class PolarEvent(Enum):
+    """Enumeration that identifies polar extremes."""
+
+    NO = 0
+    POLARDAY = 1
+    POLARNIGHT = 2
+
+
 class SunTimes:
     """Mange solar events."""
 
@@ -52,6 +72,7 @@ class SunTimes:
         self._fixed_today: bool = False
         self._gps_fix_running: threading.Event = threading.Event()
         self._gps_fix_thread: Optional[threading.Thread] = None
+        self._polar = PolarEvent.NO
         logging.info(
             "SunTimes initialized with sunrise offset: %s minutes, sunset "
             "offset: %s minutes.", self.sunrise_offset, self.sunset_offset)
@@ -284,6 +305,16 @@ class SunTimes:
             logging.error("Observer can not be created")
             return None
 
+    @property
+    def is_polar_event(self) -> PolarEvent:
+        """Return if the current data is a Polar day or Polar Night.
+
+        Returns
+        -------
+        Enum(PolarEvent) - Any of POLARDAY, POLARNIGHT or NO
+        """
+        return self._polar
+
     # --------------------- Core Methods for GPS Fixing -----------------------
 
     def start_gps_fix_process(self) -> None:
@@ -508,13 +539,22 @@ class SunTimes:
         tomorrow = DATE_TOMORROW
 
         # Calculate today's solar times
-        solar_times_today = SunTimes.calculate_solar_times(observer, today)
+        try:
+            solar_times_today = SunTimes.calculate_solar_times(observer, today)
+        except PolarDayError:
+            self._polar = PolarEvent.POLARDAY
+        except PolarNightError:
+            self._polar = PolarEvent.POLARNIGHT
+
         self._sr_today = solar_times_today["sunrise"]
         self._ss_today = solar_times_today["sunset"]
 
         # Calculate tomorrow's solar times
-        solar_times_tomorrow = SunTimes.calculate_solar_times(observer,
-                                                              tomorrow)
+        try:
+            solar_times_tomorrow = SunTimes.calculate_solar_times(observer,
+                                                                  tomorrow)
+        except (PolarDayError, PolarNightError):
+            pass
         self._sr_tomorrow = solar_times_tomorrow["sunrise"]
         self._ss_tomorrow = solar_times_tomorrow["sunset"]
 
@@ -706,96 +746,127 @@ class SunTimes:
 
     @staticmethod
     def calculate_solar_times(
-             observer: Observer,
-             date: dt.date) -> Dict[str, Optional[dt.datetime]]:
+            observer: Observer,
+            date: dt.date) -> Dict[str, Union[dt.datetime, PolarEvent]]:
         """Calculate the solar event times for an observer, location and date.
 
-        This method uses the `astral.sun` function to determine key solar
-        events based on the observer's latitude, longitude, and elevation. It
-        calculates times for sunrise and sunset in UTC.
+        This method calculates UTC sunrise and sunset times for a given date
+        and observer. It handles polar conditions (e.g. no sunrise or sunset)
+        by assigning fallback times and raising appropriate exceptions while
+        still returning usable values for schedule calculation.
 
-        If the observer's location and date correspond to a polar night
-        (no sunrise), this function returns `None` for sunrise.
-
-        If the location corresponds to a polar day (no sunset), a
-        `NoSolarEventError` is raised, since no light schedule is needed.
-
-        Args
-        ----
-            observer (Observer): An instance of `astral.Observer` containing
-                                 the observer's location data
-                                 (latitude, longitude, and elevation).
-            date (dt.date): The date for which to calculate solar event times.
+        If polar conditions are detected:
+        - PolarNightError is raised when there is no sunrise (permanent night).
+        - PolarDayError is raised when there is no sunset (permanent day).
 
         Returns
         -------
-            Dict[str, Optional[dt.datetime]]: A dictionary with "sunrise" and
-            "sunset" keys. The sunrise value may be `None` if not applicable.
+        Dict[str, Union[datetime.datetime, PolarEvent]]
+            A dictionary with the following keys:
+            - "sunrise": datetime.datetime
+                The calculated (or fallback) UTC time of sunrise.
+            - "sunset": datetime.datetime
+                The calculated (or fallback) UTC time of sunset.
+            - "polar": PolarEvent
+                Enum indicating whether this is a normal day, polar day, or
+                polar night.
 
         Raises
         ------
-            NoSolarEventError: If no sunset can be determined (polar day).
-            InvalidObserverError: If observer data is invalid.
+        PolarDayError
+            If the sun does not set (permanent day).
+        PolarNightError
+            If the sun does not rise (permanent night).
+        InvalidObserverError
+            If the observer data is invalid or unusable.
         """
         logging.debug("Calculate solar events for location %s, %s on date %s",
                       round(observer.latitude, 2),
                       round(observer.longitude, 2),
                       date.isoformat())
+        polar = PolarEvent.NO
         try:
-            # Attempt to calculate sunrise
+            # Default to actual sunrise/sunset values
             try:
                 sunrise = sun.sunrise(observer, date)
             except ValueError as ve:
                 msg = str(ve)
                 if "Sun is always below the horizon" in msg or \
-                   "Unable to find a sunrise time" in msg:
-                    # Polar night: no sunrise
-                    logging.warning("No sunrise on date: %s", msg)
-                    sunrise = None
+                        "Unable to find a sunrise time" in msg:
+                    sunrise = dt.datetime.combine(
+                        date, dt.time(11, 59, 59), dt.timezone.utc)
+                    sunset = dt.datetime.combine(
+                        date, dt.time(12, 0, 0), dt.timezone.utc)
+                    logging.warning("Polar night (no sunrise): %s", msg)
+                    polar = PolarEvent.POLARNIGHT
+                    raise PolarNightError("Polar night: no sunrise.") from ve
                 elif "Sun is always above the horizon" in msg:
-                    # Polar day
-                    logging.warning(
-                        "Polar day detected (no sunrise/sunset): %s", msg)
-                    raise NoSolarEventError("Polar day: no sunrise.") from ve
+                    sunrise = dt.datetime.combine(
+                        date, dt.time(0, 0, 1), dt.timezone.utc)
+                    sunset = dt.datetime.combine(
+                        date, dt.time(23, 59, 59), dt.timezone.utc)
+                    logging.warning("Polar day (no sunrise): %s", msg)
+                    polar = PolarEvent.POLARDAY
+                    raise PolarDayError("Polar day: no sunrise.") from ve
                 else:
                     raise
 
-            # Attempt to calculate sunset
             try:
                 sunset = sun.sunset(observer, date)
             except ValueError as ve:
                 msg = str(ve)
                 if "Sun is always above the horizon" in msg or \
-                   "Unable to find a sunset time" in msg:
-                    # Polar day: no sunset
-                    logging.warning("No sunset on date: %s", msg)
-                    raise NoSolarEventError(
-                        "No sunset for observer location and date.") from ve
+                        "Unable to find a sunset time" in msg:
+                    sunrise = dt.datetime.combine(
+                        date, dt.time(0, 0, 1), dt.timezone.utc)
+                    sunset = dt.datetime.combine(
+                        date, dt.time(23, 59, 59), dt.timezone.utc)
+                    logging.warning("Polar day (no sunset): %s", msg)
+                    polar = PolarEvent.POLARDAY
+                    raise PolarDayError("Polar day: no sunset.") from ve
+                elif "Sun is always below the horizon" in msg:
+                    sunrise = dt.datetime.combine(
+                        date, dt.time(11, 59, 59), dt.timezone.utc)
+                    sunset = dt.datetime.combine(
+                        date, dt.time(12, 0, 0), dt.timezone.utc)
+                    logging.warning("Polar night (no sunset): %s", msg)
+                    polar = PolarEvent.POLARNIGHT
+                    raise PolarNightError("Polar night: no sunset.") from ve
                 else:
                     raise
 
-            # Log and return both times
-            solar_times = {"sunrise": sunrise, "sunset": sunset}
+            solar_times = {"sunrise": sunrise, "sunset": sunset,
+                           "polar": polar}
             logging.info("Calculated solar times at location %s, %s"
-                         "\n  for     : %s"
-                         "\n  Sunrise : %s"
-                         "\n  Sunset  : %s",
+                         "\n\tfor     : %s"
+                         "\n\tSunrise : %s"
+                         "\n\tSunset  : %s"
+                         "\n\tPolar Event: %s ",
                          round(observer.latitude, 2),
                          round(observer.longitude, 2),
-                         date,
-                         sunrise.isoformat() if sunrise else "None",
-                         sunset.isoformat())
+                         date, sunrise.isoformat(),
+                         sunset.isoformat(), polar.name)
             return solar_times
 
-        except ValueError as ve:
-            msg = str(ve)
-            if "Sun is always below the horizon" in msg:
-                logging.warning(
-                    "Polar night detected (no sunrise/sunset): %s", msg)
-                return {"sunrise": None, "sunset": None}
-            logging.error("Invalid observer data or date: %s", ve)
-            raise InvalidObserverError(
-                "Invalid observer location or date.") from ve
+        except InvalidObserverError as ioe:
+            logging.error("Invalid location (Bad Observer) using default day "
+                          "for sunrise and sunset : %s", ioe)
+            # Fallback to default day if location totally broken
+            sunrise = dt.datetime.combine(
+                date, dt.time(10, 0, 0), dt.timezone.utc)
+            sunset = dt.datetime.combine(
+                date, dt.time(16, 0, 0), dt.timezone.utc)
+            return {"sunrise": sunrise, "sunset": sunset,
+                    "polar": PolarEvent.NO}
+
+        except (PolarDayError, PolarNightError):
+            # Let known polar errors propagate for specific handling
+            raise
+
+        except Exception as ex:
+            logging.error("Unexpected error in solar time calculation: %s",
+                          ex, exc_info=True)
+            raise InvalidObserverError(f"Unexpected failure: {ex}") from ex
 
     def cleanup(self):
         """Stop fix thread and clean up GPS."""

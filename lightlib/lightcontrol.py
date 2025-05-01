@@ -16,7 +16,8 @@ from lightlib.common import DT_NOW
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
 from scheduler.Schedule import LightScheduler
-from shelterGPS.Helio import SunTimes
+from shelterGPS.Helio import SunTimes, PolarDayError, PolarNightError, \
+    PolarEvent
 
 
 class LightController:
@@ -55,15 +56,32 @@ class LightController:
         -------
             bool: True if it is dark now, otherwise false
         """
-        sunt = SunTimes()
-        if sunt.UTC_sunset_today is None or sunt.UTC_sunrise_tomorrow is None:
-            logging.warning("Unable to determine if it is dark now\n"
-                            "\tSunset today is:\t%s\n"
-                            "\tSunrise tomorrow is:\t%s\nFailing safe (True)",
-                            sunt.UTC_sunset_today, sunt.UTC_sunrise_tomorrow)
+        try:
+            sunt = SunTimes()
+            darkstart = sunt.UTC_sunrise_today
+            darkend = sunt.UTC_sunrise_tomorrow
+        except PolarDayError:
+            return False
+        except PolarNightError:
             return True
 
-        return sunt.UTC_sunset_today < DT_NOW < sunt.UTC_sunrise_tomorrow
+        except Exception as e:
+            logging.error("An error occured while attempting to determine if "
+                          "it is dark now, failing safe (True): %s", e)
+            return True
+        finally:
+            if darkstart is None or darkend is None:
+                logging.warning("Unable to determine if it is dark now\n"
+                                "\tSunset today is:\t%s\n"
+                                "\tSunrise tomorrow is:\t%s\n"
+                                "Failing safe (True)", darkstart, darkend)
+
+        if sunt.is_polar_event == PolarEvent().POLARDAY:
+            return False
+        elif sunt.is_polar_event == PolarEvent().POLARDAY:
+            return True
+        else:
+            return darkstart < DT_NOW < darkend
 
     def set_lights(self) -> bool:
         """Set the light output.
