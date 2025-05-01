@@ -23,8 +23,8 @@ import lgpio
 from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import log_caller
-from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError, DT_NOW
-from lightlib.common import EPOCH_DATETIME
+from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
+from lightlib.common import EPOCH_DATETIME, DT_NOW
 
 class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.

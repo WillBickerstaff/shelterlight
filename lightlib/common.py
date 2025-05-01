@@ -17,9 +17,20 @@ from typing import Optional
 EPOCH_DATETIME = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)
 
 
+def get_now():
+    """Return a datetime.datetime object representing now."""
+    return dt.datetime.now(dt.timezone.utc)
+
+
+DT_NOW = get_now()
+
+
 def get_today():
     """Return today's date."""
     return DT_NOW.date()
+
+
+DATE_TODAY = get_today()
 
 
 def get_tomorrow():
@@ -27,14 +38,7 @@ def get_tomorrow():
     return DATE_TODAY + dt.timedelta(days=1)
 
 
-def get_now():
-    """Return a datetime.datetime object representing now."""
-    return dt.datetime.now(dt.timezone.utc)
-
-
-DATE_TODAY = get_today()
 DATE_TOMORROW = get_tomorrow()
-DT_NOW = get_now()
 
 
 class ConfigReloaded(Exception):
