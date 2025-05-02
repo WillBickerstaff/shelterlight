@@ -447,24 +447,32 @@ class SunTimes:
         made within a defined fixing window, and the method tracks consecutive
         failed attempts, halting after a configurable maximum failure
         threshold is reached.
-        """
+                    """
         max_fix_errors = ConfigLoader().gps_failed_fix_days
+        gps_start_time = time.monotonic()
         while True:
             try:
                 logging.info("Attempting GPS fix.")
-                self._gps.get_fix()
+                # Don't start reading serial until just before we got a fix
+                # last time
+                stored_time = PersistentData().time_to_fix
+                wait_time = stored_time - 2 if stored_time and \
+                            stored_time > 2 else None
+                self._gps.get_fix(pwr_up_wait=wait_time)
 
                 if self._gps.datetime_established and \
-                   self._gps.position_established:
+                        self._gps.position_established:
                     self._set_system_time()
                     self._fixed_today = get_now().date()
                     logging.info("GPS Fix succeeded, position & "
                                  "time established")
+
                     #  Update solar times and fix window based on GPS
                     #  coordinates
                     self._set_solar_times_and_fix_window()
+                    PersistentData().time_to_fix = (gps_start_time,
+                                                    time.monotonic())
                     self._store_persistent_data()
-                    self._gps.pwr_off()
                     break
 
             except pos.GPSInvalid:
@@ -478,10 +486,8 @@ class SunTimes:
                               self._gps.datetime_established)
                 if self._fix_err_day >= max_fix_errors:
                     logging.error("Failed to fix for %s days.", max_fix_errors)
-                    self._gps.pwr_off()
                     raise GPSNoFix(
                         f"Unable to obtain GPS fix for {max_fix_errors} days.")
-
             logging.debug("No fix on this attempt:\n\t"
                           "GPS Position: %s\tEstablished: %s\n\t"
                           "GPS Datetime: %s\tEstablished: %s\n",
@@ -583,6 +589,8 @@ class SunTimes:
             pass
         self._sr_tomorrow = solar_times_tomorrow["sunrise"]
         self._ss_tomorrow = solar_times_tomorrow["sunset"]
+
+        self._store_persistent_data()
 
         logging.info("Updated solar events :\n"
                      "     Today: Sunrise: %s, Sunset: %s\n"

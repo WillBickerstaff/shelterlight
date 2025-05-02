@@ -99,6 +99,8 @@ GPS module settings.
 | `failed_fix_days`    | int   | `14`           | Days of repeated fix failure before fault.      |
 | `bypass_fix_window`  | bool  | `False`        | Allow GPS fixing at any time.                   |
 
+**NOTE:** `pwr_up_time` ## [GPS] is only used on the system's first ever fix. After that, the system measures how long the GPS takes to obtain a fix and uses that duration as a base for future fix attempts (with a -2 second buffer). This reduces noise in the logs and avoids unnecessary waiting.
+
 ---
 
 ## [IO]

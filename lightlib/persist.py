@@ -96,6 +96,7 @@ class PersistentData:
         self._current_longitude = None
         self._current_altitude = None
         self._missed_fixes = 0
+        self._time_to_fix = None
         self._initialize_file()
         # Mark as initialized
         self._populate_locals_from_file()
@@ -114,7 +115,8 @@ class PersistentData:
                     "altitude": None,
                     "sunrise_times": [],
                     "sunset_times": [],
-                    "last_updated": None
+                    "last_updated": None,
+                    "time_to_fix": 2
                 }
             case _:
                 logging.error("Unsupported schema version %s, falling back "
@@ -157,7 +159,8 @@ class PersistentData:
                     [datetime_to_iso(t) for t in self._sunrise_times],
                 "sunset_times":
                     [datetime_to_iso(t) for t in self._sunset_times],
-                "last_updated": datetime_to_iso(get_now())
+                "last_updated": datetime_to_iso(get_now()),
+                "time_to_fix": self.time_to_fix
             })
 
             with open(ConfigLoader().persistent_data_json, 'w') as file:
@@ -165,7 +168,7 @@ class PersistentData:
                 logging.info("Data stored successfully in JSON file.")
 
             # Refresh local convenience attributes
-            self._populate_locals_from_file
+            self._populate_locals_from_file()
         except IOError as e:
             logging.error("Failed to store Data in JSON: %s", e)
             raise DataStorageError("Failed to store data in JSON.") from e
@@ -184,6 +187,33 @@ class PersistentData:
         if getattr(self, flag_attr) != get_today():
             logging.error(message, missing_date)
             setattr(self, flag_attr, get_tomorrow())
+
+    @property
+    def time_to_fix(self) -> int:
+        """Duration of how long GPS previously took to establish a fix in S.
+
+        Returns
+        -------
+            int|None: The time value in seconds of how long the last fix took,
+                      None if nothing is stored
+        """
+        if isinstance(self._time_to_fix, int):
+            return int(self._time_to_fix)
+        return None
+
+    @time_to_fix.setter
+    def time_to_fix(self, start_to_end: tuple[float, float]) -> None:
+        fix_start, fix_end = start_to_end
+        fix_dur = int(fix_end - fix_start)
+        if 0 < fix_dur < 600:
+            self._time_to_fix = fix_dur
+            logging.info("GPS took %ds to obtain a fix.", fix_dur)
+        else:
+            logging.warning("%s fix duration  (%ds), "
+                            "fix time of 2 minutes assumed. "
+                            "Consider adjusting the the GPS antenna.",
+                            "High" if fix_dur >= 600 else "Invalid", fix_dur)
+            self._time_to_fix = 120
 
     @property
     def current_altitude(self) -> float:
@@ -271,7 +301,7 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=get_tomorrow(),
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            self._warn_once("_ss_tmrw", DATE_TOMORROW,
+            self._warn_once("_ss_tmrw", get_tomorrow(),
                             "%s not found in persistent data sunset times")
             return None
 
@@ -352,6 +382,10 @@ class PersistentData:
                 if self._missed_fixes is None:
                     key = "missed_fixes"
                     self._missed_fixes = data.get(key)
+
+                if self._time_to_fix is None:
+                    key = "time_to_fix"
+                    self._time_to_fix = data.get(key)
 
                 # Populate sunrise and sunset times if they are empty
                 if not self._sunrise_times:

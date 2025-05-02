@@ -124,6 +124,7 @@ def daily_schedule_generation(stop_event: threading.Event,
                             "retrying in 5 minutes at %s.", retry_at.time())
             stop_event.wait((retry_at - now).total_seconds())
 
+
 def main_loop():
     """Continual Main loop entry point."""
     while True:
