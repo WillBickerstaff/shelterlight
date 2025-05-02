@@ -92,43 +92,37 @@ def daily_schedule_generation(stop_event: threading.Event,
     while not stop_event.is_set():
         now = get_now()
 
-        # Wait until solar times are available
-        while (not solar_times.UTC_sunrise_today and
-               not solar_times.UTC_sunrise_tomorrow):
-            logging.info("Waiting for sunrise and sunset times to "
-                         "be esatblished before generating schedule.")
-            stop_event.wait(timeout=20)  # Wait 20s
-            if stop_event.is_set():
-                return
-
-            # Set generation time to 1 hour after sunrise
-            generation_time = solar_times.UTC_sunrise_today + \
-                dt.timedelta(hours=1)
-
-            # Calculate the time to wait until schedule generation
+        # Wait until solar times are available, if 1 is set, all are set
+        sr_today = solar_times.UTC_sunrise_today
+        if sr_today:
+            generation_time = sr_today + dt.timedelta(hours=1)
             sleep_duration = (generation_time - now).total_seconds()
 
             if sleep_duration > 0:
-                logging.info(
-                    f"Waiting {sleep_duration / 3600:.2f} hours"
-                    " for schedule generation.")
+                logging.info("Schedule will be generated at %s.",
+                             generation_time.time())
                 stop_event.wait(timeout=sleep_duration)
-
-            if stop_event.is_set():
-                break
+                if stop_event.is_set():
+                    return
 
             logging.info("Generating daily schedule.")
             scheduler.update_daily_schedule()
 
-            # Wait until the next day's schedule generation time
-            next_run = generation_time + dt.timedelta(days=1)
+            # Wait until tomorrows generation time
+            sr_tomorrow = solar_times.UTC_sunrise_tomorrow
+            next_run = sr_tomorrow + dt.timedelta(hours=1)
             sleep_duration = (next_run - get_now()).total_seconds()
-            if sleep_duration > 0:
-                stop_event.wait(timeout=sleep_duration)
-        else:
-            logging.warning("Sunrise time not available. Retrying in 1 hour.")
-            stop_event.wait(timeout=3600)
 
+            if sleep_duration > 0:
+                logging.info("Next Schedule generation will be at %s, on %s.",
+                             next_run.time(), next_run.date())
+                stop_event.wait(timeout=sleep_duration)
+
+        else:
+            retry_at = now + dt.timedelta(minutes=5)
+            logging.warning("Sunrise time not available. "
+                            "retrying in 5 minutes at %s.", retry_at.time())
+            stop_event.wait((retry_at - now).total_seconds())
 
 def main_loop():
     """Continual Main loop entry point."""
