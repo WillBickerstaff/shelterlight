@@ -70,8 +70,8 @@ class LightController:
         """
         try:
             sunt = SunTimes()
-            darkstart = sunt.UTC_sunrise_today
-            darkend = sunt.UTC_sunrise_tomorrow
+            light_start = sunt.UTC_sunrise_today
+            light_end = sunt.UTC_sunset_today
         except PolarDayError:
             return False
         except PolarNightError:
@@ -83,18 +83,15 @@ class LightController:
                           exc_info=True)
             return True
         finally:
-            if darkstart is None or darkend is None:
+            if light_start is None or light_end is None:
                 logging.warning("Unable to determine if it is dark now\n"
+                                "\tSunrise today is:\t%s\n"
                                 "\tSunset today is:\t%s\n"
-                                "\tSunrise tomorrow is:\t%s\n"
-                                "Failing safe (True)", darkstart, darkend)
+                                "Failing safe (True)",
+                                light_start, light_end)
+                return True
 
-        if sunt.is_polar_event == PolarEvent.POLARDAY:
-            return False
-        elif sunt.is_polar_event == PolarEvent.POLARNIGHT:
-            return True
-        else:
-            return darkstart < get_now() < darkend
+        return not (light_start <= get_now() < light_end)
 
     def set_lights(self) -> bool:
         """Set the light output.
