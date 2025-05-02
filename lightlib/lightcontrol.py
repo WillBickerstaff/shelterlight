@@ -42,12 +42,24 @@ class LightController:
         self._gpio_handle = lgpio.gpiochip_open(0)
         for out_pin in self._lights_output:
             lgpio.gpio_claim_output(self._gpio_handle, out_pin)
+        self._off_logged = False
+        self._on_logged = False
         self.turn_off()  # Start with lights off
 
     def update(self):
         """Update system state: check inputs and control lights."""
         self.activity_monitor.update()
         self.set_lights()
+
+    @property
+    def lights_are_on(self) -> bool:
+        """Return True if any light output is on."""
+        if self._gpio_handle is not None:
+            return any(
+                lgpio.gpio_read(self._gpio_handle, pin) == 1
+                for pin in self._lights_output)
+
+        return False
 
     def _is_dark_now(self) -> bool:
         """Determine if it is dark now to enable activity to react.
@@ -95,15 +107,31 @@ class LightController:
             bool: True if lights are on otherwise False
         """
         schedule_on = self.schedule.should_light_be_on()
-        activity_on = (self.activity_monitor.activity_detected() and
-                       self._is_dark_now())
+        activity_on = self.activity_monitor.activity_detected()
+        is_dark = self._is_dark_now()
+
+        if not is_dark:
+            self.turn_off
+            if not self._off_logged:
+                logging.info("Lights switched --OFF--.")
+                self._off_logged = True
+                self._on_logged = False
+            return False
+
         if schedule_on or activity_on:
-            logging.info("Lights switched on (%s)",
-                         "Schedule" if schedule_on else "Activity")
-            self.turn_on()
+            self.turn_on
+            if not self._on_logged:
+                logging.info("Lights switched --ON-- : %s in darkness",
+                             "Schedule" if schedule_on else "Activity")
+                self._on_logged = True
+                self._off_logged = False
             return True
         else:
             self.turn_off()
+            if not self._off_logged:
+                logging.info("Lights switched --OFF--")
+                self._off_logged = True
+                self._on_logged = False
             return False
 
     def _set_lights(self, status: int):

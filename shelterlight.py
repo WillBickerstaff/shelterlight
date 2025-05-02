@@ -61,7 +61,8 @@ def light_loop(light_control: LightController,
             time.sleep(1)
             tick_now = get_now()
             if tick_now >= start_tick + dt.timedelta(seconds=10):
-                logging.info("[LOOP] Heartbeat tick")
+                logging.info("[LOOP] Heartbeat tick lights are %s",
+                             "ON" if light_control.lights_are_on else "OFF")
                 start_tick = tick_now
     except Exception as e:
         logging.exception("Light control loop encountered an error: %s", e,

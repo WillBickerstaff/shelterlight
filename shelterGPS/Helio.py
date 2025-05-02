@@ -62,8 +62,33 @@ class PolarEvent(Enum):
 class SunTimes:
     """Mange solar events."""
 
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        """Ensure only one instance of SunTimes is created.
+
+        This method implements the Singleton pattern for the `GPS`
+        class, ensuring that only one instance of the class can exist at any
+        time.
+
+        Returns
+        -------
+            GPS: A single instance of the `GPS` class.
+        """
+        if not cls._instance:
+            with cls._lock:  # Thread-safe check and assignment
+                if not cls._instance:
+                    cls._instance = super(SunTimes, cls).__new__(cls)
+                    cls._instance.__initialized = False
+
+        return cls._instance
+
     def __init__(self) -> None:
         """Init SunTimes with config for solar offsets and GPS tracking."""
+        if getattr(self, '_initialized', False):
+            return
+
         self.sunrise_offset: int = ConfigLoader().sunrise_offset
         self.sunset_offset: int = ConfigLoader().sunset_offset
         self.__observer = None
@@ -73,6 +98,7 @@ class SunTimes:
         self._gps_fix_running: threading.Event = threading.Event()
         self._gps_fix_thread: Optional[threading.Thread] = None
         self._polar = PolarEvent.NO
+        self._initialized = True
         logging.info(
             "SunTimes initialized with sunrise offset: %s minutes, sunset "
             "offset: %s minutes.", self.sunrise_offset, self.sunset_offset)
