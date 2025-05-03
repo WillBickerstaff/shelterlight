@@ -151,7 +151,7 @@ class SunTimes:
         """
         # if not set try and get something in there
         if self._sr_today == EPOCH_DATETIME:
-            # This first trys to determine a loaction through _get_coordinates
+            # This first trys to determine a location through _get_coordinates
             # or _use_local_geo
             self._set_solar_times(self.local_observer)
 
@@ -177,7 +177,7 @@ class SunTimes:
         """
         # if not set try and get something in there
         if self._ss_today == EPOCH_DATETIME:
-            # This first trys to determine a loaction through _get_coordinates
+            # This first trys to determine a location through _get_coordinates
             # or _use_local_geo
             self._set_solar_times(self.local_observer)
 
@@ -203,7 +203,7 @@ class SunTimes:
         """
         # if not set try and get something in there
         if self._sr_tomorrow == EPOCH_DATETIME:
-            # This first trys to determine a loaction through _get_coordinates
+            # This first trys to determine a location through _get_coordinates
             # or _use_local_geo
             self._set_solar_times(self.local_observer)
 
@@ -229,7 +229,7 @@ class SunTimes:
         """
         # if not set try and get something in there
         if self._ss_tomorrow == EPOCH_DATETIME:
-            # This first trys to determine a loaction through _get_coordinates
+            # This first trys to determine a location through _get_coordinates
             # or _use_local_geo
             self._set_solar_times(self.local_observer)
 
@@ -403,7 +403,8 @@ class SunTimes:
                 try:
                     self._attempt_fix_for_today()
                 except Exception as e:
-                    logging.error("An error occurred during GPS fixing: %s", e)
+                    logging.error("An error occurred during GPS fixing: %s",
+                                  e, exc_info=True )
                 # Wait for retry interval
                 time.sleep(ConfigLoader().gps_fix_retry_interval)
         finally:
@@ -449,15 +450,11 @@ class SunTimes:
         threshold is reached.
                     """
         max_fix_errors = ConfigLoader().gps_failed_fix_days
-        gps_start_time = time.monotonic()
+        wait_time = ConfigLoader().gps_pwr_up_time
         while True:
             try:
                 logging.info("Attempting GPS fix.")
-                # Don't start reading serial until just before we got a fix
-                # last time
-                stored_time = PersistentData().time_to_fix
-                wait_time = stored_time - 2 if stored_time and \
-                            stored_time > 2 else None
+                # Wait for gps to power up
                 self._gps.get_fix(pwr_up_wait=wait_time)
 
                 if self._gps.datetime_established and \
@@ -470,8 +467,6 @@ class SunTimes:
                     #  Update solar times and fix window based on GPS
                     #  coordinates
                     self._set_solar_times_and_fix_window()
-                    PersistentData().time_to_fix = (gps_start_time,
-                                                    time.monotonic())
                     self._store_persistent_data()
                     break
 

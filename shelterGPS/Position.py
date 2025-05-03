@@ -25,6 +25,7 @@ from lightlib.config import ConfigLoader
 from lightlib.smartlight import log_caller
 from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
 from lightlib.common import EPOCH_DATETIME, get_now
+from lightlib.persist import PersistentData
 
 class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.
@@ -137,6 +138,8 @@ class GPS:
         self._last_msg = []
         self._datetime_established = False
         self._position_established = False
+        self._fix_start_time = 0.0
+        self._log_msgs = False
 
         # Mark as initialized
         self.__initialized = True
@@ -205,6 +208,11 @@ class GPS:
                             f"Lng: {self.longitude:.2f}",
                             f"Alt: {self.altitude:.2f}m"])
 
+    def _log_msg(self, log_level: int, msg: str, *args) -> None:
+        """Log fix messages only if taking longer than the last fix duration."""
+        if self._log_msgs:
+            logging.log(log_level, msg, *args)
+
     def gpsCoord2Dec(self,
                      gps_coord: Union[str, float], direction: GPSDir) -> float:
         """Convert GPS coordinates from DMS format to decimal format.
@@ -229,7 +237,7 @@ class GPS:
 # Attribution: NMEA checksum calculation adapted from Josh Sherman's guide
 # https://doschman.blogspot.com/2013/01/calculating-nmea-sentence-checksums.html
     @staticmethod
-    def nmea_checksum(msg_str: str = "") -> bool:
+    def nmea_checksum(msg_str: str = "", do_logging: bool = True) -> bool:
         """Calculate and verify the NMEA checksum for a GPS message string.
 
         This function is used to verify the integrity of an NMEA (National
@@ -244,6 +252,7 @@ class GPS:
             msg_str (str): The full NMEA message string, should begin with
                            a '$' character and end with a '*' followed by the
                            two-character hexadecimal checksum.
+            do_logging (bool): Allows for log messages to be toggled on or off.
 
         Returns
         -------
@@ -283,8 +292,9 @@ class GPS:
             # the end of the sentence.
             # Check if '*' is in the string, otherwise return False
             if not msg_str.startswith('$') or '*' not in msg_str:
-                logging.warning("GPS: Invalid NMEA format, message does not "
-                                "start with a $ or contain a *")
+                if do_logging:
+                    logging.warning("GPS: Invalid NMEA format, message does "
+                                    "not start with a $ or contain a *")
                 return False
 
             # Extract the checksum after '*' and clean it: strip
@@ -313,19 +323,19 @@ class GPS:
 
             # Log and return result of checksum comparison
             # Log the result: pass or fail, based on if the checksum matched.
-            if is_valid:
+            if is_valid and do_logging:
                 logging.debug("GPS: NMEA checksum validation passed, computed "
-                              "%s, expected 0x%s.", hex(csum), cksum)
-            else:
+                              "%s, expected 0x%s.",hex(csum), cksum)
+            elif do_logging:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
                                 "expected 0x%s", hex(csum), cksum)
 
             return is_valid
 
         except (TypeError, ValueError) as e:
-            logging.debug(
-                "GPS: Format issue during checksum calculation: %s", e)
-            log_caller(module="GPS")
+            if do_logging:
+                logging.debug("GPS: Format issue during checksum "
+                              "calculation: %s", e)
             return False
 
     def pwr_on(self, wait_after: Optional[float] = None) -> None:
@@ -336,6 +346,7 @@ class GPS:
            wait_after (Optional[float]): Time to wait after power on
                                          before continuing
         """
+        self._fix_start_time = time.monotonic()  # Start of fix timing
         try:
             # Open gpiochip0 if not already
             if not hasattr(self, '_gpio_handle') or self._gpio_handle is None:
@@ -348,7 +359,7 @@ class GPS:
             # Drive it HIGH to turn GPS ON
             lgpio.gpio_write(self._gpio_handle, self.__pwr_pin, lgpio.HIGH)
             logging.info("GPS powered ON (GPIO %s set HIGH)", self.__pwr_pin)
-            logging.info("Waiting %.2f seconds, for GPS to stabilize",
+            logging.info("Waiting %.2f seconds, for GPS to power up.",
                          wait_after)
             # Optional wait to stabilize power
             if wait_after:
@@ -374,6 +385,8 @@ class GPS:
         except Exception as e:
             logging.error("Failed to power off GPS: %s", e)
             self._gpio_handle = None
+        finally:
+            self._fix_start_time = 0.0
 
     def get_fix(self, pwr_up_wait: float = None,
                 max_fix_time: float = None) -> None:
@@ -402,8 +415,8 @@ class GPS:
         if max_fix_time is None:
             max_fix_time = self._max_fix_time
 
-        logging.info("GPS: Starting fix attempt with power-up wait %s "
-                     "and max duration of %s", pwr_up_wait, max_fix_time)
+        logging.info("GPS: Starting fix attempt, expecting fix in ~%ds",
+                     PersistentData().time_to_fix)
 
         self.pwr_on(pwr_up_wait)
 
@@ -415,6 +428,9 @@ class GPS:
 
             self._get_coordinates(max_fix_time)
             self._get_datetime(max_fix_time)
+            # End fix timing and store duration
+            PersistentData().time_to_fix = (
+                self._fix_start_time, time.monotonic())
         except GPSInvalid:
             logging.error("GPS: Failed to acquire a fix.")
             raise
@@ -461,20 +477,29 @@ class GPS:
         """
         if max_time is None:
             max_time = self._max_fix_time
-        logging.info("GPS: Attempting to read %s message for %s seconds",
-                     msg, max_time)
-        start_time: dt.datetime = get_now()
+        self._log_msg(logging.INFO,
+                      "GPS: Attempting to read %s message for %s seconds",
+                      msg, max_time)
+        msg_time = PersistentData().time_to_fix
         # Keep trying until we get the required message and it validates
         # or we reach the defined maximum attempt duration
-        while get_now() - start_time < dt.timedelta(seconds=max_time):
+        tick = self._fix_start_time
+        while tick - self._fix_start_time < max_time:
             ser_line: str = self.__gps_ser.readline()
-            logging.debug("GPS Raw message received:\n\t%s", ser_line)
+            self._log_msg(logging.DEBUG,
+                          "GPS Raw message received:\n\t%s", ser_line)
             # Check if message is valid and proceed with decoding and
             # content verification if true
             if self._is_valid_message(ser_line):
                 self._decode_message(ser_line)
                 if self._validate_message_content(msg):
                     return True  # Exit once a valid message is confirmed
+
+            tick = time.monotonic()
+            if tick - self._fix_start_time <= msg_time:
+                self._log_msgs = False  # Start verbose log output
+            else:
+                self._log_msgs = True
 
         raise GPSInvalid(f"No valid fix obtained after {max_time} seconds")
 
@@ -495,7 +520,8 @@ class GPS:
         # identifier, some basic data fields, and a valid checksum (e.g.,
         # $GPGGA,1234.56,N*CS).
         MIN_MSG_LEN: int = 14
-        return len(ser_line) > MIN_MSG_LEN and self.nmea_checksum(ser_line)
+        return len(ser_line) > MIN_MSG_LEN and self.nmea_checksum(
+            ser_line, self._log_msgs)
 
     def _decode_message(self, ser_line: Union[bytes, str]) -> None:
         """Decode and parse GPS message, removing checksum for validation.
@@ -523,10 +549,12 @@ class GPS:
             raw_checksum = self._last_msg[-1].split("*")[-1].strip()[:2]
             self._last_msg[-1] = self._last_msg[-1].split("*")[0].strip()
             self._last_msg.append(raw_checksum)
-            logging.debug("GPS: Decoded message: %s", self._last_msg)
+            self._log_msg(logging.DEBUG,
+                          "GPS: Decoded message: %s", self._last_msg)
 
         except ValueError as ve:
-            logging.error("GPS: Error decoding message: %s", ve)
+            self._log_msg(logging.ERROR,
+                          "GPS: Error decoding message: %s", ve)
 
     def _validate_message_content(self, msg: str) -> bool:
         """Check if the message content matches expected validation criteria.
@@ -547,15 +575,16 @@ class GPS:
         valid_idx = None
         msg_type = self._last_msg[0][-3:]
         if msg_type != msg:
-            logging.debug("Read a%s %s message, waiting for a%s %s",
+            self._log_msg(logging.DEBUG,
+                          "Read a%s %s message, waiting for a%s %s",
                           "n" if msg_type == "RMC" else "",
                           msg_type,
                           "n" if msg == "RMC" else "",
                           msg)
             return False
-
-        logging.info("Got a%s %s Message!!!", "n" if msg_type == "RMC" else "",
-                     msg_type)
+        self._log_msg(logging.INFO,
+                      "Got a%s %s Message!!!", "n" if msg_type == "RMC" else "",
+                      msg_type)
 
         for entry in self.msg_validate:
             if msg_type == entry['MSG']:
@@ -564,9 +593,10 @@ class GPS:
                 valid_idx = entry['ValidIdx']
                 valid_vals = entry['ValidVals']
                 if self._last_msg[valid_idx] in valid_vals:
-                    logging.info("%s message is valid.", msg_type)
+                    self._log_msg(logging.INFO,
+                                  "%s message is valid.", msg_type)
                     return True
-                logging.info(
+                self._log_msg(logging.INFO,
                     "GPS: %s message does not include a validated data "
                     "indicator. (field %s does not contain%s%s)",
                     msg, valid_idx, " any of "if msg == "GGA" else " ",
@@ -574,7 +604,8 @@ class GPS:
                     valid_vals)
                 return False
 
-        logging.debug("GPS: Non-tracked message type %s; skipping.", msg_type)
+        self._log_msg(logging.DEBUG,
+                      "GPS: Non-tracked message type %s; skipping.", msg_type)
         return False
 
     def _get_coordinates(self, fix_wait: float) -> None:
@@ -617,7 +648,8 @@ class GPS:
                 except GPSOutOfBoundsError as obe:
                     logging.warning("GPS: Out-of-bounds coordinate: %s", obe)
                 except (KeyError, ValueError) as e:
-                    logging.error("GPS: Error processing coordinates: %s", e)
+                    logging.error("GPS: Error processing coordinates: %s",
+                                  e, exc_info=True)
                     raise GPSInvalid("Failed to retrieve coordinates.")
         if not matched:
             logging.debug("Never matched a %s in msg_coords",
@@ -677,16 +709,18 @@ class GPS:
         try:
             # Split every 2 characters
             time_parts = [utc_time[i:i+2] for i in range(0, len(utc_time), 2)]
-            logging.debug("GPS: Time string contains (hh)%s:(mm)%s:(ss)%s",
+            self._log_msg(logging.DEBUG,
+                          "GPS: Time string contains (hh)%s:(mm)%s:(ss)%s",
                           time_parts[0], time_parts[1], time_parts[2],)
             utc_time_obj = dt.time(int(time_parts[0]),
                                    int(time_parts[1]),
                                    int(time_parts[2]))
         except (ValueError, IndexError) as e:
-            logging.error("\n%s", "-"*79)
-            logging.error("GPS: *** Invalid UTC time format '%s'. Error: %s",
-                          utc_time, e)
-            log_caller(module="GPS")
+            if self._log_msgs:
+                logging.error("\n%s", "-"*79)
+                logging.error("GPS: *** Invalid UTC time format '%s'. Error: %s",
+                              utc_time, e)
+                log_caller(module="GPS")
             raise ValueError(f"Invalid UTC time format: {utc_time}") from e
 
         try:
@@ -694,7 +728,8 @@ class GPS:
                 # Split every 2 characters
                 date_parts = [date_str[i:i+2]
                               for i in range(0, len(date_str), 2)]
-                logging.debug("GPS: Date string contains (YY)%s-(MM)%s-(DD)%s",
+                self._log_msg(logging.DEBUG,
+                              "GPS: Date string contains (YY)%s-(MM)%s-(DD)%s",
                               date_parts[0], date_parts[1], date_parts[2],)
                 date_obj = dt.date(int("20" + date_parts[2]),
                                    int(date_parts[1]),
@@ -707,10 +742,11 @@ class GPS:
             logging.info("GPS: Datetime is %s", str(date_obj))
             return date_obj
         except (ValueError, IndexError) as e:
-            logging.error("\n%s", "-"*79)
-            logging.error("GPS: *** Invalid date format '%s'. Error: %s",
-                          date_str, e)
-            log_caller(module="GPS")
+            if self._log_msgs:
+                logging.error("\n%s", "-"*79)
+                logging.error("GPS: *** Invalid date format '%s'. Error: %s",
+                              date_str, e)
+                log_caller(module="GPS")
             raise ValueError(f"Invalid date format: {date_str}") from e
 
     def _sync_system_time(self) -> None:

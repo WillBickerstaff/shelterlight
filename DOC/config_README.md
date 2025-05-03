@@ -100,7 +100,11 @@ GPS module settings.
 | `failed_fix_days`    | int   | `14`           | Days of repeated fix failure before fault.      |
 | `bypass_fix_window`  | bool  | `False`        | Allow GPS fixing at any time.                   |
 
-**NOTE:** `pwr_up_time` ## [GPS] is only used on the system's first ever fix. After that, the system measures how long the GPS takes to obtain a fix and uses that duration as a base for future fix attempts (with a -2 second buffer). This reduces noise in the logs and avoids unnecessary waiting.
+**NOTE:**
+The system always waits pwr_up_time after powering on the GPS before attempting to read any messages.
+After that, it dynamically adjusts the start of verbose logging based on the duration of previous successful fix attempts:
+
+This provides quiet fix attempts under normal conditions, while still offering full diagnostics if fixes take longer than usual.
 
 ---
 
