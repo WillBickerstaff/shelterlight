@@ -695,9 +695,9 @@ class ConfigLoader:
                 section, option, fallback=default_value)
             # Convert the raw value to the correct type
             logging.debug("CONFIG: Option %s.%s set with value from config "
-                         "file, type is [%s], value is %s, (%s accept lists)",
-                         section, option, str(specified_type), raw_value,
-                         "does" if accepts_list else "doesn't")
+                          "file, type is [%s], value is %s, (%s accept lists)",
+                          section, option, str(specified_type), raw_value,
+                          "does" if accepts_list else "doesn't")
             return ConfigLoader._convert_to_type(raw_value,
                                                  specified_type, accepts_list)
 

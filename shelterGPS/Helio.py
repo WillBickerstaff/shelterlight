@@ -404,7 +404,7 @@ class SunTimes:
                     self._attempt_fix_for_today()
                 except Exception as e:
                     logging.error("An error occurred during GPS fixing: %s",
-                                  e, exc_info=True )
+                                  e, exc_info=True)
                 # Wait for retry interval
                 time.sleep(ConfigLoader().gps_fix_retry_interval)
         finally:
@@ -448,7 +448,7 @@ class SunTimes:
         made within a defined fixing window, and the method tracks consecutive
         failed attempts, halting after a configurable maximum failure
         threshold is reached.
-                    """
+        """
         max_fix_errors = ConfigLoader().gps_failed_fix_days
         wait_time = ConfigLoader().gps_pwr_up_time
         while True:
