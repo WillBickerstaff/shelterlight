@@ -133,6 +133,12 @@ class ConfigLoader:
 
             "activity_debounce_ms":     {"value": 25,
                                          "type": int,
+                                         "is_pin": False,
+                                         "Accepts_list": False},
+
+            "min_detect_on_dur":        {"value": 30,
+                                         "type": int,
+                                         "is_pin": False,
                                          "Accepts_list": False},
 
             "max_activity_time":        {"value": 1800,
@@ -269,6 +275,12 @@ class ConfigLoader:
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
+
+    @property
+    def min_activity_on(self) -> int:
+        """Minimum `on time` for light aoutput after activity detection (S)."""
+        return self.get_config_value(config=self.config, section="IO",
+                                     option="min_detect_on_dur")
 
     @property
     def heartbeat_interval(self) -> int:

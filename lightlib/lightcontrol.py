@@ -11,6 +11,7 @@ Version: 0.1
 
 import logging
 import lgpio
+import time
 from threading import Lock
 from lightlib.common import get_now
 from lightlib.config import ConfigLoader
@@ -44,6 +45,8 @@ class LightController:
             lgpio.gpio_claim_output(self._gpio_handle, out_pin)
         self._off_logged = False
         self._on_logged = False
+        self._holding_logged = False
+        self._on_time = 0.0
         self.turn_off()  # Start with lights off
 
     def update(self):
@@ -108,28 +111,40 @@ class LightController:
         is_dark = self._is_dark_now()
 
         if not is_dark:
-            self.turn_off
+            self.turn_off()
             if not self._off_logged:
                 logging.info("Lights switched --OFF--.")
                 self._off_logged = True
                 self._on_logged = False
+                self._holding_logged = False
             return False
 
         if schedule_on or activity_on:
-            self.turn_on
+            self.turn_on()
             if not self._on_logged:
                 logging.info("Lights switched --ON-- : %s in darkness",
                              "Schedule" if schedule_on else "Activity")
                 self._on_logged = True
                 self._off_logged = False
+                self._holding_logged = False
             return True
         else:
-            self.turn_off()
-            if not self._off_logged:
-                logging.info("Lights switched --OFF--")
-                self._off_logged = True
-                self._on_logged = False
-            return False
+            if time.monotonic() - self._on_time >= \
+               ConfigLoader().min_activity_on:
+                self.turn_off()
+                if not self._off_logged:
+                    logging.info("Lights switched --OFF--")
+                    self._off_logged = True
+                    self._on_logged = False
+                    self._holding_logged = False
+                    return False
+            else:
+                if not self._holding_logged:
+                    logging.info("Lights staying --ON-- "
+                                 "(Minimum duration not achieved)")
+                    self._holding_logged = True
+                    self._on_logged = False
+                return True
 
     def _set_lights(self, status: int):
         """Set all light outputs to a given status.
@@ -144,6 +159,7 @@ class LightController:
 
     def turn_on(self):
         """Turn on lights."""
+        self._on_time = time.monotonic()
         self._set_lights(1)
 
     def turn_off(self):

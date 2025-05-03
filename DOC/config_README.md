@@ -117,6 +117,7 @@ Digital input/output GPIO configuration.
 | `lights_output`           | int       | `16`    | GPIO pin(s) used to control lighting.                                                                                                                                             |
 | `fault_output`            | int       | `15`    | GPIO pin used for fault indication.                                                                                                                                               |
 | `crit_fault_out`          | int       | `14`    | GPIO pin used for critical fault indication.                                                                                                                                      |
+| `min_detect_on_dur`       | int       | `30`    | The minimum period in seconds that lights will switch **ON** for when activity is detected                                                                                        |
 
 Example:
 
