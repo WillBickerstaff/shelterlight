@@ -24,9 +24,8 @@ from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import log_caller
 from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
-from lightlib.common import EPOCH_DATETIME
+from lightlib.common import EPOCH_DATETIME, get_now
 from lightlib.persist import PersistentData
-
 
 class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.
@@ -210,7 +209,7 @@ class GPS:
                             f"Alt: {self.altitude:.2f}m"])
 
     def _log_msg(self, log_level: int, msg: str, *args) -> None:
-        """Log fix messages only if taking longer than last fix duration."""
+        """Log fix messages only if taking longer than the last fix duration."""
         if self._log_msgs:
             logging.log(log_level, msg, *args)
 
@@ -326,7 +325,7 @@ class GPS:
             # Log the result: pass or fail, based on if the checksum matched.
             if is_valid and do_logging:
                 logging.debug("GPS: NMEA checksum validation passed, computed "
-                              "%s, expected 0x%s.", hex(csum), cksum)
+                              "%s, expected 0x%s.",hex(csum), cksum)
             elif do_logging:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
                                 "expected 0x%s", hex(csum), cksum)
@@ -452,7 +451,7 @@ class GPS:
                     logging.info("GPS serial port %s opened successfuly", port)
                     return
             except (serial.SerialException, AttributeError) as e:
-                logging.warning(
+                logging.warning (
                     "Failed to open GPS srial port %s: %s", port, e)
                 self.__gps_ser = None
 
@@ -584,8 +583,8 @@ class GPS:
                           msg)
             return False
         self._log_msg(logging.INFO,
-                      "Got a%s %s Message!!!",
-                      "n" if msg_type == "RMC" else "", msg_type)
+                      "Got a%s %s Message!!!", "n" if msg_type == "RMC" else "",
+                      msg_type)
 
         for entry in self.msg_validate:
             if msg_type == entry['MSG']:
@@ -598,12 +597,11 @@ class GPS:
                                   "%s message is valid.", msg_type)
                     return True
                 self._log_msg(logging.INFO,
-                              "GPS: %s message does not include a validated "
-                              "data indicator. (field %s does not "
-                              "contain%s%s)", msg, valid_idx,
-                              " any of "if msg == "GGA" else " ",
-                              list(valid_vals) if isinstance(
-                                  valid_vals, str) else valid_vals)
+                    "GPS: %s message does not include a validated data "
+                    "indicator. (field %s does not contain%s%s)",
+                    msg, valid_idx, " any of "if msg == "GGA" else " ",
+                    list(valid_vals) if isinstance(valid_vals, str) else
+                    valid_vals)
                 return False
 
         self._log_msg(logging.DEBUG,
@@ -720,8 +718,8 @@ class GPS:
         except (ValueError, IndexError) as e:
             if self._log_msgs:
                 logging.error("\n%s", "-"*79)
-                logging.error("GPS: *** Invalid UTC time format '%s'. "
-                              "Error: %s", utc_time, e)
+                logging.error("GPS: *** Invalid UTC time format '%s'. Error: %s",
+                              utc_time, e)
                 log_caller(module="GPS")
             raise ValueError(f"Invalid UTC time format: {utc_time}") from e
 

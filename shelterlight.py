@@ -63,9 +63,8 @@ def light_loop(light_control: LightController,
             if heartbeat > 0:
                 tick_now = time.monotonic()
                 if tick_now >= start_tick + heartbeat:
-                    logging.info(
-                        "[LOOP] Heartbeat tick lights are %s",
-                        "ON" if light_control.lights_are_on else "OFF")
+                    logging.info("[LOOP] Heartbeat tick lights are %s",
+                             "ON" if light_control.lights_are_on else "OFF")
                     start_tick = tick_now
     except Exception as e:
         logging.exception("Light control loop encountered an error: %s", e,

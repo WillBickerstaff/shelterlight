@@ -875,26 +875,6 @@ class LightScheduler:
             logging.error(f"Failed to update accuracy for {date} interval "
                           f"{interval_number}: {e}")
 
-    def has_schedule_for_date(self, date: dt.date) -> bool:
-        """Check if a schedule already exists for a date."""
-        if self.db is None or self.db.conn.closed:
-            self.set_db_connection()
-            if self.db is None:
-                logging.error(
-                    "DB connection not available to check existing schedule.")
-                return False
-        try:
-            with self.db.conn.cursor() as cur:
-                cur.execute("""
-                    SELECT EXISTS (
-                        SELECT 1 FROM light_schedules WHERE date = %s
-                    );
-                """, (date,))
-                return cur.fetchone()[0]
-        except Exception as e:
-            logging.error(f"Failed to check for existing schedule: {e}")
-            return False
-
     def update_daily_schedule(self) -> Optional[dict]:
         """Generate and store tomorrow's schedule.
 
@@ -912,11 +892,6 @@ class LightScheduler:
             # Make sure only one thread can try to update the schedule at
             # any time
             date_tomorrow = get_tomorrow()
-            if self.has_schedule_for_date(date_tomorrow):
-                logging.info(
-                    "Schedule for %s already exists. Skipping generation.",
-                    date_tomorrow)
-                return self.get_current_schedule(date_tomorrow)
             with self._lock:
                 # Evaluate yesterday's schedule accuracy
                 yesterday = get_now().date() - dt.timedelta(days=1)

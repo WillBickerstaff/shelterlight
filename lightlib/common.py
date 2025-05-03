@@ -11,7 +11,6 @@ Version: 0.1
 
 import datetime as dt
 import RPi.GPIO as GPIO
-import logging
 from typing import Union
 from typing import Optional
 
@@ -84,13 +83,11 @@ def datetime_to_iso(dt_obj: dt.datetime) -> str:
 
 def gpio_init(mode: Optional[int] = GPIO.BCM) -> None:
     """Set the global GPIO mode to BOARD."""
-    pass  # no-op not required for lgpio
-
+    pass # no-op not required for lgpio
 
 def gpio_cleanup():
     """Global GPIO cleanup."""
     pass  # no-op not required for lgpio
-
 
 def valid_smallint(value):
     """Check a value can fit within smallint."""
