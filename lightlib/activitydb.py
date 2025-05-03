@@ -102,7 +102,7 @@ class Activity:
         self._db = DB("ACTIVITY_DB")
         self._activity_inputs: List[int] = \
             ConfigLoader().activity_digital_inputs
-        self._start_times: Dict[int, dt.datetime] = {}
+        self._start_times: Dict[int, float] = {}
         # Track status and state of each pin
         self._pin_status: Dict[int, Dict[str, Union[PinHealth, PinLevel]]] = {
             pin: {"status": PinHealth.OK, "state": PinLevel.LOW}
@@ -156,12 +156,12 @@ class Activity:
         """
         debounce_time = ConfigLoader().activity_debounce_s
         debounce_interval = 0.005  # 5ms
-        start_time = get_now().timestamp()
+        start_time = time.monotonic()
         end_time = start_time + debounce_time
         loop_start = start_time
 
         while True:
-            now = get_now().timestamp()
+            now = time.monotonic()
             if now >= end_time:
                 break
 
@@ -238,7 +238,7 @@ class Activity:
             pin (int): The GPIO pin that triggered the rising edge event.
         """
         # Record start time
-        self._start_times[pin] = get_now()
+        self._start_times[pin] = time.monotonic()
         self._pin_status[pin]["status"] = PinHealth.OK  # Set status to OK
         self._pin_status[pin]["state"] = PinLevel.HIGH  # Set state to HIGH
         logging.info(
@@ -274,7 +274,7 @@ class Activity:
                 f"No start time found for pin {pin}, skipping log.")
             return
         try:
-            duration = int((get_now() - start_time).total_seconds())
+            duration = int(time.monotonic() - start_time)
             valid_smallint(duration)
             if duration > self._fault_threshold:
                 logging.warning(
@@ -286,7 +286,7 @@ class Activity:
             logging.error(f"Will not log an activity duration of {duration}s, "
                           "duration must be <= 32767s (9h 6m)")
             return
-
+        start_time = get_now() - dt.timedelta(seconds=duration)
         day_of_week = int(start_time.strftime('%w'))
         month = start_time.month
         year = start_time.year
@@ -315,7 +315,7 @@ class Activity:
     def _run_fault_check_cycle(self) -> None:
         """Run one fault detection cycle."""
         for pin, start_time in list(self._start_times.items()):
-            duration = int((get_now() - start_time).total_seconds())
+            duration = time.monotonic() - start_time
             if duration > self._fault_threshold and \
                     self._pin_status[pin]["state"] == PinLevel.HIGH:
                 self._pin_status[pin]["status"] = PinHealth.FAULT

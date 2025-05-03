@@ -291,7 +291,7 @@ class ConfigLoader:
     @property
     def activity_debounce_s(self) -> float:
         """Float: debounce time in seconds for activity inputs."""
-        return self.activity_debounce_ms / 1000
+        return self.activity_debounce_ms / 1000.0
 
     @property
     def max_activity_time(self) -> int:
