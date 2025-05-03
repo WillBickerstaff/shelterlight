@@ -55,15 +55,17 @@ def light_loop(light_control: LightController,
                stop_event: threading.Event):
     """Run light control updates in a tight polling loop."""
     try:
-        start_tick = get_now()
+        start_tick = time.monotonic()
+        heartbeat = ConfigLoader().heartbeat_interval
         while not stop_event.is_set():
             light_control.update()
             time.sleep(1)
-            tick_now = get_now()
-            if tick_now >= start_tick + dt.timedelta(seconds=10):
-                logging.info("[LOOP] Heartbeat tick lights are %s",
+            if heartbeat > 0:
+                tick_now = time.monotonic()
+                if tick_now >= start_tick + heartbeat:
+                    logging.info("[LOOP] Heartbeat tick lights are %s",
                              "ON" if light_control.lights_are_on else "OFF")
-                start_tick = tick_now
+                    start_tick = tick_now
     except Exception as e:
         logging.exception("Light control loop encountered an error: %s", e,
                           exc_info=True)

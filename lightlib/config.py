@@ -60,6 +60,10 @@ class ConfigLoader:
                                          "type": bool,
                                          "is_pin": False,
                                          "accepts_list": False},
+            "heartbeat_interval":       {"value": 300,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "Accepts_list": False},
         },
         # ------------------------------------------------------------#
         "LOCATION": {
@@ -265,6 +269,12 @@ class ConfigLoader:
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
+
+    @property
+    def heartbeat_interval(self) -> int:
+        """int: The time in seconds hearbeat messages appear in the log."""
+        return self.get_config_value(config=self.config, section="GENERAL",
+                                     option="heartbeat_interval")
 
     @property
     def bypass_fix_window(self) -> bool:

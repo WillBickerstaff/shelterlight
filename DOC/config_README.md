@@ -61,14 +61,15 @@ These defaults are hard-coded in the system source and will be used unless expli
 
 General system options.
 
-| Option             | Type | Default            | Description                                        |
-| ------------------ | ---- | ------------------ | -------------------------------------------------- |
-| `log_level`        | str  | `INFO`             | Logging level (e.g. `INFO`, `DEBUG`, `WARNING`).   |
-| `log_file`         | str  | `shelterlight.log` | Path to the log file.                              |
-| `cycle_time`       | int  | `300`              | System cycle time in seconds.                      |
-| `cancel_input`     | int  | `5`                | GPIO pin used for cancel input.                    |
-| `confirm_input`    | int  | `6`                | GPIO pin used for confirm input.                   |
-| `sync_system_time` | bool | `True`             | Whether to sync system time after a valid GPS fix. |
+| Option               | Type | Default            | Description                                                                     |
+| -------------------- | ---- | ------------------ | ------------------------------------------------------------------------------- |
+| `log_level`          | str  | `INFO`             | Logging level (e.g. `INFO`, `DEBUG`, `WARNING`).                                |
+| `log_file`           | str  | `shelterlight.log` | Path to the log file.                                                           |
+| `cycle_time`         | int  | `300`              | System cycle time in seconds.                                                   |
+| `cancel_input`       | int  | `5`                | GPIO pin used for cancel input.                                                 |
+| `confirm_input`      | int  | `6`                | GPIO pin used for confirm input.                                                |
+| `sync_system_time`   | bool | `True`             | Whether to sync system time after a valid GPS fix.                              |
+| `heartbeat_interval` | int  | `300`              | Interval in seconds at which heartbeat messages are logged, set to 0 for never. |
 
 ---
 
