@@ -1283,8 +1283,8 @@ class LightScheduler:
         if not schedule:
             logging.warning("Empty UTC Schedule generated")
             return
-        if not logging.getLogger().isEnabledFor(logging.DEBUG):
-            return  # Skip formatting unless debug level is enabled
+        if not logging.getLogger().isEnabledFor(logging.INFO):
+            return  # Skip formatting unless info level is enabled
 
         rows = []
         # Extract all intervals and build row data
@@ -1313,4 +1313,4 @@ class LightScheduler:
                 f" {r['state']:^5} | {r['confidence']:.2f}"
             )
 
-        logging.debug("\n" + "\n".join(lines))
+        logging.info("\n" + "\n".join(lines))

@@ -116,6 +116,7 @@ class SunTimes:
         self._gps: pos.GPS = pos.GPS()
         self._sr_today = self._ss_today = EPOCH_DATETIME
         self._sr_tomorrow = self._ss_tomorrow = EPOCH_DATETIME
+        self._sr_next_day = self._ss_next_day = EPOCH_DATETIME
         self._fix_window: dict[str, dt.datetime] = {"start": EPOCH_DATETIME,
                                                     "end": EPOCH_DATETIME}
         self._local_tz = pytz.timezone('UTC')
@@ -541,11 +542,11 @@ class SunTimes:
     def _set_solar_times(self, observer: Observer) -> None:
         """Calculate and update UTC sunrise and sunset times.
 
-        For today and tomorrow based on the provided geographic position
-        (observer).
+        For today and tomorrow and the following day based on the provided
+        geographic position (observer).
 
         This method computes and stores solar event times (sunrise and sunset)
-        for today and tomorrow using the `Observer` instance's geographic
+        for today and the next 2 days using the `Observer` instance's geographic
         location (latitude, longitude, and optionally altitude). The calculated
         times stored in attributes `_sr_today`, `_ss_today`, `_sr_tomorrow`,
         and `_ss_tomorrow` accessible through the properties
@@ -564,6 +565,7 @@ class SunTimes:
         """
         today = get_today()
         tomorrow = get_tomorrow()
+        next_day = get_tomorrow() + dt.timedelta(days=1)
 
         # Calculate today's solar times
         try:
@@ -584,6 +586,15 @@ class SunTimes:
             pass
         self._sr_tomorrow = solar_times_tomorrow["sunrise"]
         self._ss_tomorrow = solar_times_tomorrow["sunset"]
+
+        # Calculate the same events in 2 days time
+        try:
+            solar_times_next_day = SunTimes.calculate_solar_times(observer,
+                                                                  next_day)
+        except (PolarDayError, PolarNightError):
+            pass
+        self._sr_next_day = solar_times_next_day["sunrise"]
+        self._ss_next_day = solar_times_next_day["sunset"]
 
         self._store_persistent_data()
 
@@ -769,8 +780,10 @@ class SunTimes:
         # Save today's and tomorrow's solar event times
         persist.add_sunrise_time(self.UTC_sunrise_today)
         persist.add_sunrise_time(self.UTC_sunrise_tomorrow)
+        persist.add_sunrise_time(self._sr_next_day)
         persist.add_sunset_time(self.UTC_sunset_today)
         persist.add_sunset_time(self.UTC_sunset_tomorrow)
+        persist.add_sunset_time(self._ss_next_day)
         persist.store_data()
 
     @staticmethod

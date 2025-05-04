@@ -33,15 +33,21 @@ def cleanup_resources(gps: SunTimes, light_control: LightController) -> None:
     logging.info("Resources cleaned up successfully.")
 
 
-def usb_listener(usb_manager, gps, host="localhost", port=9999):
+def usb_listener(usb_manager, gps, stop_event: threading.Event,
+                 host="localhost", port=9999):
     """Listen for USB insert events via socket and trigger config reload."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.bind((host, port))
         server_socket.listen(1)
+        server_socket.settimeout(1)  # Allow periodic stop_event checking
         logging.info(f"Listening for USB insert events on {host}:{port}...")
 
-        while True:
-            conn, _ = server_socket.accept()
+        while not stop_event.is_set():
+            try:
+                conn, _ = server_socket.accept()
+            except socket.timeout:
+                continue  # Periodically check for stop_event
+
             with conn:
                 logging.info("USB insertion detected via socket signal")
                 try:
@@ -130,23 +136,27 @@ def daily_schedule_generation(stop_event: threading.Event,
 def main_loop():
     """Continual Main loop entry point."""
     while True:
+        stop_event = threading.Event()
         try:
-            main()
+            main(stop_event)
         except KeyboardInterrupt:
             logging.info("Program interrupted by user.")
+            stop_event.set()
             break
         except ConfigReloaded:
             logging.info("Configuration reloaded; restarting main loop.")
+            stop_event.set()
             continue  # Restart the main loop
         except Exception as e:
             logging.error("Fatal error: %s", e, exc_info=True)
+            stop_event.set()
             break
         finally:
             # Let systemd handle restarting to avoid zombie process
             logging.info("\n%s\n%sMAIN LOOP ENDED\n%s", "-"*79, " "*32, "-"*79)
 
 
-def main():
+def main(stop_event: threading.Event):
     """Program entry point."""
     # Argument parser setup
     parser = argparse.ArgumentParser(description="Lighting Control System")
@@ -154,7 +164,6 @@ def main():
                         help='Set the logging level (e.g., DEBUG, INFO)')
     args = parser.parse_args()
     init_log(args.log_level)
-    stop_event = threading.Event()
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
@@ -166,7 +175,8 @@ def main():
 
     # Start USB listener in a separate thread to handle USB insert signals
     usb_thread = threading.Thread(target=usb_listener,
-                                  args=(usb_manager, gps), daemon=True)
+                                  args=(usb_manager, gps, stop_event),
+                                  daemon=True)
     usb_thread.start()  # Begin listening for USB-based config reloads
 
     # Start schedule generation in background
