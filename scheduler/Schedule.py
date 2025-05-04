@@ -6,20 +6,21 @@ See LICENSE file in the root directory of this project.
 
 Description: Generate daily schedules, train the learning model
 Author: Will Bickerstaff
-Version: 0.1
+Version: 0.2
 """
 
+import psycopg2
+import pandas as pd
+import datetime as dt
+import logging
 from threading import Lock
-from lightlib.persist import PersistentData
 from lightlib.db import DB
 from lightlib.common import get_today, get_tomorrow, get_now
 from typing import Optional
-import psycopg2
-import pandas as pd
-import numpy as np
-import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
-import datetime as dt
-import logging
+from scheduler.features import FeatureEngineer
+from scheduler.model import LightModel
+from scheduler.evaluation import ScheduleEvaluator
+from scheduler.store import ScheduleStore
 
 
 class LightScheduler:
@@ -69,30 +70,54 @@ class LightScheduler:
         Only runs once due to Singleton pattern.
         """
         # Check if already initialized to prevent re-initialization
-        if not hasattr(self, 'initialized'):
-            self.initialized = True
+        if hasattr(self, 'initialized'):
+            return
 
-            # Core components
-            self.model = None  # LightGBM model instance
-            self.interval_minutes = 10  # Schedule interval in minutes
-            self.min_confidence = 0.6  # Minimum prediction threshold
-            self.schedule_cache = {}  # Cache for current schedule
-            self.db = None  # Database connection
-            self._warned_missing = None
+        self.initialized = True
 
-            # LightGBM model configuration
-            self.model_params = {
-                'objective': 'binary',    # Binary classification task
-                'metric': 'auc',          # Area Under Curve metric
-                'boosting_type': 'gbdt',  # Gradient Boosting Decision Tree
-                'num_leaves': 31,         # Maximum number of leaves in trees
-                'learning_rate': 0.05,    # Learning rate for optimization
-                'feature_fraction': 0.9,  # Frac of features used in each tree
-                'bagging_fraction': 0.8,  # Frac of data used for each tree
-                'bagging_freq': 5,        # Bagging frequency
-                'verbose': -1             # Suppress logging output
-            }
-            self.set_db_connection()
+        # Core state
+        self.model = None
+        self.interval_minutes = 10
+        self.min_confidence = 0.6
+        self.schedule_cache = {}
+        self.db = None
+        self._warned_missing = None
+
+        self.model_params = {
+            'objective': 'binary',
+            'metric': 'auc',
+            'boosting_type': 'gbdt',
+            'num_leaves': 31,
+            'learning_rate': 0.05,
+            'feature_fraction': 0.9,
+            'bagging_fraction': 0.8,
+            'bagging_freq': 5,
+            'verbose': -1
+        }
+
+        self._initialize_components()
+
+    def _initialize_components(self):
+        self.set_db_connection()
+
+        self.features = FeatureEngineer()
+        self.model_engine = LightModel(feature_engineer=self.features)
+        self.evaluator = ScheduleEvaluator()
+        self.store = ScheduleStore()
+
+        self._apply_shared_config()
+
+    def _apply_shared_config(self):
+        shared = {
+            "db": self.db,
+            "interval_minutes": self.interval_minutes,
+            "min_confidence": self.min_confidence,
+            "schedule_cache": self.schedule_cache
+        }
+        self.features.set_config(**shared)
+        self.model_engine.set_config(**shared)
+        self.evaluator.set_config(**shared)
+        self.store.set_config(**shared)
 
     def set_db_connection(self, db_connection: Optional[DB] = None) -> None:
         """Set or initialize the database connection.
@@ -124,330 +149,6 @@ class LightScheduler:
                     self.db = None  # Set to None to prevent further issues
             else:
                 logging.info("Database connection is still active.")
-
-    def _prepare_training_data(self, days_history=30) -> tuple[pd.DataFrame,
-                                                               pd.DataFrame]:
-        """Get data from the activity log and previous schedules accuracy.
-
-        Retrieve historical data from both activity logs and schedule accuracy
-        records to prepare the training dataset.
-
-        Args
-        ----
-            days_history (int): Number of days of historical data to use
-                                (default: 30)
-
-        Returns
-        -------
-            pandas.DataFrame: Prepared dataset with features and activity data
-
-        Note
-        ----
-            Combines activity data with schedule accuracy metrics for model
-            training.
-        """
-        # Don't do eanythin if the DB connection is not established
-        if self.db is None or self.db.conn.closed:
-            logging.warning("DB connection not established, can't train")
-            return None
-        # Define SQL queries
-        # - Activity log query
-        activity_query = """
-            SELECT
-                timestamp,
-                day_of_week,
-                month,
-                year,
-                duration,
-                activity_pin,
-                EXTRACT(EPOCH FROM timestamp) as epoch_time
-            FROM activity_log
-            WHERE timestamp >= NOW() - INTERVAL '%s days'
-        """
-        # - Schedule accuracy query
-        schedule_query = """
-            SELECT
-                date,
-                interval_number,
-                was_correct,
-                false_positive,
-                false_negative,
-                confidence
-            FROM light_schedules
-            WHERE date >= NOW() - INTERVAL '%s days'
-        """
-
-        engine = self.db.get_alchemy_engine()
-        # Execute queries and load into pandas DataFrames
-        try:
-            if engine is not None:
-                logging.debug("Using SQLAlchemy to retrieve training data.")
-            else:
-                engine = self.db.conn
-                logging.debug("Using psycopg2 to retrieve training data.")
-
-            # Execute activity log query
-            df_activity = pd.read_sql_query(
-                activity_query,
-                engine,
-                params=(days_history,)
-            )
-
-            # Execute schedule accuracy query
-            df_schedules = pd.read_sql_query(
-                schedule_query,
-                engine,
-                params=(days_history,)
-            )
-
-            # Verify we have data
-            if df_activity.empty:
-                logging.warning(
-                    "No activity data found for the specified period")
-                return None
-
-            logging.info(f"Retrieved {len(df_activity)} activity records and "
-                         f"{len(df_schedules)} schedule records")
-            # Enhanced feature engineering
-            df = self._create_base_features(df_activity)
-            # Add schedule accuracy features
-            df = self._add_schedule_accuracy_features(df, df_schedules)
-
-        except Exception as e:
-            logging.error("Error retrieving training data: %s", e,
-                          exc_info=True)
-            raise
-
-        # Return the complete dataset
-        return df_activity, df_schedules
-
-    def _create_base_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add training features.
-
-        - Daily patterns (through hour encoding)
-        - Weekly patterns (through day_of_week encoding)
-        - Seasonal patterns (through month encoding)
-        - Recent activity patterns (through rolling averages)
-        - Environmental conditions (through darkness information)
-        """
-        # Apply the shared feature function to all timestamps
-        feature_dicts = df['timestamp'].apply(self._generate_features_dict)
-
-        # Convert the list of feature dictionaries into a DataFrame
-        features_df = pd.DataFrame(feature_dicts.tolist(), index=df.index)
-
-        # Merge the features back into the original dataset
-        df = pd.concat([df, features_df], axis=1)
-
-        logging.info("Activity data processed successfully")
-        return df
-
-    def _get_darkness_times(self, date: dt.date) -> tuple[dt.time, dt.time]:
-        """Retrieve stored sunset and sunrise times from PersistentData.
-
-        Args
-        ----
-            date (dt.date): The date for which to retrieve the dark period:
-                            Typically today or tomorrow.
-                            For tomorrow, the start time is accurate, but the
-                            end is approximated based on today's sunris
-                            (+1 day)
-
-        Returns
-        -------
-            tuple[dt.time, dt.time]: (darkness_start, darkness_end)
-        """
-        persistent_data = PersistentData()
-        date_today = get_today()
-        if date == date_today:
-            darkness_start = persistent_data.sunset_today
-            darkness_end = persistent_data.sunrise_tomorrow
-        elif date == get_tomorrow():
-            darkness_start = persistent_data.sunset_tomorrow
-            darkness_end = persistent_data.sunrise_tomorrow + \
-                dt.timedelta(days=1)
-        else:
-            darkness_start = None
-            darkness_end = None
-
-        # Create a tracking attribute for the logged warning
-        # (Removes multiple log entries)
-        if not hasattr(self, "_warned_missing"):
-            self._warned_missing = None
-        # Ensure we have valid data, otherwise use default fallback
-        if not darkness_start or not darkness_end:
-            if self._warned_missing != date_today:
-                logging.warning("Missing sunrise/sunset data, using default "
-                                "darkness (15:30-09:00).")
-                # Track that the warning has been looged today
-                # (reduce log spam)
-                self._warned_missing = date_today
-            now = get_now()
-            darkness_start = now.replace(hour=15, minute=30)
-            darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)
-
-        return darkness_start.time(), darkness_end.time()
-
-    @staticmethod
-    def is_dark(time_obj: dt.time, darkness_start: dt.time,
-                darkness_end: dt.time) -> int:
-        """Determine if a given time falls within darkness hours.
-
-        Uses stored sunset and sunrise times from PersistentData
-
-        Args
-        ----
-            time_obj (dt.time): The time to check.
-
-        Returns
-        -------
-            int: 1 if within darkness hours, 0 otherwise.
-        """
-        if darkness_start < darkness_end:
-            # Darkness is within a single day (e.g., 18:00 - 06:00)
-            return 1 if darkness_start <= time_obj < darkness_end else 0
-        else:
-            # Darkness spans midnight (e.g., 21:00 - 05:00)
-            return 1 if (time_obj >= darkness_start or
-                         time_obj < darkness_end) else 0
-
-    def _add_schedule_accuracy_features(
-                                self, df: pd.DataFrame,
-                                df_schedules: pd.DataFrame) -> pd.DataFrame:
-        """Enhance dataset with historical schedule accuracy metrics.
-
-        Integrate past scheduling accuracy data into the activity dataset.
-        This helps the model learn from past mistakes by including false
-        positives, false negatives, and confidence levels per time interval.
-
-        Args
-        ----
-        df (pandas.DataFrame): The main activity dataset.
-        df_schedules (pandas.DataFrame): The historical schedule
-            accuracy dataset.
-
-        """
-        # Aggregate historical accuracy per interval
-        #   Calculate the mean accuracy (was_correct), Sum up false positives &
-        #   false negatives, Compute the average confidence level
-        accuracy_metrics = df_schedules.groupby(['interval_number']).agg({
-            'was_correct': 'mean',      # Average accuracy per interval
-            'false_positive': 'sum',    # Total false positives
-            'false_negative': 'sum',    # Total false negatives
-            'confidence': 'mean'        # Average confidence score
-        }).reset_index()
-
-        # Merge the aggregated schedule accuracy into the main database
-        df = df.merge(
-            accuracy_metrics,
-            left_on='interval_number',  # Match intervals in activity data
-            right_on='interval_number',
-            how='left'                  # Preserve intervals in main dataset
-        )
-
-        # Handle missing values for intervals with no recorded accuracy
-        #   Default accuracy: Assume 50% accuracy for unseen intervals
-        # cast columns before filling
-        df['was_correct'] = df['was_correct'].astype(float)
-        df['confidence'] = df['confidence'].astype(float)
-        df['false_positive'] = df['false_positive'].astype(int)
-        df['false_negative'] = df['false_negative'].astype(int)
-
-        df['historical_accuracy'] = df['was_correct'].fillna(0.5)
-        # - Default false positive & false negative counts: Assume zero
-        df['historical_false_positives'] = df['false_positive'].fillna(0)
-        df['historical_false_negatives'] = df['false_negative'].fillna(0)
-        # - Default confidence: Neutral confidence (0.5) for unseen intervals
-        df['historical_confidence'] = df['confidence'].fillna(0.5)
-
-        return df
-
-    def train_model(self, days_history=30):
-        """Train the LightGBM model using recent historical data.
-
-        Retrieves historical data, selects relevant features, and trains a
-        LightGBM model to predict when lights should be turned on.
-
-        Args
-        ----
-            days_history (int): The number of days of historical data to use.
-
-        Returns
-        -------
-            None
-        """
-        #   1-Retrieve & prepare training data
-        fetched_data = self._prepare_training_data(days_history)
-        # If there is no training data then exit
-        if fetched_data is None:
-            logging.warning(
-                "No training data available, skipping model training")
-            return
-
-        df_activity, df_schedules = fetched_data
-        df = self._create_base_features(df_activity)
-        df = self._add_schedule_accuracy_features(df, df_schedules)
-
-        # 2-Select features for training
-        feature_cols = self._get_feature_columns()
-        x = df[feature_cols]
-        # 3-Define the target variable
-        y = (df['activity_pin'] > 0).astype(int)
-        # 4-Create the dataset
-        train_data = lgb.Dataset(x, label=y)
-        # 5-Train the model
-        try:
-            # Attempt with newer LightGBM API
-            self.model = lgb.train(
-                self.model_params,
-                train_data,
-                num_boost_round=100,
-                valid_sets=[train_data],
-                early_stopping_rounds=10
-            )
-        except TypeError:
-            # Fallback to callbacks on older LightGBM versions
-            logging.warning("LightGBM Unsupported kwarg early_stopping_rounds"
-                            "falling back to callbacks API")
-            self.model = lgb.train(
-                self.model_params,
-                train_data,
-                num_boost_round=100,
-                valid_sets=[train_data],
-                callbacks=[lgb.early_stopping(stopping_rounds=10)]
-            )
-        # 6-log feature importance
-        importance = pd.DataFrame({
-            'feature': feature_cols,
-            'importance': self.model.feature_importance()
-        }).sort_values('importance', ascending=False)
-
-        logging.info("Feature importance:\n%s", importance)
-
-    def _get_feature_columns(self) -> list[str]:
-        """Return the list of features used by the model.
-
-        These are the columns the model uses when training and making
-        predictions. Any other features that are calculated will be ignored.
-
-        Returns
-        -------
-            list[str]: The names of the features the model expects.
-        """
-        return [
-            'hour_sin', 'hour_cos',        # Hour encoding
-            'month_sin', 'month_cos',      # Seasonal encoding
-            'day_sin', 'day_cos',          # Weekly pattern encoding
-            'is_dark',                     # Whether it's nighttime
-            'rolling_activity_1h',         # Short-term activity trend
-            'rolling_activity_1d',         # Long-term activity trend
-            'interval_number',             # Time interval index
-            'historical_accuracy',         # Past scheduling success rate
-            'historical_false_positives',  # Past over-predictions
-            'historical_false_negatives',  # Past under-predictions
-            'historical_confidence'        # Average confidence in past
-                                           # schedules
-        ]
 
     def _progressive_history(self) -> int:
         """Return the maximum available number of days for training.
@@ -546,7 +247,7 @@ class LightScheduler:
         ]
 
         # Compute necessary features (includes interval_number correctly)
-        df = self._create_base_features(df)
+        df = self.features._create_base_features(df)
 
         logging.debug("Using darkness windows on %s: start=%s, end=%s",
                       schedule_date,
@@ -554,7 +255,7 @@ class LightScheduler:
                       darkness_end.strftime("%H:%M"))
         # Calculate is_dark field based on darkness window
         df['is_dark'] = df['timestamp'].dt.time.apply(
-            lambda t: self.is_dark(t, darkness_start, darkness_end)
+            lambda t: self.features.is_dark(t, darkness_start, darkness_end)
         )
 
         # Filter to only darkness intervals
@@ -569,311 +270,16 @@ class LightScheduler:
                 schedule_date)
             return {}
 
-        if self.model is None:
+        if self.model_engine.model is None:
             logging.error("No trained model found. Cannot generate schedule.")
             return {}
 
-        predictions, probabilities = self._predict_schedule(df)
+        predictions, probabilities = self.model_engine._predict_schedule(df)
         # logging.debug("Predictions: %s", predictions.tolist())
         # logging.debug("Prediction probabilities: %s", probabilities.tolist())
 
-        return self.store_schedule(schedule_date, df,
-                                   predictions, probabilities)
-
-    def _predict_schedule(self, df: pd.DataFrame) -> np.ndarray:
-        """Generate predictions for the given schedule DataFrame.
-
-        Args
-        ----
-            df (pd.DataFrame): DataFrame containing feature columns
-            for prediction.
-
-        Returns
-        -------
-            np.ndarray: Array of predicted labels (0 or 1).
-        """
-        if self.model is None:
-            logging.error("No trained model found. Cannot make predictions.")
-            return np.array([])
-
-        feature_cols = self._get_feature_columns()
-
-        # Drop polluting non-feature columns BEFORE selecting feature columns
-        drop_cols = ['date', 'timestamp']
-        df = df.drop(columns=[col for col in drop_cols if col in df.columns])
-
-        # logging.debug("After dropping non-features, DataFrame columns: %s",
-        #              df.columns.tolist())
-        # logging.debug("Expected feature columns: %s", feature_cols)
-        # Always slice the DataFrame cleanly
-        x_predict = df[feature_cols].copy()
-
-        y_pred = self.model.predict(x_predict)
-        probabilities = self.model.predict(x_predict, raw_score=False)
-        predictions = (y_pred >= self.min_confidence).astype(int)
-
-        return predictions, probabilities
-
-    def store_schedule(self, schedule_date: dt.date, df: pd.DataFrame,
-                       predictions: np.ndarray,
-                       probabilities: np.ndarray) -> dict:
-        """Store the generated schedule in cache and database.
-
-        Args
-        ----
-            schedule_date (dt.date): The date of the schedule.
-            df (pandas.DataFrame): DataFrame containing intervals for the date.
-            predictions (list[int]): List of light activation predictions
-                                    (0 or 1).
-
-        Returns
-        -------
-            dict: The stored schedule mapping interval numbers to light status.
-        """
-        # Store in cache
-        schedule = {}
-        for idx, row in enumerate(df.itertuples(index=False)):
-            interval = int(row.interval_number)
-            schedule[interval] = {
-                "start": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
-                          dt.timedelta(minutes=interval *
-                                       self.interval_minutes)).time(),
-                "end": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
-                        dt.timedelta(minutes=(interval+1) *
-                                     self.interval_minutes)).time(),
-                "prediction": True if int(predictions[idx]) > 0 else False,
-                "confidence": float(probabilities[idx])
-            }
-
-        self.schedule_cache[schedule_date] = schedule
-
-        # Store in database
-        # Check we have a database connection
-        if self.db is None or self.db.conn.closed:
-            logging.warning("Database connection unavailable."
-                            "Attempting reconnection...")
-            self.set_db_connection()  # Attempt to reconnect
-
-        if self.db is None:
-            logging.error("Database connection could not be established."
-                          "Skipping database storage.")
-            return schedule  # Return cache-only schedule if DB is down
-
-        # If we get here, database is healthy, Store in database
-        try:
-            with self.db.conn.cursor() as cursor:
-                for interval, info in schedule.items():
-                    cursor.execute("""
-                        INSERT INTO light_schedules (date, interval_number,
-                                                     start_time, end_time,
-                                                     prediction)
-                        VALUES (%s, %s, %s, %s, %s)
-                        ON CONFLICT (date, interval_number) DO UPDATE
-                        SET prediction = EXCLUDED.prediction;
-                    """, (schedule_date, int(interval), info["start"],
-                          info["end"],info["prediction"]))
-
-            self.db.conn.commit()  # Commit transaction
-            logging.info(f"Stored schedule for {schedule_date} in database.")
-
-        except psycopg2.DatabaseError as e:
-            self.db.conn.rollback()  # Rollback on failure
-            logging.error(f"Failed to store schedule for {schedule_date}: {e}")
-
-        return schedule
-
-    def get_schedule(self, target_date: dt.date) -> dict:
-        """Retrieve the light schedule for a given date.
-
-        Args
-        ----
-            target_date (dt.date): The date for which to retrieve the schedule.
-
-        Returns
-        -------
-            dict: A dictionary mapping interval numbers to light status
-                  (0 or 1). Returns an empty dict if no schedule is found.
-        """
-        # Check if the schedule is already in cache
-        if self.schedule_cache.get('date') == target_date:
-            return self.schedule_cache.get('schedule', {})
-        # If not in cache, attempt to retrieve it from the database
-        # Check DB connection
-        if self.db is None or self.db.conn.closed:
-            logging.warning("Database connection unavailable. "
-                            "Attempting reconnection...")
-            self.set_db_connection()
-            if self.db is None:
-                logging.error("Database connection could not be established.")
-                return {}
-
-        # Query the database
-        try:
-            with self.db.conn.cursor() as cur:
-                cur.execute("""
-                    SELECT interval_number, start_time, end_time, prediction,
-                confidence
-                    FROM light_schedules
-                    WHERE date = %s
-                """, (target_date,))
-                rows = cur.fetchall()
-                logging.debug("get_schedule fetched %i rows for %s",
-                              len(rows), target_date)
-            # Convert results to a dictionary
-            schedule = {}
-            for row in rows:
-                schedule[row[0]] = {
-                    "start": row[1],
-                    "end": row[2],
-                    "prediction": row[3],
-                    "confidence": row[4] if row[4] is not None else 0.5
-                }
-        # If retrieved from the database, store it in cache
-            self.schedule_cache = {
-                'date': target_date,
-                'schedule': schedule
-            }
-
-            return schedule
-
-        except psycopg2.DatabaseError as e:
-            logging.error(
-                f"Failed to retrieve schedule for {target_date}: {e}")
-            return {}
-
-    def evaluate_previous_schedule(self, date: dt.date) -> None:
-        """Evaluate the accuracy of the previous day's schedule.
-
-        Args
-        ----
-            date (dt.date): The date of the schedule to evaluate.
-
-        -Retrieve the scheduled light intervals from `light_schedules`.
-        -Retrieve actual activity timestamps from `activity_log`.
-        -Compare each scheduled interval with actual activity.
-        -Determine if the schedule was correct, a false positive,
-         or a false negative.
-        -Update the accuracy metrics in `light_schedules` using
-         `update_schedule_accuracy()`.
-        """
-        schedule_query = """
-            SELECT interval_number, start_time, end_time, prediction
-            FROM light_schedules
-            WHERE date = %s
-        """
-        activity_query = """
-            SELECT timestamp
-            FROM activity_log
-            WHERE DATE(timestamp) = %s
-        """
-        # Fetch actual activity data and the schedule for the date
-        try:
-            with self.db.conn.cursor() as cur:
-                # Fetch schedule entries for the date
-                cur.execute(schedule_query, (date,))
-                scheduled_intervals = cur.fetchall()
-
-                # Fetch all activity timestamps
-                cur.execute(activity_query, (date,))
-                activity_timestamps = [row[0] for row in cur.fetchall()]
-
-            # Build a set of activity times for fast lookup
-            activity_times = [ts.time() for ts in activity_timestamps]
-
-            seen_intervals = set()
-
-            for interval, start_time, end_time, prediction \
-                    in scheduled_intervals:
-
-                # Skip evaluation if the interval hasn't ended yet
-                now = get_now()
-                if dt.datetime.combine(date, end_time) > now:
-                    continue
-
-                seen_intervals.add(interval)
-
-                # Skip intervals where prediction was off
-                if not prediction:
-                    continue
-
-                # Check if any activity happened during this interval
-                activity_occurred = any(
-                    start_time <= act_time <= end_time
-                    for act_time in activity_times
-                )
-
-                # Classify the outcome
-                was_correct = activity_occurred
-                false_positive = not activity_occurred
-                false_negative = False  # False negatives below
-
-                self.update_schedule_accuracy(
-                    date=date,
-                    interval_number=interval,
-                    was_correct=was_correct,
-                    false_positive=false_positive,
-                    false_negative=false_negative
-                )
-
-            # False negatives: activity without a scheduled light
-            for ts in activity_timestamps:
-                interval = (ts.hour * 60 + ts.minute) // self.interval_minutes
-                if interval not in seen_intervals:
-                    self.update_schedule_accuracy(
-                        date=date,
-                        interval_number=interval,
-                        was_correct=False,
-                        false_positive=False,
-                        false_negative=True
-                    )
-            logging.info(f"Schedule evaluation completed for {date}")
-
-        except Exception as e:
-            logging.error(f"Failed to evaluate schedule for {date}: {e}")
-
-    def update_schedule_accuracy(self, date: dt.date, interval_number: int,
-                                 was_correct: bool, false_positive: bool,
-                                 false_negative: bool) -> None:
-        """Update the accuracy metrics for a specific schedule interval.
-
-        Args
-        ----
-            date (dt.date): The schedule date.
-            interval_number (int): The interval number to update.
-            was_correct (bool): Whether the schedule was correct.
-            false_positive (bool): Whether the lights were on unnecessarily.
-            false_negative (bool): Whether lights were off when needed.
-
-        Updates:
-        - was_correct → 1, the schedule matched actual activity, 0 otherwise.
-        - false_positive → 1, the schedule had unnecessary lights.
-        - false_negative → 1, activity was detected but no lights
-                                were scheduled.
-        """
-        update_query = """
-            UPDATE light_schedules
-            SET
-                was_correct = %s,
-                false_positive = %s,
-                false_negative = %s
-            WHERE date = %s AND interval_number = %s
-        """
-
-        try:
-            with self.db.conn.cursor() as cur:
-                cur.execute(update_query, (
-                    was_correct, false_positive, false_negative, date,
-                    interval_number
-                ))
-            self.db.conn.commit()
-            logging.debug(
-                f"Updated accuracy for {date} interval {interval_number}")
-
-        except Exception as e:
-            # Handle potential exceptions (rollback on failure, log errors)
-            self.db.conn.rollback()
-            logging.error(f"Failed to update accuracy for {date} interval "
-                          f"{interval_number}: {e}")
+        return self.store.store_schedule(schedule_date, df,
+                                         predictions, probabilities)
 
     def update_daily_schedule(self) -> Optional[dict]:
         """Generate and store tomorrow's schedule.
@@ -895,12 +301,13 @@ class LightScheduler:
             with self._lock:
                 # Evaluate yesterday's schedule accuracy
                 yesterday = get_now().date() - dt.timedelta(days=1)
-                self.evaluate_previous_schedule(yesterday)
+                self.evaluator.evaluate_previous_schedule(yesterday)
                 # Retrain the model using updated accuracy data
-                self.train_model(days_history=self._progressive_history())
+                self.model_engine.train_model(
+                    days_history=self._progressive_history())
                 # Get tomorrow's date and darkness period
                 darkness_start, darkness_end = \
-                    self._get_darkness_times(date_tomorrow)
+                    self.features._get_darkness_times(date_tomorrow)
                 # Generate a new schedule for tomorrow
                 new_schedule = self.generate_daily_schedule(
                     date_tomorrow.strftime("%Y-%m-%d"),
@@ -925,37 +332,6 @@ class LightScheduler:
             logging.error("Failed to update daily schedule: %s", e)
             raise e
             return None
-
-    def get_current_schedule(self,
-                             target_date: Optional[dt.date] = None) -> dict:
-        """Get the cached schedule or load it from the database if needed.
-
-        Returns
-        -------
-            dict: (Optional[dt.date]): Date for the schedule.
-                                       Defaults to today.
-        """
-        # Get today's date if no date is given
-        if target_date is None:
-            target_date = get_now().date()
-
-        # Check if the schedule is already cached and up to date
-        logging.debug(
-            f"Checking cache for date: {self.schedule_cache.get('date')}")
-        if (self.schedule_cache and
-                self.schedule_cache.get('date') == target_date):
-            logging.info("Schedule retrieved from cache")
-            return self.schedule_cache['schedule']
-
-        # Not in cache, retrieve from the database using `get_schedule()`
-        schedule = self.get_schedule(target_date)
-        # Store the retrieved schedule in `self.schedule_cache`
-        self.schedule_cache = {
-            'date': target_date,
-            'schedule': schedule
-        }
-        logging.info(f"Schedule loaded from DB: {schedule}")
-        return schedule
 
     def should_light_be_on(
             self, current_time: Optional[dt.datetime] = None) -> bool:
@@ -994,7 +370,7 @@ class LightScheduler:
             else:
                 schedule_date = now.date()
         # Retrieve the schedule for the identified date
-        schedule = self.get_schedule(schedule_date)
+        schedule = self.store.get_schedule(schedule_date)
         # Determine the current interval number
         interval_number = (now.hour * 60 + now.minute) // self.interval_minutes
         # return if lights should be ON for this interval
@@ -1067,197 +443,6 @@ class LightScheduler:
         # Retrain the model, if needed.
         if retrain == 1:
             self.update_daily_schedule()
-
-    def _create_prediction_features(
-            self, timestamp: dt.datetime) -> tuple[np.ndarray, pd.DataFrame]:
-        """Create a feature vector for a single timestamp.
-
-        Args
-        ----
-            timestamp (dt.datetime): The timestamp to generate features for.
-
-        Returns
-        -------
-            tuple[np.ndarray, pd.DataFrame]:
-                - NumPy array of feature values for model inference.
-                - DataFrame with named columns for debugging or model training.
-        """
-        feature_dict = self._generate_features_dict(timestamp)
-
-        # Ensure expected features match the generated features
-        expected_features = set(self._get_feature_columns())
-        generated_features = set(feature_dict.keys())
-
-        if expected_features != generated_features:
-            missing = expected_features - generated_features
-            extra = generated_features - expected_features
-            raise ValueError(
-                f"Feature mismatch!\nMissing: {missing}\nExtra: {extra}"
-            )
-
-        # Convert dictionary to NumPy array (for prediction)
-        # Keep in order for testing
-        feature_values = np.array(
-            [feature_dict[f] for f in expected_features])
-
-        # Convert dictionary to DataFrame (for debugging/training)
-        # Keep in order for testing
-        feature_df = pd.DataFrame([feature_dict],
-                                  columns=sorted(list(expected_features)))
-
-        logging.debug(f"Generated features: {feature_dict}")
-        logging.debug(f"Feature array shape: {feature_values.shape}")
-        logging.debug(f"Expected features: {self._get_feature_columns()}")
-
-        return feature_values, feature_df
-
-    def _generate_features_dict(self, timestamp: dt.datetime) -> dict:
-        """Generate feature values for a timestamp.
-
-        Args
-        ----
-            timestamp (dt.datetime): The timestamp to generate features for.
-
-        -Extracts time-based features (hour, day of week, month).
-        -Converts these into cyclical features (`sin/cos` encoding).
-        -Determines whether the timestamp falls within darkness hours.
-        -Retrieves historical schedule accuracy features for this interval.
-        -Computes rolling activity features for short- and long-term trends.
-
-        Returns
-        -------
-            dict: A dictionary of extracted feature values.
-        """
-        # Extract time components
-        hour = timestamp.hour
-        minute = timestamp.minute
-        day_of_week = timestamp.weekday()
-        month = timestamp.month
-
-        # Create cyclical time features
-        #    sin(2pi * value/max_value)
-        #    cos(2pi * value/max_value)
-
-        # - Hours (24-hour cycle)
-        # - hour_sin, hour_cos (24-hour cycle)
-        hour_sin = np.sin(2 * np.pi * hour / 24)
-        hour_cos = np.cos(2 * np.pi * hour / 24)
-
-        # - Days of week (7-day cycle)
-        # - day_sin, day_cos (7-day cycle)
-        day_sin = np.sin(2 * np.pi * day_of_week / 7)
-        day_cos = np.cos(2 * np.pi * day_of_week / 7)
-
-        # - Months (12-month cycle)
-        # - month_sin, month_cos (12-month cycle)
-        month_sin = np.sin(2 * np.pi * month / 12)
-        month_cos = np.cos(2 * np.pi * month / 12)
-
-        # Determine if the timestamp is within darkness hours
-        darkness_start, darkness_end = \
-            self._get_darkness_times(timestamp.date())
-        is_dark = self.is_dark(timestamp.time(), darkness_start, darkness_end)
-
-        # Calculate interval number
-        interval_number = (hour * 60 + minute) // self.interval_minutes
-
-        # Retrieve historical accuracy features (default if missing)
-        history = self.get_schedule(timestamp.date()).get(interval_number, {})
-        historical_accuracy = history.get(
-            "historical_accuracy", 0.5)
-        historical_false_positives = history.get(
-            "historical_false_positives", 0)
-        historical_false_negatives = history.get(
-            "historical_false_negatives", 0)
-        historical_confidence = history.get(
-            "historical_confidence", 0.5)
-
-        # Compute rolling activity features
-        past_activity = self._retrieve_past_activity(
-            timestamp.date(), interval_number)
-
-        # Compute rolling activity features
-        if len(past_activity) >= 6:
-            rolling_activity_1h = np.mean(past_activity[-6:])  # Last hour
-        else:
-            rolling_activity_1h = 0
-
-        if past_activity:
-            rolling_activity_1d = np.mean(past_activity)       # Last 24 hours
-        else:
-            rolling_activity_1d = 0
-
-        # Construct full dictionary of all available features
-        feature_values = {
-            "hour_sin": hour_sin, "hour_cos": hour_cos,
-            "day_sin": day_sin, "day_cos": day_cos,
-            "month_sin": month_sin, "month_cos": month_cos,
-            "is_dark": is_dark,
-            "rolling_activity_1h": rolling_activity_1h,
-            "rolling_activity_1d": rolling_activity_1d,
-            "interval_number": interval_number,
-            "historical_accuracy": historical_accuracy,
-            "historical_false_positives": historical_false_positives,
-            "historical_false_negatives": historical_false_negatives,
-            "historical_confidence": historical_confidence
-        }
-
-        # Only return the features needed by the model.
-        # _get_feature_columns() lists the features the model uses.
-        # This lets us:
-        # - Control which features are used in one place
-        # - Try out new features here without affecting the model
-        # - Keep training and prediction using the same inputs
-        return {
-            key: feature_values[key] for key in self._get_feature_columns()}
-
-    def _retrieve_past_activity(self, date: dt.date, interval_number: int,
-                                history_days: int = 1) -> list[int]:
-        """Retrieve activity for a specific interval over previous days.
-
-        Args
-        ----
-            date (dt.date): The date for which to retrieve past activity.
-            interval_number (int): The interval number on that date.
-            history_days (int): How many previous days to include.
-
-        Returns
-        -------
-            list[int]: A list of activity values (0 or 1) for the interval over
-                       the past `history_days`.
-        """
-        if self.db is None or self.db.conn.closed:
-            self.set_db_connection()
-            if self.db is None:
-                logging.error("No DB connection for _retrieve_past_activity")
-                return []
-
-        try:
-            # Get start and end timestamps for each historical interval
-            results = []
-            for days_ago in range(1, history_days + 1):
-                historical_date = date - dt.timedelta(days=days_ago)
-                start_time = dt.datetime.combine(
-                    historical_date, dt.time(0, 0)
-                ) + dt.timedelta(
-                    minutes=interval_number * self.interval_minutes)
-                end_time = start_time + dt.timedelta(
-                    minutes=self.interval_minutes)
-
-                with self.db.conn.cursor() as cursor:
-                    cursor.execute("""
-                        SELECT COUNT(*) FROM activity_log
-                        WHERE timestamp >= %s AND timestamp < %s
-                    """, (start_time, end_time))
-
-                    count = cursor.fetchone()[0]
-                    results.append(1 if count > 0 else 0)
-
-            return results
-
-        except Exception as e:
-            logging.error("Failed to retrieve past activity: %s", e)
-            return []
 
     def _log_schedule(self, schedule: dict, schedule_date: dt.date) -> None:
         """Log the generated UTC schedule as a fomatted table (DEBUG only).
