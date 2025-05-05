@@ -322,9 +322,9 @@ class FeatureEngineer(SchedulerComponent):
             results = []
             for days_ago in range(1, history_days + 1):
                 historical_date = date - dt.timedelta(days=days_ago)
-                start_time = dt.datetime.combine(
-                    historical_date, dt.time(0, 0)
-                ) + dt.timedelta(
+                base_time = dt.datetime.combine(
+                    historical_date, dt.time(0, 0), tzinfo=dt.timezone.utc)
+                start_time = base_time + dt.timedelta(
                     minutes=interval_number * self.interval_minutes)
                 end_time = start_time + dt.timedelta(
                     minutes=self.interval_minutes)

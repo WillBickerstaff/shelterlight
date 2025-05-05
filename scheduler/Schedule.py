@@ -230,8 +230,8 @@ class LightScheduler:
         df['timestamp'] = [
             dt.datetime.combine(schedule_date, dt.time(
                 hour=(i * self.interval_minutes) // 60,
-                minute=(i * self.interval_minutes) % 60
-            ))
+                minute=(i * self.interval_minutes) % 60),
+                                tzinfo=dt.timezone.utc)
             for i in range(num_intervals)
         ]
 

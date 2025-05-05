@@ -54,14 +54,15 @@ class ScheduleStore(SchedulerComponent):
         schedule = {}
         for idx, row in enumerate(df.itertuples(index=False)):
             interval = int(row.interval_number)
+            start_dt = dt.datetime.combine(
+                schedule_date, dt.time(0, 0), tzinfo=dt.timezone.utc) + \
+                    dt.timedelta(minutes=interval * self.interval_minutes)
+            end_dt = start_dt + dt.timedelta(minutes=self.interval_minutes)
+
             schedule[interval] = {
-                "start": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
-                          dt.timedelta(minutes=interval *
-                                       self.interval_minutes)).time(),
-                "end": (dt.datetime.combine(schedule_date, dt.time(0, 0)) +
-                        dt.timedelta(minutes=(interval+1) *
-                                     self.interval_minutes)).time(),
-                "prediction": True if int(predictions[idx]) > 0 else False,
+                "start": start_dt,
+                "end": end_dt,
+                "prediction": bool(predictions[idx]),
                 "confidence": float(probabilities[idx])
             }
 

@@ -738,7 +738,7 @@ class GPS:
                 date_obj = dt.date.today()
 
             date_obj = dt.datetime.combine(
-                date_obj, utc_time_obj).replace(tzinfo=dt.timezone.utc)
+                date_obj, utc_time_obj, tzinfo=dt.timezone.utc)
             logging.info("GPS: Datetime is %s", str(date_obj))
             return date_obj
         except (ValueError, IndexError) as e:

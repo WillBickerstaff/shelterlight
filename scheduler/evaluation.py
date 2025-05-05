@@ -77,7 +77,8 @@ class ScheduleEvaluator(SchedulerComponent):
 
                 # Skip evaluation if the interval hasn't ended yet
                 now = get_now()
-                if dt.datetime.combine(date, end_time) > now:
+                if dt.datetime.combine(
+                        date, end_time, tzinfo=dt.timezone.utc) > now:
                     continue
 
                 seen_intervals.add(interval)

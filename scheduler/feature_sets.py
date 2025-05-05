@@ -82,7 +82,7 @@ class FeatureSetManager:
             case FeatureSet.CUSTOM:
                 logging.warning("CUSTOM feature set is not yet implemented. "
                                 "using BASELINE")
-                return FeatureSetManager.get_columns(FeatureSet.BASELINE)
+                return FeatureSetManager.get_columns(FeatureSet.MINIMAL)
 
             case FeatureSet.BASELINE | _:
                 if feature_set != FeatureSet.BASELINE:

@@ -314,7 +314,7 @@ class Coordinate:
         self._deg_min_sec()
         self._decimal()
         logging.debug("COORD: %s coordinate is %s",
-                      self.lat_lng_str, self.decimal_value)
+                      self.lat_lng_str, round(self.decimal_value, 6))
 
     def _deg_min_sec(self):
         """Convert the GPS coord string into degrees, minutes, and seconds."""
@@ -357,7 +357,7 @@ class Coordinate:
             logging.info("%s coordinate is %s, (%s decimal degrees)",
                          self.lat_lng_str,
                          self.deg_min_sec,
-                         self.decimal_value)
+                         round(self.decimal_value, 6))
             return True
         else:
             logging.error(

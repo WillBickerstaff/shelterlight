@@ -8,7 +8,7 @@ Description: Base class for shared configuration in scheduling components.
 Author: Will Bickerstaff
 Version: 0.1
 """
-
+import logging
 
 class SchedulerComponent:
     """Base class to inject shared configuration into scheduling components.
@@ -40,3 +40,5 @@ class SchedulerComponent:
         self.min_confidence = min_confidence
         self.schedule_cache = schedule_cache
         self.features = features  # Optional dependency
+        logging.info("[%s] Config applied: interval minutes = %s",
+                     self.__class__.__name__, interval_minutes)
