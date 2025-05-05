@@ -83,25 +83,13 @@ class LightScheduler:
         self.db = None
         self._warned_missing = None
 
-        self.model_params = {
-            'objective': 'binary',
-            'metric': 'auc',
-            'boosting_type': 'gbdt',
-            'num_leaves': 31,
-            'learning_rate': 0.05,
-            'feature_fraction': 0.9,
-            'bagging_fraction': 0.8,
-            'bagging_freq': 5,
-            'verbose': -1
-        }
-
         self._initialize_components()
 
     def _initialize_components(self):
         self.set_db_connection()
 
         self.features = FeatureEngineer()
-        self.model_engine = LightModel(feature_engineer=self.features)
+        self.model_engine = LightModel()
         self.evaluator = ScheduleEvaluator()
         self.store = ScheduleStore()
 
@@ -112,7 +100,8 @@ class LightScheduler:
             "db": self.db,
             "interval_minutes": self.interval_minutes,
             "min_confidence": self.min_confidence,
-            "schedule_cache": self.schedule_cache
+            "schedule_cache": self.schedule_cache,
+            "features": self.features
         }
         self.features.set_config(**shared)
         self.model_engine.set_config(**shared)
@@ -356,7 +345,8 @@ class LightScheduler:
         now = current_time or get_now()
         # Identify the relevant schedule date (yesterday or today)
         # Get darkness times for today (could span two dates)
-        darkness_start, darkness_end = self._get_darkness_times(get_today())
+        darkness_start, darkness_end = \
+            self.features._get_darkness_times(get_today())
 
         # Determine if this moment falls in today's or yesterday's schedule
         if darkness_start < darkness_end:

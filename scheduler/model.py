@@ -30,9 +30,20 @@ class LightModel(SchedulerComponent):
     including database connection, schedule intervals, and thresholds.
     """
 
-    def __init__(self, feature_engineer):
+    def __init__(self):
         super().__init__()
-        self.features = feature_engineer
+        self.model = None
+        self.model_params = {
+            'objective': 'binary',
+            'metric': 'auc',
+            'boosting_type': 'gbdt',
+            'num_leaves': 31,
+            'learning_rate': 0.05,
+            'feature_fraction': 0.9,
+            'bagging_fraction': 0.8,
+            'bagging_freq': 5,
+            'verbose': -1
+        }
 
     def train_model(self, days_history=30):
         """Train the LightGBM model using recent historical data.
@@ -214,7 +225,7 @@ class LightModel(SchedulerComponent):
             logging.info(f"Retrieved {len(df_activity)} activity records and "
                          f"{len(df_schedules)} schedule records")
             # Enhanced feature engineering
-            df = self._create_base_features(df_activity)
+            df = self.features._create_base_features(df_activity)
             # Add schedule accuracy features
             df = self._add_schedule_accuracy_features(df, df_schedules)
 
