@@ -34,7 +34,7 @@ class LightModel(SchedulerComponent):
     def __init__(self):
         super().__init__()
         self.model = None
-        self.feature_set = fset.FeatureSet.BASELINE
+        self.set_feature_set(fset.FeatureSet.NO_DARKNESS)
         self.model_params = {
             'objective': 'binary',
             'metric': 'auc',
@@ -61,6 +61,7 @@ class LightModel(SchedulerComponent):
         -------
             None
         """
+        logging.debug("Training with feature set %s", self.feature_set.name)
         #   1-Retrieve & prepare training data
         fetched_data = self._prepare_training_data(days_history)
         # If there is no training data then exit
@@ -164,7 +165,7 @@ class LightModel(SchedulerComponent):
             Combines activity data with schedule accuracy metrics for model
             training.
         """
-        # Don't do eanythin if the DB connection is not established
+        # Don't do anything if the DB connection is not established
         if self.db is None or self.db.conn.closed:
             logging.warning("DB connection not established, can't train")
             return None
@@ -301,4 +302,6 @@ class LightModel(SchedulerComponent):
         ----
             feature_set (FeatureSet): The desired feature set configuration.
         """
+        logging.debug("FeatureManager is using feature set %s",
+                      feature_set.name)
         self.feature_set = feature_set

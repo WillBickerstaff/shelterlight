@@ -243,9 +243,9 @@ class LightScheduler:
                       darkness_start.strftime("%H:%M"),
                       darkness_end.strftime("%H:%M"))
         # Calculate is_dark field based on darkness window
-        df['is_dark'] = df['timestamp'].dt.time.apply(
-            lambda t: self.features.is_dark(t, darkness_start, darkness_end)
-        )
+        #df['is_dark'] = df['timestamp'].dt.time.apply(
+        #    lambda t: self.features.is_dark(t, darkness_start, darkness_end)
+        #)
 
         # Filter to only darkness intervals
         # df = df[df['is_dark'] == 1]

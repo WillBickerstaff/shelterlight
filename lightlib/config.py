@@ -601,8 +601,8 @@ class ConfigLoader:
         -------
             The converted value, either as a single value or a list.
         """
-        logging.debug("CONFIG: Converting %s to type %s",
-                      raw_value, specified_type)
+        # logging.debug("CONFIG: Converting %s to type %s",
+        #              raw_value, specified_type)
         # If the value is expected to be a list and accepts_list is True
         if accepts_list and specified_type == int:
             return [int(item.strip()) for item in
@@ -639,8 +639,8 @@ class ConfigLoader:
         """
         def_val = self._FALLBACK_VALUES.get(section, {}).\
             get(option, {}).get("value")
-        logging.debug("CONFIG: Default value for %s.%s is [%s]",
-                      section, option, def_val)
+        # logging.debug("CONFIG: Default value for %s.%s is [%s]",
+        #               section, option, def_val)
         return def_val
 
     def get_config_value(self, config, section, option):
@@ -676,28 +676,28 @@ class ConfigLoader:
                         specified type.
         """
         # Retrieve the fallback dictionary entry for type and value
-        logging.debug("CONFIG: Getting config value for %s.%s",
-                      section, option)
+        # logging.debug("CONFIG: Getting config value for %s.%s",
+        #               section, option)
         default_value = self._get_default_value(section, option)
         option_spec = self._FALLBACK_VALUES.get(section, {}).get(option, {})
         specified_type = option_spec.get("type", str)
         accepts_list = option_spec.get("accepts_list", False)
-        logging.debug("CONFIG: [%s].%s default = %s",
-                      section, option, default_value)
-        logging.debug("CONFIG: [%s].%s type = %s",
-                      section, option, specified_type)
-        logging.debug("CONFIG: [%s].%s accepts lists = %s",
-                      section, option, accepts_list)
+        # logging.debug("CONFIG: [%s].%s default = %s",
+        #               section, option, default_value)
+        # logging.debug("CONFIG: [%s].%s type = %s",
+        #               section, option, specified_type)
+        # logging.debug("CONFIG: [%s].%s accepts lists = %s",
+        #               section, option, accepts_list)
 
         try:
             # Retrieve the raw value from the config, or use the fallback
             raw_value = self.config.get(
                 section, option, fallback=default_value)
             # Convert the raw value to the correct type
-            logging.debug("CONFIG: Option %s.%s set with value from config "
-                         "file, type is [%s], value is %s, (%s accept lists)",
-                         section, option, str(specified_type), raw_value,
-                         "does" if accepts_list else "doesn't")
+            # logging.debug("CONFIG: Option %s.%s set with value from config "
+            #             "file, type is [%s], value is %s, (%s accept lists)",
+            #             section, option, str(specified_type), raw_value,
+            #             "does" if accepts_list else "doesn't")
             return ConfigLoader._convert_to_type(raw_value,
                                                  specified_type, accepts_list)
 
@@ -821,8 +821,8 @@ class ConfigLoader:
                         if isinstance(pins, int):
                             pins = [pins]
 
-                        logging.debug("CONFIG: %s.%s is pin assignment (%s)",
-                                      section, key, pins)
+                        # logging.debug("CONFIG: %s.%s is pin assignment (%s)",
+                        #              section, key, pins)
 
                         for pin in pins:
                             # Check for duplicate pin assignments

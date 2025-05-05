@@ -25,6 +25,11 @@ from lightlib.common import ConfigReloaded, get_now
 from lightlib.lightcontrol import LightController
 
 
+class ExitAfter(Exception):
+    """Raised to force a program halt."""
+
+    pass
+
 def cleanup_resources(gps: SunTimes, light_control: LightController) -> None:
     """Perform resource cleanup for GPS, GPIO, and logging."""
     logging.info("Performing resource cleanup...")
@@ -133,6 +138,18 @@ def daily_schedule_generation(stop_event: threading.Event,
             stop_event.wait((retry_at - now).total_seconds())
 
 
+def re_eval_history(force: bool = False):
+    """Optional mode: re-evaluate schedules and exit."""
+    from scheduler.evaluation import ScheduleEvaluator
+    from lightlib.db import DB
+
+    db = DB()
+    evaluator = ScheduleEvaluator()
+    evaluator.set_config(db=db)
+    evaluator.re_eval_all_schedules(force=force)
+    return
+
+
 def main_loop():
     """Continual Main loop entry point."""
     while True:
@@ -147,8 +164,12 @@ def main_loop():
             logging.info("Configuration reloaded; restarting main loop.")
             stop_event.set()
             continue  # Restart the main loop
+        except ExitAfter as e:
+            logging.info("Re-evaluated all historic schedules")
+            stop_event.set()
+            break
         except Exception as e:
-            logging.error("Fatal error: %s", e, exc_info=True)
+            loggiOAng.error("Fatal error: %s", e, exc_info=True)
             stop_event.set()
             break
         finally:
@@ -162,8 +183,16 @@ def main(stop_event: threading.Event):
     parser = argparse.ArgumentParser(description="Lighting Control System")
     parser.add_argument('--log_level', type=str,
                         help='Set the logging level (e.g., DEBUG, INFO)')
+    parser.add_argument('--re-eval', action="store_true",
+                        help='Re-evaluate all historical schedules.')
+    parser.add_argument('--force-eval', action="store_true",
+                        help='Force re-evalution even if already marked.')
     args = parser.parse_args()
     init_log(args.log_level)
+
+    if args.re_eval:
+        re_eval_history(force=args.force_eval)
+        raise ExitAfter()  # Exit immediately after re-evaluation
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
