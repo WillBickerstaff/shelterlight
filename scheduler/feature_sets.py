@@ -78,7 +78,11 @@ class FeatureSetManager:
                     'historical_false_negatives',
                     'historical_confidence'
                 ]
-            case FeatureSet.BASELINE:
+
+            case FeatureSet.BASELINE | _:
+                if feature_set != FeatureSet.BASELINE:
+                    logging.warning("Feature set [%d] is not a valid feature "
+                                    "set. using BASELINE", feature_set)
                 return [
                     'hour_sin', 'hour_cos',
                     'month_sin', 'month_cos',
@@ -94,8 +98,4 @@ class FeatureSetManager:
             case FeatureSet.CUSTOM:
                 logging.warning("CUSTOM feature set is not yet implemented. "
                                 "using BASELINE")
-                return FeatureSetManager.get_columns(FeatureSet.BASELINE)
-            case _:
-                logging.warning("Unsupported FeatureSet: %s. using BASELINE",
-                                feature_set.name)
                 return FeatureSetManager.get_columns(FeatureSet.BASELINE)

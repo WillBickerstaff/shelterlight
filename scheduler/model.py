@@ -14,6 +14,7 @@ import lightgbm as lgb  # https://lightgbm.readthedocs.io/en/stable/
 import logging
 import pandas as pd
 import numpy as np
+import scheduler.feature_sets as fset
 from scheduler.base import SchedulerComponent
 
 
@@ -33,6 +34,7 @@ class LightModel(SchedulerComponent):
     def __init__(self):
         super().__init__()
         self.model = None
+        self.feature_set = fset.FeatureSet.BASELINE
         self.model_params = {
             'objective': 'binary',
             'metric': 'auc',
@@ -72,7 +74,7 @@ class LightModel(SchedulerComponent):
         df = self._add_schedule_accuracy_features(df, df_schedules)
 
         # 2-Select features for training
-        feature_cols = self.features._get_feature_columns()
+        feature_cols = fset.FeatureSetManager.get_columns(self.feature_set)
         x = df[feature_cols]
         # 3-Define the target variable
         y = (df['activity_pin'] > 0).astype(int)
@@ -123,7 +125,7 @@ class LightModel(SchedulerComponent):
             logging.error("No trained model found. Cannot make predictions.")
             return np.array([])
 
-        feature_cols = self.features._get_feature_columns()
+        feature_cols = fset.FeatureSetManager.get_columns(self.feature_set)
 
         # Drop polluting non-feature columns BEFORE selecting feature columns
         drop_cols = ['date', 'timestamp']
@@ -287,3 +289,16 @@ class LightModel(SchedulerComponent):
         df['historical_confidence'] = df['confidence'].fillna(0.5)
 
         return df
+
+    def set_feature_set(self, feature_set: fset.FeatureSet):
+        """Set the feature set strategy for model training and prediction.
+
+        Allows dynamic selection of which input features should be used by the
+        LightGBM model. Useful for experimentation and evaluation of different
+        feature subsets.
+
+        Args
+        ----
+            feature_set (FeatureSet): The desired feature set configuration.
+        """
+        self.feature_set = feature_set
