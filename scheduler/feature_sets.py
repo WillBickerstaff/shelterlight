@@ -79,6 +79,11 @@ class FeatureSetManager:
                     'historical_confidence'
                 ]
 
+            case FeatureSet.CUSTOM:
+                logging.warning("CUSTOM feature set is not yet implemented. "
+                                "using BASELINE")
+                return FeatureSetManager.get_columns(FeatureSet.BASELINE)
+
             case FeatureSet.BASELINE | _:
                 if feature_set != FeatureSet.BASELINE:
                     logging.warning("Feature set [%d] is not a valid feature "
@@ -95,7 +100,3 @@ class FeatureSetManager:
                     'historical_false_negatives',
                     'historical_confidence'
                 ]
-            case FeatureSet.CUSTOM:
-                logging.warning("CUSTOM feature set is not yet implemented. "
-                                "using BASELINE")
-                return FeatureSetManager.get_columns(FeatureSet.BASELINE)
