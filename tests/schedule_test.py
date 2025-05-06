@@ -177,50 +177,6 @@ class TestLightScheduler(unittest.TestCase):
             (schedule_date, 2, dt.time(0, 20), dt.time(0, 30), 1)
         )
 
-    def test_is_dark_within_same_day(self):
-        """Test for a darkness period starting and ending in the same day.
-
-        Verifies that the method correctly identifies if a given time is
-        within the darkness period in this scenario.
-        """
-        # Define some darkness times
-        darkness_start = dt.time(18, 0)
-        darkness_end = dt.time(23, 30)
-
-        # Time 19:00 is within darkness period, expect result = 1 (True)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(19, 0), darkness_start, darkness_end), 1)
-        # Time 17:00 is before darkness period, expect result = 0 (False)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(17, 0), darkness_start, darkness_end), 0)
-        # Time 23:45 is after darkness period, expect result = 0 (False)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(23, 45), darkness_start, darkness_end), 0)
-
-    def test_is_dark_across_midnight(self):
-        """Test for a darkness period that spans midnight.
-
-        Verifies that the method correctly identifies if a given time is
-        within the darkness period when it starts in the evening and ends
-        the next morning.
-        """
-        # Darkness period: starts at 18:00, ends at 06:00 (next day)
-        darkness_start = dt.time(18, 0)
-        darkness_end = dt.time(6, 0)
-
-        # Time 05:00 is within darkness period, expect 1 (True)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(5, 0), darkness_start, darkness_end), 1)
-        # Time 17:00 is before darkness period, expect 0 (False)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(17, 0), darkness_start, darkness_end), 0)
-        # Time 19:00 is within darkness period, expect 1 (True)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(19, 0), darkness_start, darkness_end), 1)
-        # Time 07:00 is after darkness period, expect 0 (False)
-        self.assertEqual(self.scheduler.is_dark(
-            dt.time(7, 0), darkness_start, darkness_end), 0)
-
     def test_update_schedule_accuracy_executes_update(self):
         """Check for db update containing the correct schedule ID and accuracy.
 
@@ -363,7 +319,6 @@ class TestLightScheduler(unittest.TestCase):
             'day_cos': 0.5,
             'month_sin': 0.1,
             'month_cos': 0.9,
-            'is_dark': 1,
             'rolling_activity_1h': 0.2,
             'rolling_activity_1d': 0.3,
             'interval_number': 108,
