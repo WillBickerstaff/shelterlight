@@ -16,7 +16,7 @@ import pandas as pd
 import numpy as np
 import scheduler.feature_sets as fset
 from scheduler.base import SchedulerComponent
-
+from lightlib.config import ConfigLoader
 
 class LightModel(SchedulerComponent):
     """Train and apply a LightGBM model to predict light activation needs.
@@ -34,7 +34,7 @@ class LightModel(SchedulerComponent):
     def __init__(self):
         super().__init__()
         self.model = None
-        self.set_feature_set(fset.FeatureSet.FULL_FEATURES)
+        self.set_feature_set(ConfigLoader().model_features)
         self.model_params = {
             'objective': 'binary',
             'metric': 'auc',
@@ -61,7 +61,7 @@ class LightModel(SchedulerComponent):
         -------
             None
         """
-        logging.debug("Training with feature set %s", self.feature_set.name)
+        logging.info("Training with feature set %s", self.feature_set.name)
         #   1-Retrieve & prepare training data
         fetched_data = self._prepare_training_data(days_history)
         # If there is no training data then exit
@@ -79,6 +79,10 @@ class LightModel(SchedulerComponent):
         x = df[feature_cols]
         # 3-Define the target variable
         y = (df['activity_pin'] > 0).astype(int)
+        label_dist = pd.Series(y).value_counts().to_dict()
+        logging.debug("y_train distribution: %s", label_dist)
+        logging.debug("Sample activity_pin values:\n%s",
+                      df[['timestamp', 'activity_pin']].head(10))
         # 4-Create the dataset
         train_data = lgb.Dataset(x, label=y)
         # 5-Train the model
@@ -122,6 +126,8 @@ class LightModel(SchedulerComponent):
         -------
             np.ndarray: Array of predicted labels (0 or 1).
         """
+        logging.debug("min_confidence in model: %.2f", self.min_confidence)
+
         if self.model is None:
             logging.error("No trained model found. Cannot make predictions.")
             return np.array([])
@@ -137,10 +143,13 @@ class LightModel(SchedulerComponent):
         # logging.debug("Expected feature columns: %s", feature_cols)
         # Always slice the DataFrame cleanly
         x_predict = df[feature_cols].copy()
-
         y_pred = self.model.predict(x_predict)
         probabilities = self.model.predict(x_predict, raw_score=False)
         predictions = (y_pred >= self.min_confidence).astype(int)
+
+        logging.debug("min_confidence in model: %.2f", self.min_confidence)
+        logging.debug("Prediction probabilities: %s", probabilities.tolist())
+        logging.debug("Binary predictions: %s", predictions.tolist())
 
         return predictions, probabilities
 

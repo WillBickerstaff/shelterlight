@@ -12,6 +12,7 @@ Version: 0.1
 import logging
 import configparser
 from lightlib.common import valid_smallint
+from scheduler.feature_sets import FeatureSet
 
 
 class ConfigNotLoaded(Exception):
@@ -185,7 +186,7 @@ class ConfigLoader:
                                          "accepts_list": False},
 
             "persistent_data_JSON":     {"value": "persist.json",
-                                         "type": str,
+                                              "type": str,
                                          "is_pin": False,
                                          "accepts_list": False},
         },
@@ -225,6 +226,13 @@ class ConfigLoader:
                                          "type": int,
                                          "is_pin": False,
                                          "accepts_list": False}
+        },
+        # ------------------------------------------------------------#
+        "MODEL": {
+            "feature_set":              {"value": "DEFAULT",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
         }
     }
 
@@ -275,6 +283,18 @@ class ConfigLoader:
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
+
+    @property
+    def model_features(self) -> int:
+        """Model feature_set to use for training."""
+        model_str = self.get_config_value(config=self.config, section="MODEL",
+                                     option="feature_set").upper()
+        try:
+            return FeatureSet[model_str]
+        except KeyError:
+            logging.warning("Invalid MODEL.feature_set in config file (%s) "
+                            "Using DEFAULT feature_set.", model_str)
+            return FeatureSet.DEFAULT
 
     @property
     def min_activity_on(self) -> int:

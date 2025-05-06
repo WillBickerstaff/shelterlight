@@ -24,6 +24,7 @@ class FeatureSet(IntEnum):
     MINIMAL = 0
     DEFAULT = 1
     NO_ROLLING = 2
+    COUNT = 3
     FULL_FEATURES = 500
     CUSTOM = 999
 
@@ -61,6 +62,33 @@ class FeatureSetManager:
                 return [
                     'hour_sin', 'hour_cos',
                     'day_sin', 'day_cos',
+                    'interval_number',
+                    'historical_accuracy',
+                    'historical_false_positives',
+                    'historical_false_negatives',
+                    'historical_confidence'
+                ]
+
+            case FeatureSet.COUNT:
+                return [
+                    'hour_sin', 'hour_cos',
+                    'month_sin', 'month_cos',
+                    'day_sin', 'day_cos',
+                    'rolling_count_1h', 'rolling_count_1d',
+                    'interval_number',
+                    'historical_accuracy',
+                    'historical_false_positives',
+                    'historical_false_negatives',
+                    'historical_confidence'
+                ]
+
+            case FeatureSet.FULL_FEATURES:
+                return [
+                    'hour_sin', 'hour_cos',
+                    'month_sin', 'month_cos',
+                    'day_sin', 'day_cos',
+                    'rolling_activity_1h', 'rolling_activity_1d',
+                    'rolling_count_1h', 'rolling_count_1d',
                     'interval_number',
                     'historical_accuracy',
                     'historical_false_positives',

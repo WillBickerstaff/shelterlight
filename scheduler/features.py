@@ -113,6 +113,7 @@ class FeatureEngineer(SchedulerComponent):
         else:
             rolling_activity_1d = 0
 
+        rolling_counts = self._get_rolling_count_features(timestamp)
         # Construct full dictionary of all available features
         feature_values = {
             "hour_sin": hour_sin, "hour_cos": hour_cos,
@@ -124,8 +125,9 @@ class FeatureEngineer(SchedulerComponent):
             "historical_accuracy": historical_accuracy,
             "historical_false_positives": historical_false_positives,
             "historical_false_negatives": historical_false_negatives,
-            "historical_confidence": historical_confidence
+            "historical_confidence": historical_confidence,
         }
+        feature_values.update(rolling_counts)
 
         # Only return the features needed by the model.
         # _get_feature_columns() lists the features the model uses.
@@ -152,6 +154,8 @@ class FeatureEngineer(SchedulerComponent):
             'day_sin', 'day_cos',          # Weekly pattern encoding
             'rolling_activity_1h',         # Short-term activity trend
             'rolling_activity_1d',         # Long-term activity trend
+            'rolling_count_1h',            # Short-term count trend
+            'rolling_count_1d',            # Total detection count for this
             'interval_number',             # Time interval index
             'historical_accuracy',         # Past scheduling success rate
             'historical_false_positives',  # Past over-predictions
@@ -159,6 +163,42 @@ class FeatureEngineer(SchedulerComponent):
             'historical_confidence'        # Average confidence in past
                                            # schedules
         ]
+
+    def _get_rolling_count_features(self, timestamp: dt.datetime,
+                                history_days: int = 30) -> dict[str,float]:
+        """Determine rolling count based features.
+
+        Returns
+        -------
+            dict with keys {"rolling_count_1h": 0.0 , "rolling_count_1d": 0.0}
+        """
+        intervals_per_day = 1440 // self.interval_minutes
+        interval_number = (timestamp.hour * 60 + timestamp.minute
+                           ) // self.interval_minutes
+        totals = self._get_past_activity_count(timestamp.date(), history_days)
+
+        if not totals:
+            return {"rolling_count_1h": 0.0,
+                    "rolling_count_1d":0.0}
+
+        lookback_intervals = max(1, 60 // self.interval_minutes)
+        recent_intervals = [
+            (interval_number - i) % intervals_per_day for i in \
+            range(lookback_intervals)
+            ]
+
+        counts_1h = [totals.get(i, 0) for i in recent_intervals]
+        counts_1d = totals.get(interval_number, 0)
+
+        # How many detections in the 6 intervals leading up to this
+        # interval over the last n days (how active is this time slot)
+        rolling_count_1h = float(np.mean(counts_1h))
+        # How many total activations in the time slot over the last n
+        # days (Historical density at this time)
+        rolling_count_1d = float(counts_1d)
+
+        return {"rolling_count_1h": rolling_count_1h,
+                "rolling_count_1d": rolling_count_1d}
 
     def _create_base_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Add training features.
@@ -285,3 +325,80 @@ class FeatureEngineer(SchedulerComponent):
                   missing.
         """
         return self.schedule_cache.get(str(date), {}).get(interval, {})
+
+    def _get_activity_count(self, timestamp: dt.datetime) -> int:
+        """Count how many activity events occured in this interval."""
+        if self.db is None or self.db.conn.closed:
+            self.set_db_connection()
+            if self.sb is None:
+                logging.error("No DB connection cannot get activity count.")
+                return 0
+
+        try:
+            interval_minutes = self.interval_minutes
+            interval_start = timestamp.replace(
+                second=0, microseconds=0,
+                minute=(timestamp.minute // interval_minutes))
+            interva_end = interval_start + dt.timedelta(
+                minutes=interval_minutes)
+
+            with self.db.conn.cursor() as cur:
+                cur.execute("""
+                    SELECT COUNT(*) FROM activity_log
+                    WHERE timestamp >= %s AND timestamp < %s
+                """, (interval_start, interval_end))
+                return cur.fetchone()[0]
+        except Exception as e:
+            logging.error("Failed to count in interval: %s", e,
+                          exc_info=True)
+            return 0
+
+    def _get_past_activity_count(
+            self, date: dt.date, history_days: int = 1
+            ) -> dict[int, int]:
+        """Retrieves total activity counts for intervals over n days.
+
+        Args
+        ----
+            date (dt.date): The first day to retrieve.
+            history_days (int): The number of days history to get
+
+        Returns
+        -------
+            dict[interval_number, total_count]
+        """
+        if self.db is None or self.db.conn.closed:
+            self.set_db_connection()
+            if self.db is None:
+                logging.error("No DB connection cannot get historic "
+                              "activity count.")
+                return 0
+
+        totals: dict[int, int] = \
+            {i: 0 for i in range(1440 // self.interval_minutes)}
+
+        try:
+            for days_ago in range(1, history_days + +1):
+                day = date - dt.timedelta(days=days_ago)
+                start_of_day = dt.datetime.combine(day, dt.time.min,
+                                                   tzinfo=dt.timezone.utc)
+                end_of_day = start_of_day + dt.timedelta(days=1)
+
+                with self.db.conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT timestamp FROM activity_log
+                        WHERE timestamp >= %s AND timestamp < %s
+                    """, (start_of_day, end_of_day))
+
+                    rows = cur.fetchall()
+
+                for (timestamp,) in rows:
+                    minute_of_day = ( timestamp.hour * 60 + timestamp.minute)
+                    interval_number = minute_of_day // self.interval_minutes
+                    totals[interval_number] += 1
+                return totals
+
+        except Exception as e:
+            logging.error("Failed to retrieve interval activity totals: %s",
+                          e, exc_info=True)
+            return {}

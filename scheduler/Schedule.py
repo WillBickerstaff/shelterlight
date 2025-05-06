@@ -93,7 +93,6 @@ class LightScheduler:
         self.model_engine = LightModel()
         self.evaluator = ScheduleEvaluator()
         self.store = ScheduleStore()
-
         self._apply_shared_config()
 
     def _apply_shared_config(self):

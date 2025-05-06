@@ -10,7 +10,7 @@ If a USB device is inserted and mounted at `media_mount_point`, the following wi
 
 1. **Configuration Validity Check:**
 
-   - If a `config.ini` is found on the USB device, it will be validated. Sections and keys can be ommitted but all present must be valid. Any invalid entry will mark the entire config as invalid and defaults will be used for all settings. 
+   - If a `config.ini` is found on the USB device, it will be validated. Sections and keys can be ommitted but all present must be valid. Any invalid entry will mark the entire config as invalid and defaults will be used for all settings.
 
 2. **Backup Existing Config & Logs:**
 
@@ -245,5 +245,37 @@ The backup files will be renamed to include an ISO-formatted timestamp:
 
 The backup operation is performed **once per USB insertion event.**
 If the USB device is removed and re-inserted, a new backup will be created.
+
+---
+
+## [MODEL]
+
+Model configuration options used to train the LightGBM prediction engine for light scheduling. You can select which **feature set** to use for training and prediction.
+
+| Option         | Type | Default   | Description                                |
+| -------------- | ---- | --------- | ------------------------------------------ |
+| `feature_set`  | str  | `DEFAULT` | Which feature set to use for model input.  |
+
+### Supported `feature_set` values:
+
+- `MINIMAL`
+  Basic cyclical time features only (`hour`, `day`), no history or activity metrics.
+
+- `DEFAULT`
+  Time features + rolling activity trends + basic schedule performance history.
+
+- `NO_ROLLING`
+  Time features + historical schedule performance, **no** rolling activity averages.
+
+- `COUNT`
+  Adds long-term activation **count patterns** instead of activity averages.
+
+- `FULL_FEATURES`
+  Combines all available features: time encodings, rolling activity and count trends, and historical accuracy.
+
+- `CUSTOM` *(reserved, not implemented)*
+  Placeholder for future user-defined feature sets.
+
+Each feature set includes different combinations of time encodings, activity trends, and historical accuracy metrics.
 
 ---
