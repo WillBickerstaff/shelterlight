@@ -56,17 +56,7 @@ class FeatureSetManager:
                     'day_sin', 'day_cos',
                     'interval_number'
                 ]
-            case FeatureSet.DEFAULT:
-                return [
-                    'hour_sin', 'hour_cos',
-                    'day_sin', 'day_cos',
-                    'rolling_activity_1h', 'rolling_activity_1d',
-                    'interval_number',
-                    'historical_accuracy',
-                    'historical_false_positives',
-                    'historical_false_negatives',
-                    'historical_confidence'
-                ]
+
             case FeatureSet.NO_ROLLING:
                 return [
                     'hour_sin', 'hour_cos',
@@ -83,13 +73,12 @@ class FeatureSetManager:
                                 "using BASELINE")
                 return FeatureSetManager.get_columns(FeatureSet.MINIMAL)
 
-            case FeatureSet.BASELINE | _:
-                if feature_set != FeatureSet.BASELINE:
+            case FeatureSet.DEFAULT | _:
+                if feature_set != FeatureSet.DEFAULT:
                     logging.warning("Feature set [%d] is not a valid feature "
                                     "set. using BASELINE", feature_set)
                 return [
                     'hour_sin', 'hour_cos',
-                    'month_sin', 'month_cos',
                     'day_sin', 'day_cos',
                     'rolling_activity_1h', 'rolling_activity_1d',
                     'interval_number',

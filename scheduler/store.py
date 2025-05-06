@@ -16,8 +16,8 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 import psycopg2
+import lightlib.common as llc
 from typing import Optional
-from lightlib.common import get_now
 from scheduler.base import SchedulerComponent
 
 
@@ -103,6 +103,18 @@ class ScheduleStore(SchedulerComponent):
 
         return schedule
 
+    def _purge_old_cache_entries(self):
+        """Keep only, yesterday, today & tomorrow in schedule cache."""
+        valid_dates = {
+            llc.get_yesterday(),
+            llc.get_today(),
+            llc.get_tomorrow()
+        }
+
+        for cached_date in list(self.schedule_cache.keys()):
+            if cached_date not in valid_dates:
+                del self.schedule_cache[cahed_date]
+
     def get_schedule(self, target_date: dt.date) -> dict:
         """Retrieve the light schedule for a given date.
 
@@ -116,8 +128,8 @@ class ScheduleStore(SchedulerComponent):
                   (0 or 1). Returns an empty dict if no schedule is found.
         """
         # Check if the schedule is already in cache
-        if self.schedule_cache.get('date') == target_date:
-            return self.schedule_cache.get('schedule', {})
+        if target_date in self.schedule_cache:
+            return self.schedule_cache[target_date]
         # If not in cache, attempt to retrieve it from the database
         # Check DB connection
         if self.db is None or self.db.conn.closed:
@@ -143,17 +155,16 @@ class ScheduleStore(SchedulerComponent):
             # Convert results to a dictionary
             schedule = {}
             for row in rows:
-                schedule[row[0]] = {
+                schedule[(target_date, row[0])] = {
                     "start": row[1],
                     "end": row[2],
                     "prediction": row[3],
                     "confidence": row[4] if row[4] is not None else 0.5
                 }
-        # If retrieved from the database, store it in cache
-            self.schedule_cache = {
-                'date': target_date,
-                'schedule': schedule
-            }
+            # If retrieved from the database, store it in cache
+            self.schedule_cache[target_date] = schedule
+            # Prevent the cache from infinitely growing
+            self._purge_old_cache_entries()
 
             return schedule
 
@@ -162,33 +173,19 @@ class ScheduleStore(SchedulerComponent):
                 f"Failed to retrieve schedule for {target_date}: {e}")
             return {}
 
-    def get_current_schedule(self,
-                             target_date: Optional[dt.date] = None) -> dict:
+    def get_current_schedule(self) -> dict:
         """Get the cached schedule or load it from the database if needed.
 
         Returns
         -------
-            dict: (Optional[dt.date]): Date for the schedule.
-                                       Defaults to today.
+            dict: Combined schedule for yesterday & today.
         """
-        # Get today's date if no date is given
-        if target_date is None:
-            target_date = get_now().date()
 
-        # Check if the schedule is already cached and up to date
-        logging.debug(
-            f"Checking cache for date: {self.schedule_cache.get('date')}")
-        if (self.schedule_cache and
-                self.schedule_cache.get('date') == target_date):
-            logging.info("Schedule retrieved from cache")
-            return self.schedule_cache['schedule']
+        # We must include yesterday, depending on how intervals
+        # are setup times just after midnight may be included
+        # in yesterdays schedule
+        sched_yesterday = self.get_schedule(llc.get_yesterday())
+        sched_today = self.get_schedule(llc.get_today())
 
-        # Not in cache, retrieve from the database using `get_schedule()`
-        schedule = self.get_schedule(target_date)
-        # Store the retrieved schedule in `self.schedule_cache`
-        self.schedule_cache = {
-            'date': target_date,
-            'schedule': schedule
-        }
-        logging.info(f"Schedule loaded from DB: {schedule}")
-        return schedule
+        return sched_yesterday | sched_today
+

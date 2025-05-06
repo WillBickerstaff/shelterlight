@@ -10,6 +10,7 @@ Version: 0.1
 """
 import logging
 
+
 class SchedulerComponent:
     """Base class to inject shared configuration into scheduling components.
 

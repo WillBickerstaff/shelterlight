@@ -15,7 +15,8 @@ import datetime as dt
 import logging
 from threading import Lock
 from lightlib.db import DB
-from lightlib.common import get_today, get_tomorrow, get_now
+from collections import OrderedDict
+from lightlib.common import get_today, get_tomorrow, get_now, get_yesterday
 from typing import Optional
 from scheduler.features import FeatureEngineer
 from scheduler.model import LightModel
@@ -79,7 +80,7 @@ class LightScheduler:
         self.model = None
         self.interval_minutes = 10
         self.min_confidence = 0.6
-        self.schedule_cache = {}
+        self.schedule_cache = OrderedDict()
         self.db = None
         self._warned_missing = None
 
@@ -289,13 +290,15 @@ class LightScheduler:
             return None
 
     def should_light_be_on(
-            self, current_time: Optional[dt.datetime] = None) -> bool:
+            self, check_time: Optional[dt.datetime] = None) -> bool:
         """Determine if the lights should be on at a given moment.
 
         Args
         ----
-            current_time (Optional[dt.datetime]):
-                The time to check. Defaults to now if not provided.
+            check_time (Optional[dt.datetime]):
+                Defaults to current UTC time if not provided.
+                If the check time is outside the current schedule window,
+                a direct DB query is used to avoid polluting the cache.
 
         Returns
         -------
@@ -304,17 +307,16 @@ class LightScheduler:
         Loads both yesterday's and today's schedules to ensure
         correct detection of early-morning lighting intervals.
         """
-        now = current_time or get_now()
+        now = check_time or get_now()
         interval_number = (now.hour * 60 + now.minute) // self.interval_minutes
+        sched_date = now.date()
+        if sched_date in {get_yesterday(), get_today(), get_tomorrow()}:
+            schedule = self.store.get_current_schedule()
+        else:
+            schedule = self.store.get_schedule(sched_date)
 
-        today = now.date()
-        yesterday = today - dt.timedelta(days=1)
-
-        # Merge yesterday + today
-        schedule = \
-            self.store.get_schedule(yesterday) | self.store.get_schedule(today)
-
-        return schedule.get(interval_number, {}).get("prediction", 0) == 1
+        key = (sched_date, interval_number)
+        return schedule.get(key, {}).get("prediction", 0) == 1
 
     def set_interval_minutes(self, minutes: int,
                              retrain: Optional[int] = 1) -> None:

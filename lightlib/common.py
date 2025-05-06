@@ -41,6 +41,14 @@ def get_tomorrow():
 DATE_TOMORROW = get_tomorrow()
 
 
+def get_yesterday():
+    """Return yesterdays date."""
+    return get_today() - dt.timedelta(days=1)
+
+
+DATE_YESTERDAY = get_yesterday()
+
+
 class ConfigReloaded(Exception):
     """Raise when config reloaded, to trigger a re-read of config."""
 
