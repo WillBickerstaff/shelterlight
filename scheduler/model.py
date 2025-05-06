@@ -34,7 +34,7 @@ class LightModel(SchedulerComponent):
     def __init__(self):
         super().__init__()
         self.model = None
-        self.set_feature_set(fset.FeatureSet.NO_DARKNESS)
+        self.set_feature_set(fset.FeatureSet.FULL_FEATURES)
         self.model_params = {
             'objective': 'binary',
             'metric': 'auc',

@@ -35,15 +35,15 @@ class ScheduleEvaluator(SchedulerComponent):
                               force=False):
         """Re-evaluate all previously generated light schedules.
 
-           Parameters
-           ----------
-           start_date : datetime.date or None
-                        First date to re-evaluate. If None, uses oldest
-                        date in light_schedules.
-           end_date : datetime.date or None
-                      Last date to re-evaluate. If None, uses today.
-           force : bool
-                    If True, re-evaluates even if was_correct is already set.
+        Parameters
+        ----------
+        start_date : datetime.date or None
+                     First date to re-evaluate. If None, uses oldest
+                     date in light_schedules.
+        end_date : datetime.date or None
+                   Last date to re-evaluate. If None, uses today.
+        force : bool
+                 If True, re-evaluates even if was_correct is already set.
         """
         try:
             with self.db.conn.cursor() as cur:

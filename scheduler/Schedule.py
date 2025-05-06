@@ -192,7 +192,7 @@ class LightScheduler:
                 "Failed to calculate progressive training history: %s", e)
             return MIN_DAYS_HISTORY
 
-    def generate_daily_schedule(self, date, darkness_start, darkness_end):
+    def generate_daily_schedule(self, date):
         """Generate a light schedule for a date based on model predictions.
 
         Create a daily schedule of when lights should be turned on,
@@ -202,22 +202,15 @@ class LightScheduler:
         ----
             date (str): The date for which the schedule is
                         generated (YYYY-MM-DD).
-            darkness_start (str): Time when darkness starts (HH:MM).
-            darkness_end (str): Time when darkness ends (HH:MM).
 
         Returns
         -------
-            dict: A dictionary mapping time intervals to predicted light
-                  activation (True/False).
+            dict: A dictionary mapping time intervals to predicted activity.
         """
         # Validate input parameters
         try:
             schedule_date = dt.datetime.strptime(
                 date, "%Y-%m-%d").date()
-            darkness_start = dt.datetime.strptime(
-                darkness_start, "%H:%M").time()
-            darkness_end = dt.datetime.strptime(
-                darkness_end, "%H:%M").time()
         except ValueError as e:
             logging.error("Invalid date or time format: %s", e)
             return {}
@@ -237,27 +230,6 @@ class LightScheduler:
 
         # Compute necessary features (includes interval_number correctly)
         df = self.features._create_base_features(df)
-
-        logging.debug("Using darkness windows on %s: start=%s, end=%s",
-                      schedule_date,
-                      darkness_start.strftime("%H:%M"),
-                      darkness_end.strftime("%H:%M"))
-        # Calculate is_dark field based on darkness window
-        #df['is_dark'] = df['timestamp'].dt.time.apply(
-        #    lambda t: self.features.is_dark(t, darkness_start, darkness_end)
-        #)
-
-        # Filter to only darkness intervals
-        # df = df[df['is_dark'] == 1]
-
-        logging.debug(
-            "Prediction DataFrame after darkness filter: \n%s", df.head())
-
-        if df.empty:
-            logging.warning(
-                "No darkness intervals found for %s. Empty schedule.",
-                schedule_date)
-            return {}
 
         if self.model_engine.model is None:
             logging.error("No trained model found. Cannot generate schedule.")
@@ -294,15 +266,9 @@ class LightScheduler:
                 # Retrain the model using updated accuracy data
                 self.model_engine.train_model(
                     days_history=self._progressive_history())
-                # Get tomorrow's date and darkness period
-                darkness_start, darkness_end = \
-                    self.features._get_darkness_times(date_tomorrow)
                 # Generate a new schedule for tomorrow
                 new_schedule = self.generate_daily_schedule(
-                    date_tomorrow.strftime("%Y-%m-%d"),
-                    darkness_start.strftime("%H:%M"),
-                    darkness_end.strftime("%H:%M")
-                )
+                    date_tomorrow.strftime("%Y-%m-%d"))
                 # Storage of the generated schedule in the database & cache
                 # is completed by `self.generate_daily_schedule' with its
                 # final call to `self.store_schedule'
@@ -335,36 +301,20 @@ class LightScheduler:
         -------
             bool: True if lights should be ON, False otherwise.
 
-        This method:
-        -Uses the current time if no time is provided.
-        -Identifies the correct schedule (yesterday or today).
-        -Retrieves the relevant interval number for the given time.
-        -Checks if lights should be ON for that interval.
+        Loads both yesterday's and today's schedules to ensure
+        correct detection of early-morning lighting intervals.
         """
-        # Get the current time (use datetime.now() if None)
         now = current_time or get_now()
-        # Identify the relevant schedule date (yesterday or today)
-        # Get darkness times for today (could span two dates)
-        darkness_start, darkness_end = \
-            self.features._get_darkness_times(get_today())
-
-        # Determine if this moment falls in today's or yesterday's schedule
-        if darkness_start < darkness_end:
-            # Darkness is within a single day (e.g. 18:00–06:00)
-            schedule_date = now.date()
-        else:
-            # Darkness spans midnight: decide based on whether time is after
-            # midnight but before sunrise
-            if now.time() <= darkness_end:
-                schedule_date = (now - dt.timedelta(days=1)).date()
-            else:
-                schedule_date = now.date()
-        # Retrieve the schedule for the identified date
-        schedule = self.store.get_schedule(schedule_date)
-        # Determine the current interval number
         interval_number = (now.hour * 60 + now.minute) // self.interval_minutes
-        # return if lights should be ON for this interval
-        return schedule.get(interval_number, 0) == 1
+
+        today = now.date()
+        yesterday = today - dt.timedelta(days=1)
+
+        # Merge yesterday + today
+        schedule = \
+            self.store.get_schedule(yesterday) | self.store.get_schedule(today)
+
+        return schedule.get(interval_number, {}).get("prediction", 0) == 1
 
     def set_interval_minutes(self, minutes: int,
                              retrain: Optional[int] = 1) -> None:

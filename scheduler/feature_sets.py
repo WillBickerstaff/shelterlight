@@ -22,9 +22,9 @@ class FeatureSet(IntEnum):
     """Supported feature set configurations for model training."""
 
     MINIMAL = 0
-    NO_DARKNESS = 1
+    DEFAULT = 1
     NO_ROLLING = 2
-    BASELINE = 500
+    FULL_FEATURES = 500
     CUSTOM = 999
 
 
@@ -56,7 +56,7 @@ class FeatureSetManager:
                     'day_sin', 'day_cos',
                     'interval_number'
                 ]
-            case FeatureSet.NO_DARKNESS:
+            case FeatureSet.DEFAULT:
                 return [
                     'hour_sin', 'hour_cos',
                     'day_sin', 'day_cos',
@@ -71,7 +71,6 @@ class FeatureSetManager:
                 return [
                     'hour_sin', 'hour_cos',
                     'day_sin', 'day_cos',
-                    'is_dark',
                     'interval_number',
                     'historical_accuracy',
                     'historical_false_positives',
@@ -92,7 +91,6 @@ class FeatureSetManager:
                     'hour_sin', 'hour_cos',
                     'month_sin', 'month_cos',
                     'day_sin', 'day_cos',
-                    'is_dark',
                     'rolling_activity_1h', 'rolling_activity_1d',
                     'interval_number',
                     'historical_accuracy',

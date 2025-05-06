@@ -83,11 +83,6 @@ class FeatureEngineer(SchedulerComponent):
         month_sin = np.sin(2 * np.pi * month / 12)
         month_cos = np.cos(2 * np.pi * month / 12)
 
-        # Determine if the timestamp is within darkness hours
-        darkness_start, darkness_end = \
-            self._get_darkness_times(timestamp.date())
-        is_dark = self.is_dark(timestamp.time(), darkness_start, darkness_end)
-
         # Calculate interval number
         interval_number = (hour * 60 + minute) // self.interval_minutes
 
@@ -123,7 +118,6 @@ class FeatureEngineer(SchedulerComponent):
             "hour_sin": hour_sin, "hour_cos": hour_cos,
             "day_sin": day_sin, "day_cos": day_cos,
             "month_sin": month_sin, "month_cos": month_cos,
-            "is_dark": is_dark,
             "rolling_activity_1h": rolling_activity_1h,
             "rolling_activity_1d": rolling_activity_1d,
             "interval_number": interval_number,
@@ -156,7 +150,6 @@ class FeatureEngineer(SchedulerComponent):
             'hour_sin', 'hour_cos',        # Hour encoding
             'month_sin', 'month_cos',      # Seasonal encoding
             'day_sin', 'day_cos',          # Weekly pattern encoding
-            'is_dark',                     # Whether it's nighttime
             'rolling_activity_1h',         # Short-term activity trend
             'rolling_activity_1d',         # Long-term activity trend
             'interval_number',             # Time interval index
@@ -174,7 +167,6 @@ class FeatureEngineer(SchedulerComponent):
         - Weekly patterns (through day_of_week encoding)
         - Seasonal patterns (through month encoding)
         - Recent activity patterns (through rolling averages)
-        - Environmental conditions (through darkness information)
         """
         # Apply the shared feature function to all timestamps
         feature_dicts = df['timestamp'].apply(self._generate_features_dict)
@@ -187,71 +179,6 @@ class FeatureEngineer(SchedulerComponent):
 
         logging.info("Activity data processed successfully")
         return df
-
-    def _get_darkness_times(self, date: dt.date) -> tuple[dt.time, dt.time]:
-        """Retrieve stored sunset and sunrise times from PersistentData.
-
-        Args
-        ----
-            date (dt.date): The date for which to retrieve the dark period:
-                            Typically today or tomorrow.
-                            For tomorrow, the start time is accurate, but the
-                            end is approximated based on today's sunris
-                            (+1 day)
-
-        Returns
-        -------
-            tuple[dt.time, dt.time]: (darkness_start, darkness_end)
-        """
-        persistent_data = PersistentData()
-        date_today = get_today()
-        if date == date_today:
-            darkness_start = persistent_data.sunset_today
-            darkness_end = persistent_data.sunrise_tomorrow
-        elif date == get_tomorrow():
-            darkness_start = persistent_data.sunset_tomorrow
-            darkness_end = persistent_data.sunrise_tomorrow + \
-                dt.timedelta(days=1)
-        else:
-            darkness_start = None
-            darkness_end = None
-
-        # Ensure we have valid data, otherwise use default fallback
-        if not darkness_start or not darkness_end:
-            if self._warned_missing != date_today:
-                logging.warning("Missing sunrise/sunset data, using default "
-                                "darkness (15:30-09:00).")
-                # Track that the warning has been looged today
-                # (reduce log spam)
-                self._warned_missing = date_today
-            now = get_now()
-            darkness_start = now.replace(hour=15, minute=30)
-            darkness_end = now.replace(hour=9, minute=0) + dt.timedelta(days=1)
-
-        return darkness_start.time(), darkness_end.time()
-
-    @staticmethod
-    def is_dark(time_obj: dt.time, darkness_start: dt.time,
-                darkness_end: dt.time) -> int:
-        """Determine if a given time falls within darkness hours.
-
-        Uses stored sunset and sunrise times from PersistentData
-
-        Args
-        ----
-            time_obj (dt.time): The time to check.
-
-        Returns
-        -------
-            int: 1 if within darkness hours, 0 otherwise.
-        """
-        if darkness_start < darkness_end:
-            # Darkness is within a single day (e.g., 18:00 - 06:00)
-            return 1 if darkness_start <= time_obj < darkness_end else 0
-        else:
-            # Darkness spans midnight (e.g., 21:00 - 05:00)
-            return 1 if (time_obj >= darkness_start or
-                         time_obj < darkness_end) else 0
 
     def _create_prediction_features(
             self, timestamp: dt.datetime) -> tuple[np.ndarray, pd.DataFrame]:
