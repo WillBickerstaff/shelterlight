@@ -169,7 +169,7 @@ def main_loop():
             stop_event.set()
             break
         except Exception as e:
-            loggiOAng.error("Fatal error: %s", e, exc_info=True)
+            logging.error("Fatal error: %s", e, exc_info=True)
             stop_event.set()
             break
         finally:
@@ -187,8 +187,16 @@ def main(stop_event: threading.Event):
                         help='Re-evaluate all historical schedules.')
     parser.add_argument('--force-eval', action="store_true",
                         help='Force re-evalution even if already marked.')
+    parser.add_argument('--retrain', action="store_true",
+                        help="Retrain the model and store the schedule.")
     args = parser.parse_args()
     init_log(args.log_level)
+
+    if args.retrain:
+        scheduler = LightScheduler()
+        scheduler.update_daily_schedule()
+        logging.info("Model retraining and schedule generation complete.")
+        raise ExitAfter()
 
     if args.re_eval:
         re_eval_history(force=args.force_eval)
