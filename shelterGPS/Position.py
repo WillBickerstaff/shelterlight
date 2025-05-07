@@ -17,9 +17,10 @@ import serial
 import subprocess
 import time
 import glob
+import lgpio
 from threading import Lock
 from typing import Union, Optional
-import lgpio
+from collections import deque
 from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import log_caller
@@ -485,7 +486,7 @@ class GPS:
         # Keep trying until we get the required message and it validates
         # or we reach the defined maximum attempt duration
         tick = self._fix_start_time
-        valid_msg_history = []
+        valid_msg_history = deque(maxlen=10)
         while tick - self._fix_start_time < max_time:
             ser_line: str = self.__gps_ser.readline()
             self._log_msg(logging.DEBUG,
@@ -495,7 +496,7 @@ class GPS:
             if self._is_valid_message(ser_line):
                 self._decode_message(ser_line)
                 if self._validate_message_content(msg):
-                    valid_msg_history.append(self.last_msg)
+                    valid_msg_history.append(self._last_msg)
                     if self._verify_time(valid_msg_history):
                         return True  # Exit once a valid message is confirmed
 
@@ -537,7 +538,7 @@ class GPS:
         """
         if "GGA" not in msg_list[0][0]:
             return True
-        if len(msg_list) < 5:
+        if len(msg_list) < 10:
             return False
 
         times = []

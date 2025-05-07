@@ -113,7 +113,7 @@ class ScheduleStore(SchedulerComponent):
 
         for cached_date in list(self.schedule_cache.keys()):
             if cached_date not in valid_dates:
-                del self.schedule_cache[cahed_date]
+                del self.schedule_cache[cached_date]
 
     def get_schedule(self, target_date: dt.date) -> dict:
         """Retrieve the light schedule for a given date.
