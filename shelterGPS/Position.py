@@ -24,8 +24,9 @@ from shelterGPS.coord import Coordinate
 from lightlib.config import ConfigLoader
 from lightlib.smartlight import log_caller
 from shelterGPS.common import GPSDir, GPSInvalid, GPSOutOfBoundsError
-from lightlib.common import EPOCH_DATETIME, get_now
+from lightlib.common import EPOCH_DATETIME
 from lightlib.persist import PersistentData
+
 
 class GPS:
     """GPS Module for managing GPS data, fix attempts, and validation.
@@ -209,7 +210,7 @@ class GPS:
                             f"Alt: {self.altitude:.2f}m"])
 
     def _log_msg(self, log_level: int, msg: str, *args) -> None:
-        """Log fix messages only if taking longer than the last fix duration."""
+        """Log messages only if taking longer than the last fix duration."""
         if self._log_msgs:
             logging.log(log_level, msg, *args)
 
@@ -325,7 +326,7 @@ class GPS:
             # Log the result: pass or fail, based on if the checksum matched.
             if is_valid and do_logging:
                 logging.debug("GPS: NMEA checksum validation passed, computed "
-                              "%s, expected 0x%s.",hex(csum), cksum)
+                              "%s, expected 0x%s.", hex(csum), cksum)
             elif do_logging:
                 logging.warning("NMEA checksum mismatch: computed %s vs. "
                                 "expected 0x%s", hex(csum), cksum)
@@ -451,7 +452,7 @@ class GPS:
                     logging.info("GPS serial port %s opened successfuly", port)
                     return
             except (serial.SerialException, AttributeError) as e:
-                logging.warning (
+                logging.warning(
                     "Failed to open GPS srial port %s: %s", port, e)
                 self.__gps_ser = None
 
@@ -484,6 +485,7 @@ class GPS:
         # Keep trying until we get the required message and it validates
         # or we reach the defined maximum attempt duration
         tick = self._fix_start_time
+        valid_msg_history = []
         while tick - self._fix_start_time < max_time:
             ser_line: str = self.__gps_ser.readline()
             self._log_msg(logging.DEBUG,
@@ -493,7 +495,9 @@ class GPS:
             if self._is_valid_message(ser_line):
                 self._decode_message(ser_line)
                 if self._validate_message_content(msg):
-                    return True  # Exit once a valid message is confirmed
+                    valid_msg_history.append(self.last_msg)
+                    if self._verify_time(valid_msg_history):
+                        return True  # Exit once a valid message is confirmed
 
             tick = time.monotonic()
             if tick - self._fix_start_time <= msg_time:
@@ -502,6 +506,118 @@ class GPS:
                 self._log_msgs = True
 
         raise GPSInvalid(f"No valid fix obtained after {max_time} seconds")
+
+    def _verify_time(self, msg_list: list[list[str]]) -> bool:
+        """Verify GPS message timestamps are consistent and not stale.
+
+        Ensures that the GPS time from GGA messages appears fresh and
+        stable before trusting it for setting system time. It checks:
+
+        1. That all messages are from the same hour and minute.
+        2. That seconds (with millisecond precision) are non-decreasing
+           across the messages.
+
+        If the message type is not GGA, the method returns True immediately
+        (no time verification needed). Otherwise, at least 5 GGA messages are
+        required to perform this validation.
+
+        Parameters
+        ----------
+        msg_list : list[list[str]]
+            A list of parsed NMEA message fields (each message is a list of
+                                                  strings).
+            The second field (index 1) is expected to contain the UTC time
+            string.
+
+        Returns
+        -------
+        bool
+            True if GPS time appears valid and increasing (i.e., not stale).
+            False if time is inconsistent, stale, or parsing fails.
+        """
+        if "GGA" not in msg_list[0][0]:
+            return True
+        if len(msg_list) < 5:
+            return False
+
+        times = []
+        try:
+            for msg in msg_list:
+                times.append(GPS.NMEA_time(msg[1]))
+
+            base_hour = times[0]["hour"]
+            base_minute = times[0]["minute"]
+
+            if not all(t["hour"] == base_hour and
+                       t["minute"] == base_minute for t in times):
+                return False
+
+            prev = times[0]["second"] * 1000 + times[0]["ms"]
+            for t in times[1:]:
+                current = t["second"] * 1000 + t["ms"]
+                if current < prev:
+                    return False
+                prev = current
+
+        except ValueError:
+            logging.warning("Unable to verify GPS time is not stale")
+            return False
+
+        logging.info("GGA Time verified: NOT stale")
+        return True
+
+    @staticmethod
+    def NMEA_time(nmea_time_str: str) -> dict:
+        """Split the time string part of an NMEA message into its components.
+
+        Parses a UTC time field from an NMEA sentence (e.g., GGA or RMC) and
+        returns the time components as a dictionary containing hour, minute,
+        second, and millisecond.
+
+        Parameters
+        ----------
+        nmea_time_str : str
+            NMEA time string in the format 'hhmmss.sss', e.g. '211232.238'
+
+        Raises
+        ------
+        ValueError
+            If the input string is not in a valid format or cannot be parsed.
+
+        Returns
+        -------
+        dict
+            Dictionary with the following keys:
+            - "hour" (int): Hour component (0–23)
+            - "minute" (int): Minute component (0–59)
+            - "second" (int): Second component (0–59)
+            - "ms" (int): millisecond component (0-999)
+        """
+        if not nmea_time_str or len(nmea_time_str) < 8:
+            logging.warning("%s is not a valid NMEA time string",
+                            nmea_time_str)
+            raise ValueError(f"Invalid NMEA time string: {nmea_time_str}")
+
+        try:
+            hour = int(nmea_time_str[0:2])
+            minute = int(nmea_time_str[2:4])
+            second = int(nmea_time_str[4:6])
+            millisecond = 0
+            if '.' in nmea_time_str:
+                fractional = nmea_time_str.split('.')[1]
+                millisecond = int(float(f"0.{fractional}") * 1000)
+
+            return {
+                "hour": hour,
+                "minute": minute,
+                "second": second,
+                "ms": millisecond,
+                }
+
+        except Exception as e:
+            logging.error("Failed to parse NMEA time string %s", nmea_time_str,
+                          exc_info=True)
+            raise ValueError(e)
 
     def _is_valid_message(self, ser_line: bytes) -> bool:
         """Check if the message has content and passes checksum validation.
