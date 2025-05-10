@@ -17,6 +17,7 @@ from threading import Lock
 from lightlib.db import DB
 from collections import OrderedDict
 from lightlib.common import get_today, get_tomorrow, get_now, get_yesterday
+from lighlib.common import LogColor as lc
 from typing import Optional
 from scheduler.features import FeatureEngineer
 from scheduler.model import LightModel
@@ -419,7 +420,8 @@ class LightScheduler:
                 "start": val["start"],
                 "end": val["end"],
                 "confidence": val.get("confidence", 0.0),
-                "state": "ON" if val.get("prediction", 0) == 1 else "OFF"
+                "state": f"{lc.BG_GREEN}ON{lc.RESET}"
+                if val.get("prediction", 0) == 1 else "OFF"
             })
 
         # Sort by start time

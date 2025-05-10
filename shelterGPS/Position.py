@@ -430,9 +430,7 @@ class GPS:
 
             self._get_coordinates(max_fix_time)
             self._get_datetime(max_fix_time)
-            # End fix timing and store duration
-            PersistentData().time_to_fix = (
-                self._fix_start_time, time.monotonic())
+
         except GPSInvalid:
             logging.error("GPS: Failed to acquire a fix.")
             raise

@@ -420,7 +420,6 @@ class SunTimes:
 
         try:
             self._perform_gps_fix_attempts()
-            self._set_solar_times_and_fix_window()
         except GPSNoFix:
             logging.warning("GPS fixing failed; reverting to local geo data.")
             self._use_local_geo()
@@ -449,9 +448,10 @@ class SunTimes:
         made within a defined fixing window, and the method tracks consecutive
         failed attempts, halting after a configurable maximum failure
         threshold is reached.
-                    """
+        """
         max_fix_errors = ConfigLoader().gps_failed_fix_days
         wait_time = ConfigLoader().gps_pwr_up_time
+        fix_start_time = time.monotonic()
         while True:
             try:
                 logging.info("Attempting GPS fix.")
@@ -460,11 +460,13 @@ class SunTimes:
 
                 if self._gps.datetime_established and \
                         self._gps.position_established:
+                    # End fix timing and store duration
+                    PersistentData().time_to_fix = (
+                        fix_start_time, time.monotonic())
                     self._set_system_time()
                     self._fixed_today = get_now().date()
                     logging.info("GPS Fix succeeded, position & "
                                  "time established")
-
                     #  Update solar times and fix window based on GPS
                     #  coordinates
                     self._set_solar_times_and_fix_window()

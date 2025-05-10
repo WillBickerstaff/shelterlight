@@ -11,10 +11,36 @@ Version: 0.1
 
 import datetime as dt
 import RPi.GPIO as GPIO
+import logging
 from typing import Union
 from typing import Optional
+from enum import Enum
 
 EPOCH_DATETIME = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)
+
+
+class LogColor(str, Enum):
+    """Colours for use in Log Messages."""
+
+    RESET = "\033[0m"
+
+    # Text colors
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    MAGENTA = "\033[95m"
+    CYAN = "\033[96m"
+    GRAY = "\033[90m"
+
+    # Background + Foreground combos (contrast-safe)
+    BG_RED = "\033[97;101m"       # white on red
+    BG_GREEN = "\033[30;102m"     # black on green
+    BG_YELLOW = "\033[30;103m"    # black on yellow
+    BG_BLUE = "\033[97;104m"      # white on blue
+    BG_MAGENTA = "\033[97;105m"   # white on magenta
+    BG_CYAN = "\033[30;106m"      # black on cyan
+    BG_GRAY = "\033[97;100m"      # white on gray
 
 
 def get_now():
@@ -91,11 +117,13 @@ def datetime_to_iso(dt_obj: dt.datetime) -> str:
 
 def gpio_init(mode: Optional[int] = GPIO.BCM) -> None:
     """Set the global GPIO mode to BOARD."""
-    pass # no-op not required for lgpio
+    pass  # no-op not required for lgpio
+
 
 def gpio_cleanup():
     """Global GPIO cleanup."""
-    pass  # no-op not required for lgpio
+    pass   # no-op not required for lgpio
+
 
 def valid_smallint(value):
     """Check a value can fit within smallint."""
