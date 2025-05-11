@@ -232,7 +232,7 @@ class DB:
                 result = cursor.fetchall() if fetch else None
                 # Commit the transaction if successful
                 self._conn.commit()
-                logging.info("Query executed successfully.")
+                logging.debug("Query executed successfully.")
                 return result
         except psycopg2.DatabaseError as e:
             # Rollback on error to maintain database consistency
@@ -252,7 +252,7 @@ class DB:
                 self._alchemy_exists = False
                 self._alchemy_engine = None
         return self._alchemy_engine
-    
+
     def __del__(self):
         """Destructor to ensure connection is closed on deletion of the DB."""
         self.close_connection()

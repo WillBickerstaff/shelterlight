@@ -106,9 +106,10 @@ class Location():
             tz = df.get("Timezone").iloc[0] \
                 if not df.empty and "Timezone" in df else None
             self._tz = pytz.timezone(tz)
-            logging.debug(
-                "LOC: Retrieved lat %s, lng %s for %s in country %s. TZ=:%s",
-                self.latitude, self.longitude, place, iso, self.timezone)
+            logging.info("config location is: %s\%s. Timezone: %s",
+                         place, iso, self.timezone)
+            logging.info("Position of config location is: lat %s, lng %s",
+                         self.latitude, self.longitude)
         except InvalidLocationError as e:
             raise e
 

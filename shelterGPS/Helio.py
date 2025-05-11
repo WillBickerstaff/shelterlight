@@ -99,7 +99,7 @@ class SunTimes:
         self._gps_fix_thread: Optional[threading.Thread] = None
         self._polar = PolarEvent.NO
         self._initialized = True
-        logging.info(
+        logging.debug(
             "SunTimes initialized with sunrise offset: %s minutes, sunset "
             "offset: %s minutes.", self.sunrise_offset, self.sunset_offset)
 
@@ -107,7 +107,7 @@ class SunTimes:
         if self._attempt_initial_fix_window():
             logging.info("Fix window established from local data on startup.")
         else:
-            logging.info(
+            logging.warning(
                 "No local data available. GPS fix process will start.")
             self.start_gps_fix_process()
 
@@ -375,7 +375,6 @@ class SunTimes:
             self._gps_fix_thread = threading.Thread(
                 target=self._gps_fix_process, daemon=True)
             self._gps_fix_thread.start()
-            logging.info("GPS fix process started in a separate thread.")
 
     def stop_gps_fix_process(self) -> None:
         """Stop the GPS fix process if it is running."""
@@ -383,7 +382,6 @@ class SunTimes:
             self._gps_fix_running.clear()
             if self._gps_fix_thread:
                 self._gps_fix_thread.join()
-                logging.info("GPS fix process stopped.")
 
     def _gps_fix_process(self) -> None:
         """Periodically attempt a GPS fix within a fix attempt window.
@@ -421,18 +419,22 @@ class SunTimes:
         try:
             self._perform_gps_fix_attempts()
         except GPSNoFix:
-            logging.warning("GPS fixing failed; reverting to local geo data.")
+            logging.warning("GPS fixing failed; reverting to locally "
+                            "configured geographic information.")
             self._use_local_geo()
             self._set_solar_times_and_fix_window()
 
         except NoSolarEventError:
-            # Polar day/night condition detected (no sunrise/sunset possible).
-            # In this case, we deliberately clear the fix window and allow
-            # the system to continue without generating a light schedule today.
-            # This avoids crashing or falling back to local geo data, because
-            # this is a valid scenario at extreme latitudes.
+            # A polar condition (either no sunrise or no sunset) has occurred.
+            # If this is a polar day (sun never sets), we skip light scheduling
+            # entirely — no darkness period exists.
+            # If it's a polar night (sun never rises),
+            #     we still generate a schedule,
+            # as darkness persists throughout the day.
+            # In both cases, we clear the fix window to prevent retries
+            #     and log the event.
             logging.warning("Polar day/night condition detected. "
-                            "Proceeding without light schedule today.")
+                            "Proceeding with appropriate handling.")
             self._fix_window = {
                 "start_today": dt.datetime.min,
                 "end_today": dt.datetime.min,
@@ -463,7 +465,6 @@ class SunTimes:
                     # End fix timing and store duration
                     PersistentData().time_to_fix = (
                         fix_start_time, time.monotonic())
-                    self._set_system_time()
                     self._fixed_today = get_now().date()
                     logging.info("GPS Fix succeeded, position & "
                                  "time established")
@@ -600,11 +601,13 @@ class SunTimes:
 
         self._store_persistent_data()
 
-        logging.info("Updated solar events :\n"
+        logging.info("Updated solar events:\n"
                      "     Today: Sunrise: %s, Sunset: %s\n"
-                     "  Tomorrow: Sunrise: %s, Sunset: %s",
+                     "  Tomorrow: Sunrise: %s, Sunset: %s\n"
+                     " Day after: Sunrise: %s, Sunset: %s",
                      strfdt(self._sr_today), strfdt(self._ss_today),
-                     strfdt(self._sr_tomorrow), strfdt(self._ss_tomorrow))
+                     strfdt(self._sr_tomorrow), strfdt(self._ss_tomorrow),
+                     strfdt(self._sr_next_day), strfdt(self._ss_next_day))
 
     def _set_fix_window(self) -> None:
         """Calculate and set the GPS fix windows.
@@ -643,13 +646,13 @@ class SunTimes:
         self._fix_window["end_tomorrow"] = self.UTC_sunset_tomorrow + \
             dt.timedelta(minutes=self.sunset_offset)
 
-        logging.info("Updated fixing window :\n"
-                     "   Today:     Start: %s,    End: %s\n"
-                     "Tomorrow:     Start: %s,    End: %s",
-                     strfdt(self._fix_window["start_today"]),
-                     strfdt(self._fix_window["end_today"]),
-                     strfdt(self._fix_window["start_tomorrow"]),
-                     strfdt(self._fix_window["end_tomorrow"]))
+        logging.debug("Updated fixing window :\n"
+                      "   Today:     Start: %s,    End: %s\n"
+                      "Tomorrow:     Start: %s,    End: %s",
+                      strfdt(self._fix_window["start_today"]),
+                      strfdt(self._fix_window["end_today"]),
+                      strfdt(self._fix_window["start_tomorrow"]),
+                      strfdt(self._fix_window["end_tomorrow"]))
 
     # ---------------------- Coordinate and System Helpers --------------------
 
@@ -715,49 +718,6 @@ class SunTimes:
             else pytz.UTC
 
         return lat, lng, alt
-
-    def _set_system_time(self) -> None:
-        """Set the system time using the GPS datetime property.
-
-        Retrieves the current UTC datetime from the GPS class instance and
-        updates the system time. On non-Linux systems, this operation is
-        skipped with a warning.
-
-        Raises
-        ------
-            subprocess.CalledProcessError: If the system time cannot be set,
-            an error is logged, detailing the failure.
-        """
-        gps_datetime = EPOCH_DATETIME
-        try:
-            # Ensure this code only runs on Linux/Unix-like systems
-            if os.name != 'posix':
-                logging.warning(
-                    "SUNT: System time setting skipped on non-Linux systems.")
-                return
-            # Access the datetime property from the GPS instance
-            gps_datetime = self._gps.datetime
-
-            # Validate that gps_datetime is a datetime instance and is set
-            if not isinstance(gps_datetime, dt.datetime) or \
-                    gps_datetime == EPOCH_DATETIME:
-                logging.error("SUNT: GPS datetime is not set or invalid. "
-                              "Exiting system time update.")
-                return
-
-            # Format the datetime for compatibility with the system 'date'
-            # command
-            formatted_time = gps_datetime.strftime('%Y-%m-%d %H:%M:%S')
-
-            # Run system command to set the date (requires sudo on most
-            # Linux systems)
-            subprocess.run(['sudo', 'date',
-                            '--set', formatted_time], check=True)
-            logging.info("System time set to %s based on GPS time",
-                         formatted_time)
-
-        except subprocess.CalledProcessError as e:
-            logging.error("Failed to set system time: %s", e)
 
     def _store_persistent_data(self) -> None:
         """Store the current GPS location and solar event times persistently.
@@ -881,7 +841,7 @@ class SunTimes:
 
             solar_times = {"sunrise": sunrise, "sunset": sunset,
                            "polar": polar}
-            logging.info("Calculated solar times at location %s, %s"
+            logging.debug("Calculated solar times at location %s, %s"
                          "\n\tfor     : %s"
                          "\n\tSunrise : %s"
                          "\n\tSunset  : %s"

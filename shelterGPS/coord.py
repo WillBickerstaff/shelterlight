@@ -68,7 +68,7 @@ class Coordinate:
         if direction is not None:
             self.direction = direction
         if gps_string is not None:
-            logging.debug("COORD: Initialized with GPS string %s", gps_string)
+            logging.debug("Coordinate Initialized with GPS string %s", gps_string)
             self.gps_string = gps_string
         self._calc_coords()
 
@@ -121,7 +121,7 @@ class Coordinate:
         if direction not in GPSDir:
             raise ValueError(f"Coordinate direction is invalid: {direction}")
         self._dir = direction
-        logging.debug("COORD: Direction set to %s (%s)",
+        logging.debug("Coordinate Direction set to %s (%s)",
                       self._dir,
                       type(self._dir))
         self._degree_len = 3 if self.is_longitude else 2
@@ -225,7 +225,7 @@ class Coordinate:
             self._pad_gps_string()
             if float(gps_str) < 0.0:
                 logging.error(
-                    "COORD: GPS coordinate string (%s) cannot be negative",
+                    "GPS coordinate string (%s) cannot be negative",
                     gps_str)
                 raise GPSOutOfBoundsError(
                     f"GPS coordinate string ({gps_str}) cannot be negative")
@@ -258,7 +258,7 @@ class Coordinate:
             GPSOutOfBoundsError: If the integer part of the coordinate is
             too large.
         """
-        logging.debug("COORD: gps_string=%s dir=%s",
+        logging.debug("Coordinate: gps_string=%s dir=%s",
                       self.gps_string, self._dir)
         if self.gps_string is None or self._dir is None:
             return
@@ -273,7 +273,7 @@ class Coordinate:
                 )
         except ValueError:
             logging.error(
-                "COORD: GPS coordinate %s is not numeric", self.gps_string)
+                "GPS coordinate %s is not numeric", self.gps_string)
             raise ValueError(f"{self.gps_string} is not numeric")
 
         # Split into [ddmm / dddmm] & [ssss]
@@ -281,7 +281,7 @@ class Coordinate:
         req_int_len = 5 if self.is_longitude else 4
         if len(split_str[0]) > req_int_len:
             logging.error(
-                "COORD: GPS string %s is too long, should be: '%s'",
+                "GPS coordinate string %s is too long, should be: '%s'",
                 self.gps_string,
                 "dddmm.ssss" if self.is_longitude else "ddmm.ssss")
             raise GPSOutOfBoundsError(
@@ -298,7 +298,7 @@ class Coordinate:
 
         # Rejoin the string
         self._gps_str = ".".join(split_str)
-        logging.debug("COORD: Padded GPS string is %s", self._gps_str)
+        logging.debug("Padded GPS coordinate string is %s", self._gps_str)
 
     def _calc_coords(self) -> None:
         """Calculate and update the GPS coordinate values.
@@ -313,17 +313,17 @@ class Coordinate:
             return
         self._deg_min_sec()
         self._decimal()
-        logging.debug("COORD: %s coordinate is %s",
+        logging.debug("%s coordinate is %s",
                       self.lat_lng_str, round(self.decimal_value, 6))
 
     def _deg_min_sec(self):
         """Convert the GPS coord string into degrees, minutes, and seconds."""
         if self._dir is None:
             return
-        logging.debug("COORD: NMEA %s is %s", self.lat_lng_str, self._gps_str)
+        logging.debug("NMEA %s is %s", self.lat_lng_str, self._gps_str)
         self._deg = int(self.gps_string[:self._degree_len])
         self._min = float(self.gps_string[self._degree_len:])
-        logging.debug("COORD: Coordinate is %s degrees, %s minutes, %s "
+        logging.debug("Coordinate is %s degrees, %s minutes, %s "
                       "seconds %s", self._deg, self.minutes,
                       round(self.seconds, 2), self.direction.value)
 
@@ -332,7 +332,7 @@ class Coordinate:
         self._dec = self._deg + (self._min / 60)
         if self.direction in [GPSDir.South, GPSDir.West]:
             self._dec = -self._dec
-        logging.debug("COORD: Decimal coordinate calculated as %s", self._dec)
+        logging.debug("Decimal coordinate calculated as %s", self._dec)
         if not self._validate_decimal(self._dec):
             self._dec = None
 
@@ -361,7 +361,7 @@ class Coordinate:
             return True
         else:
             logging.error(
-                "COORD: Decimal coordinate %s is out of bounds for %s",
+                "Decimal coordinate %s is out of bounds for %s",
                 decimal_value, self.lat_lng_str)
             raise GPSOutOfBoundsError(
                 f"Coordinate {decimal_value} is out of bounds "

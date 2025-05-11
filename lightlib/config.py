@@ -588,12 +588,12 @@ class ConfigLoader:
             if self.__validate_config_structure(temp_config) and \
                     self.__validate_unique_pins(temp_config):
                 logging.info(
-                    "CONFIG: Alternative config file at %s is valid.",
+                    "Alternative config file at %s is valid.",
                     file_path)
                 return True  # File is valid (meets structural expectations)
             else:
                 logging.warning(
-                    "CONFIG: Alternative config file at %s is invalid.",
+                    "Alternative config file at %s is invalid.",
                     file_path)
                 return False  # File is invalid if structure or pins
                 # assignments do not meet expectations
@@ -602,7 +602,7 @@ class ConfigLoader:
             # Log any errors encountered during parsing and return False to
             # indicate invalid config
             logging.error(
-                "CONFIG: Error parsing alternative config file %s: %s",
+                "Error parsing alternative config file %s: %s",
                 file_path, e)
             return False
 
@@ -621,7 +621,7 @@ class ConfigLoader:
         -------
             The converted value, either as a single value or a list.
         """
-        # logging.debug("CONFIG: Converting %s to type %s",
+        # logging.debug("Converting %s to type %s",
         #              raw_value, specified_type)
         # If the value is expected to be a list and accepts_list is True
         if accepts_list and specified_type == int:
@@ -659,8 +659,6 @@ class ConfigLoader:
         """
         def_val = self._FALLBACK_VALUES.get(section, {}).\
             get(option, {}).get("value")
-        # logging.debug("CONFIG: Default value for %s.%s is [%s]",
-        #               section, option, def_val)
         return def_val
 
     def get_config_value(self, config, section, option):
@@ -696,35 +694,23 @@ class ConfigLoader:
                         specified type.
         """
         # Retrieve the fallback dictionary entry for type and value
-        # logging.debug("CONFIG: Getting config value for %s.%s",
-        #               section, option)
         default_value = self._get_default_value(section, option)
         option_spec = self._FALLBACK_VALUES.get(section, {}).get(option, {})
         specified_type = option_spec.get("type", str)
         accepts_list = option_spec.get("accepts_list", False)
-        # logging.debug("CONFIG: [%s].%s default = %s",
-        #               section, option, default_value)
-        # logging.debug("CONFIG: [%s].%s type = %s",
-        #               section, option, specified_type)
-        # logging.debug("CONFIG: [%s].%s accepts lists = %s",
-        #               section, option, accepts_list)
 
         try:
             # Retrieve the raw value from the config, or use the fallback
             raw_value = self.config.get(
                 section, option, fallback=default_value)
             # Convert the raw value to the correct type
-            # logging.debug("CONFIG: Option %s.%s set with value from config "
-            #             "file, type is [%s], value is %s, (%s accept lists)",
-            #             section, option, str(specified_type), raw_value,
-            #             "does" if accepts_list else "doesn't")
             return ConfigLoader._convert_to_type(raw_value,
                                                  specified_type, accepts_list)
 
         except (configparser.NoSectionError,
                 configparser.NoOptionError, ValueError) as e:
             logging.warning(
-                "CONFIG: Value for %s.%s is missing or invalid in the config "
+                "Value for %s.%s is missing or invalid in the config "
                 "file, using default value %s of type [%s], "
                 "(%s accept lists): %s", section, option, default_value,
                 str(specified_type), "does" if accepts_list else "doesn't", e)
@@ -758,7 +744,7 @@ class ConfigLoader:
         try:
             # Attempt to read the configuration file
             config.read(file_path)
-            logging.info("CONFIG: Read config file from %s", file_path)
+            logging.info("Read config file from %s", file_path)
 
             # Validate configuration structure and GPIO pin assignments
             if not self.__validate_config_structure(config):
@@ -767,12 +753,12 @@ class ConfigLoader:
                 return False
 
             # If all checks pass, assign the validated config to the instance
-            logging.info("CONFIG: config file at %s is valid")
+            logging.debug("config file at %s is valid")
             self.config = config
             return True
         except configparser.Error as e:
             logging.error(
-                "CONFIG: Parsing error for config file %s: %s", file_path, e)
+                "Parsing error for config file %s: %s", file_path, e)
             return False
 
     def __validate_config_structure(self,
@@ -799,12 +785,12 @@ class ConfigLoader:
         for section in required_sections:
             # Check if each required section exists in the loaded config
             if section not in config:
-                logging.error("CONFIG: config file is invalid, required "
+                logging.error("config file is invalid, required "
                               "section is missing: %s", section)
                 return False
             # Log a warning if the section exists but is empty
             elif not config.items(section):
-                logging.warning("CONFIG: Section [%s] in config file contains "
+                logging.warning("Section [%s] in config file contains "
                                 "no values.", section)
         return True
 
@@ -847,8 +833,8 @@ class ConfigLoader:
                         for pin in pins:
                             # Check for duplicate pin assignments
                             if pin in pins_used:
-                                logging.error("CONFIG: Pin %s is defined"
-                                              " multiple times. [%s]",
+                                logging.error("Pin %s is defined "
+                                              "multiple times. [%s]",
                                               pin, pins_used)
                                 return False
                             pins_used.add(pin)

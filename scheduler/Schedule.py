@@ -13,11 +13,11 @@ import psycopg2
 import pandas as pd
 import datetime as dt
 import logging
+import time
 from threading import Lock
 from lightlib.db import DB
 from collections import OrderedDict
 from lightlib.common import get_today, get_tomorrow, get_now, get_yesterday
-from lighlib.common import LogColor as lc
 from typing import Optional
 from scheduler.features import FeatureEngineer
 from scheduler.model import LightModel
@@ -121,7 +121,6 @@ class LightScheduler:
             # Use the provided database connection
             # (for dependency injection/testing)
             self.db = db_connection
-            logging.info("Database connection set via external instance.")
         else:
             # If no connection is provided, initialize a new DB connection
             connection_invalid = (
@@ -137,8 +136,6 @@ class LightScheduler:
                 except psycopg2.DatabaseError as e:
                     logging.error("Failed to reconnect to the database: %s", e)
                     self.db = None  # Set to None to prevent further issues
-            else:
-                logging.info("Database connection is still active.")
 
     def _progressive_history(self) -> int:
         """Return the maximum available number of days for training.
@@ -237,8 +234,6 @@ class LightScheduler:
             return {}
 
         predictions, probabilities = self.model_engine._predict_schedule(df)
-        # logging.debug("Predictions: %s", predictions.tolist())
-        # logging.debug("Prediction probabilities: %s", probabilities.tolist())
 
         return self.store.store_schedule(schedule_date, df,
                                          predictions, probabilities)
@@ -259,14 +254,15 @@ class LightScheduler:
         try:
             # Make sure only one thread can try to update the schedule at
             # any time
+            training_start = time.monotonic()
             date_tomorrow = get_tomorrow()
             with self._lock:
                 # Evaluate yesterday's schedule accuracy
-                yesterday = get_now().date() - dt.timedelta(days=1)
-                self.evaluator.evaluate_previous_schedule(yesterday)
+                self.evaluator.evaluate_previous_schedule(get_yesterday())
                 # Retrain the model using updated accuracy data
                 self.model_engine.train_model(
                     days_history=self._progressive_history())
+                training_end = time.monotonic()
                 # Generate a new schedule for tomorrow
                 new_schedule = self.generate_daily_schedule(
                     date_tomorrow.strftime("%Y-%m-%d"))
@@ -282,6 +278,15 @@ class LightScheduler:
                     logging.info("Successfully updated schedule for %s",
                                  date_tomorrow)
                 self._log_schedule(new_schedule, date_tomorrow)
+                final_time = time.monotonic()
+                logging.info("Training and schedule generation completed.\n"
+                             "\t           Training duration: %ds\n"
+                             "\tSchedule Generation duration: %ds\n"
+                             "\t-----------------------------------\n"
+                             "\t                  Total time: %ds\n",
+                             training_end - training_start,
+                             final_time - training_end,
+                             final_time - training_start)
                 return new_schedule
 
         except Exception as e:
@@ -394,7 +399,7 @@ class LightScheduler:
         The output is formatted as a table and sorted chronologically by ON
         time.
 
-        Logging only occurs if the active log level is DEBUG. If the schedule
+        Logging only occurs if the active log level is INFO. If the schedule
         is empty, a warning is logged instead.
 
         Args
@@ -420,8 +425,7 @@ class LightScheduler:
                 "start": val["start"],
                 "end": val["end"],
                 "confidence": val.get("confidence", 0.0),
-                "state": f"{lc.BG_GREEN}ON{lc.RESET}"
-                if val.get("prediction", 0) == 1 else "OFF"
+                "state": "ON" if val.get("prediction", 0) == 1 else "OFF"
             })
 
         # Sort by start time

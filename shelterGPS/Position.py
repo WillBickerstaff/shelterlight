@@ -121,12 +121,13 @@ class GPS:
                 port=self.__serial_port,
                 baudrate=ConfigLoader().gps_baudrate,
                 timeout=ConfigLoader().gps_timeout)
-            logging.info("GPS: initialized with port %s", self.__serial_port)
+            logging.info("GPS initialized with port %s", self.__serial_port)
         except serial.SerialException as e:
-            logging.error("GPS: Failed to initialize serial port %s - %s",
+            logging.error("GPS Failed to initialize serial port %s - %s",
                           self.__serial_port, e)
-            available_ports = glob.glob('/dev/tty[A-Za-z]*')
-            logging.debug("GPS: Available serial ports: %s", available_ports)
+            available_ports = sorted(glob.glob('/dev/tty[A-Za-z]*') +
+                                     glob.glob('/dev/serial*'))
+            logging.debug("GPS Available serial ports: %s", available_ports)
             self.__gps_ser = None
 
         # Initialize remaining attributes
@@ -712,7 +713,7 @@ class GPS:
                                   "%s message is valid.", msg_type)
                     return True
                 self._log_msg(logging.INFO,
-                    "GPS: %s message does not include a validated data "
+                    "GPS message:\n%s\ndoes not include a validated data "
                     "indicator. (field %s does not contain%s%s)",
                     msg, valid_idx, " any of "if msg == "GGA" else " ",
                     list(valid_vals) if isinstance(valid_vals, str) else
@@ -720,7 +721,7 @@ class GPS:
                 return False
 
         self._log_msg(logging.DEBUG,
-                      "GPS: Non-tracked message type %s; skipping.", msg_type)
+                      "Non-tracked message type %s; skipping.", msg_type)
         return False
 
     def _get_coordinates(self, fix_wait: float) -> None:
@@ -793,12 +794,12 @@ class GPS:
                                 if entry['DATE'] != -1 else None)
                     self._dt = self._process_datetime(utc_time, date_str)
                     logging.info(
-                        "GPS: Date and time obtained: %s", self._dt)
+                        "Date and time obtained from GPS: %s", self._dt)
                     self._datetime_established = True
                     self._sync_system_time()
                     matched = True
                 except (KeyError, ValueError) as e:
-                    logging.error("GPS: Error processing datetime: %s", e)
+                    logging.error("Error processing GPS datetime: %s", e)
                     raise GPSInvalid("Failed to retrieve datetime.")
         if not matched:
             logging.debug("Never matched a %s in msg_dt",
@@ -844,7 +845,7 @@ class GPS:
                 date_parts = [date_str[i:i+2]
                               for i in range(0, len(date_str), 2)]
                 self._log_msg(logging.DEBUG,
-                              "GPS: Date string contains (YY)%s-(MM)%s-(DD)%s",
+                              "GPS Date string contains (YY)%s-(MM)%s-(DD)%s",
                               date_parts[2], date_parts[1], date_parts[0],)
                 date_obj = dt.date(int("20" + date_parts[2]),
                                    int(date_parts[1]),
@@ -854,7 +855,7 @@ class GPS:
 
             date_obj = dt.datetime.combine(
                 date_obj, utc_time_obj, tzinfo=dt.timezone.utc)
-            logging.info("GPS: Datetime is %s", str(date_obj))
+            logging.info("GPS Datetime is %s", str(date_obj))
             return date_obj
         except (ValueError, IndexError) as e:
             if self._log_msgs:
@@ -866,6 +867,12 @@ class GPS:
 
     def _sync_system_time(self) -> None:
         """Set system time to UTC datetime from GPS fix."""
+        if os.name != 'posix':
+                logging.warning(
+                    "System time setting unavailable on "
+                    "non-Linux systems.")
+                return
+
         if self._datetime_established:
             iso_time = self._dt.isoformat()
             try:

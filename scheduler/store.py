@@ -188,4 +188,3 @@ class ScheduleStore(SchedulerComponent):
         sched_today = self.get_schedule(llc.get_today())
 
         return sched_yesterday | sched_today
-

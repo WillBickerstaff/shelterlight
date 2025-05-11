@@ -140,9 +140,6 @@ class LightModel(SchedulerComponent):
         drop_cols = ['date', 'timestamp']
         df = df.drop(columns=[col for col in drop_cols if col in df.columns])
 
-        # logging.debug("After dropping non-features, DataFrame columns: %s",
-        #              df.columns.tolist())
-        # logging.debug("Expected feature columns: %s", feature_cols)
         # Always slice the DataFrame cleanly
         x_predict = df[feature_cols].copy()
         y_pred = self.model.predict(x_predict)
@@ -195,9 +192,6 @@ class LightModel(SchedulerComponent):
 
             df_intervals = pd.DataFrame({'timestamp': timestamps})
             df_intervals['date'] = df_intervals['timestamp'].dt.date
-            # df_intervals['interval_number'] = (
-            #     df_intervals['timestamp'].dt.hour * 60 +
-            #     df_intervals['timestamp'].dt.minute) // interval_minutes
 
             # Pull activity_log timestamps
             engine = self.db.get_alchemy_engine()

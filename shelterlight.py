@@ -75,7 +75,8 @@ def light_loop(light_control: LightController,
                 tick_now = time.monotonic()
                 if tick_now >= start_tick + heartbeat:
                     logging.info("[LOOP] Heartbeat tick lights are %s",
-                             "ON" if light_control.lights_are_on else "OFF")
+                                 f"ON ({light_control.on_reason.name})"
+                                 if light_control.lights_are_on else "OFF",)
                     start_tick = tick_now
     except Exception as e:
         logging.exception("Light control loop encountered an error: %s", e,
@@ -193,13 +194,16 @@ def main(stop_event: threading.Event):
     init_log(args.log_level)
 
     if args.retrain:
+        logging.info("Manual model retraining triggered via CLI."
         scheduler = LightScheduler()
         scheduler.update_daily_schedule()
         logging.info("Model retraining and schedule generation complete.")
         raise ExitAfter()
 
     if args.re_eval:
+        logging.info("Manual history re-evaluation triggered via CLI.")
         re_eval_history(force=args.force_eval)
+        logging.info("History re-evaluation complete.")
         raise ExitAfter()  # Exit immediately after re-evaluation
 
     # Initialize USB manager, configuration, and logging

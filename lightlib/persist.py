@@ -128,17 +128,17 @@ class PersistentData:
         try:
             # Create a basic structure if the JSON file does not exist
             logging.debug(
-                "JSON: Attempting to initialize data storage file %s",
+                "Attempting to initialize data storage file %s",
                 ConfigLoader().persistent_data_json)
             with open(ConfigLoader().persistent_data_json, 'a+') as file:
                 file.seek(0)
                 if file.read().strip() == "":
                     json.dump(self._get_empty_schema(), file,
                               indent=2, sort_keys=True)
-                    logging.info("GPSDataStore JSON file initialized at %s",
+                    logging.info("JSON file initialized at %s",
                                  ConfigLoader().persistent_data_json)
         except IOError as e:
-            logging.error("Failed to initialize GPSDataStore JSON file: %s", e)
+            logging.error("Failed to initialize JSON file: %s", e)
             raise DataStorageError("Failed to initialize JSON file.") from e
 
     def store_data(self) -> None:
@@ -165,7 +165,7 @@ class PersistentData:
 
             with open(ConfigLoader().persistent_data_json, 'w') as file:
                 json.dump(data, file, indent=2, sort_keys=True)
-                logging.info("Data stored successfully in JSON file.")
+                logging.debug("Data stored successfully in JSON file.")
 
             # Refresh local convenience attributes
             self._populate_locals_from_file()
@@ -341,13 +341,13 @@ class PersistentData:
     def _populate_times_from_local(self, iso_datetimes: List[str],
                                    is_sunrise: bool = True) -> None:
         sr_ss_str = "sunrise" if is_sunrise else "sunset"
-        logging.debug("JSON: Retrieved %s times: %s",
+        logging.debug("Retrieved %s times: %s",
                       sr_ss_str, iso_datetimes)
         for srt in iso_datetimes:
             self._add_date(dt_obj=iso_to_datetime(srt),
                            is_sunrise=is_sunrise)
         times_list = self._sunrise_times if is_sunrise else self._sunset_times
-        logging.debug("JSON: Converted %s times to date.datetimes: \n  %s",
+        logging.debug("Converted %s times to date.datetimes: \n  %s",
                       sr_ss_str, times_list)
 
     def _clear_past_times(self) -> None:

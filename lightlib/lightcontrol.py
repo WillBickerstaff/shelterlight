@@ -12,6 +12,7 @@ Version: 0.1
 import logging
 import lgpio
 import time
+from enum import Enum
 from threading import Lock
 from lightlib.common import get_now
 from lightlib.config import ConfigLoader
@@ -20,6 +21,11 @@ from scheduler.Schedule import LightScheduler
 from shelterGPS.Helio import SunTimes, PolarDayError, PolarNightError, \
     PolarEvent
 
+
+class OnReason(Enum):
+    NOT_ON = 0
+    ACTIVITY = 1
+    SCHEDULE = 2
 
 class LightController:
     """Manage light on status, activity recording and schedule generation."""
@@ -48,6 +54,7 @@ class LightController:
         self._holding_logged = False
         self._on_time = 0.0
         self.turn_off()  # Start with lights off
+        self.on_reason = OnReason.NOT_ON
 
     def update(self):
         """Update system state: check inputs and control lights."""
@@ -119,11 +126,15 @@ class LightController:
                 self._holding_logged = False
             return False
 
+        if schedule_on:
+            self.on_reason = OnReason.SCHEDULE
+        elif activity_on:
+            self.on_reason = OnReason.ACTIVITY
         if schedule_on or activity_on:
             self.turn_on()
             if not self._on_logged:
                 logging.info("Lights switched --ON-- : %s in darkness",
-                             "Schedule" if schedule_on else "Activity")
+                             self.on_reason.name)
                 self._on_logged = True
                 self._off_logged = False
                 self._holding_logged = False
@@ -165,6 +176,7 @@ class LightController:
     def turn_off(self):
         """Turn off lights."""
         self._set_lights(0)
+        self.on_reason = OnReason.NOT_ON
 
     def cleanup(self):
         """Cleanup GPIO resources."""
