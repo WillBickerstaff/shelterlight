@@ -194,7 +194,7 @@ def main(stop_event: threading.Event):
     init_log(args.log_level)
 
     if args.retrain:
-        logging.info("Manual model retraining triggered via CLI."
+        logging.info("Manual model retraining triggered via CLI.")
         scheduler = LightScheduler()
         scheduler.update_daily_schedule()
         logging.info("Model retraining and schedule generation complete.")

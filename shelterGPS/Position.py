@@ -12,6 +12,7 @@ Version: 0.1
 
 import datetime as dt
 import logging
+import os
 import re
 import serial
 import subprocess
