@@ -182,56 +182,13 @@ class LightModel(SchedulerComponent):
             end_time = get_now()
             start_time = end_time - dt.timedelta(days=days_history)
 
-            # Build the complete interval grid
-            interval_minutes = self.interval_minutes
-            timestamps = []
-            current = start_time.replace(minute=0, second=0, microsecond=0)
-            while current < end_time:
-                timestamps.append(current)
-                current += dt.timedelta(minutes=interval_minutes)
-
-            df_intervals = pd.DataFrame({'timestamp': timestamps})
-            df_intervals['date'] = df_intervals['timestamp'].dt.date
-
-            # Pull activity_log timestamps
-            engine = self.db.get_alchemy_engine()
-            activity_query = """
-                    SELECT timestamp FROM activity_log
-                    WHERE timestamp >= %(start)s AND timestamp < %(end)s
-                """
-            df_activity = pd.read_sql_query(
-                activity_query,
-                con=engine,
-                params={'start': start_time, 'end': end_time})
-
-            activity_ts = df_activity['timestamp'].tolist()
-
-            # Assign activity label (1 for activity in interval, else 0)
-            flags = []
-            for ts in df_intervals['timestamp']:
-                window_end = ts + dt.timedelta(minutes=interval_minutes)
-                has_activity = any(ts <= a < window_end for a in activity_ts)
-                flags.append(1 if has_activity else 0)
-
-            df_intervals['activity_pin'] = flags
-
-            # - Schedule accuracy query
-            schedule_query = """
-                SELECT
-                    date,
-                    interval_number,
-                    was_correct,
-                    false_positive,
-                    false_negative,
-                    confidence
-                FROM light_schedules
-                WHERE date >= %(start)s AND date < %(end)s
-            """
-            df_schedules = pd.read_sql_query(
-                schedule_query,
-                engine,
-                params={'start': start_time.date(), 'end': end_time.date()}
-            )
+            df_intervals = self._build_interval_grid(start_time, end_time)
+            activity_ts = self._load_activity_data(start_time, end_time)
+            df_intervals = self._assign_activity_flags(
+                df_intervals, activity_ts)
+            df_schedules = self._load_schedule_data(start_time, end_time)
+            df_intervals, df_schedules = self._filter_no_activity_days(
+                df_intervals, df_schedules)
 
             logging.info(f"Training set: {len(df_intervals)} intervals, "
                          f"{sum(df_intervals['activity_pin'])} with activity")
@@ -243,6 +200,142 @@ class LightModel(SchedulerComponent):
 
         # Return the complete dataset
         return df_intervals, df_schedules
+
+    def _filter_no_activity_days(self,
+                                 df_intervals: pd.DataFrame,
+                                 df_schedules: pd.DataFrame
+                                 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Filter out dates with no recorded activity from training data.
+
+        Args
+        ----
+            df_intervals (DataFrame): Interval-level data with
+                'activity_pin' column
+            df_schedules (DataFrame): Schedule accuracy data by date
+
+        Returns
+        -------
+            Tuple of filtered (df_intervals, df_schedules)
+        """
+        activity_by_day = df_intervals.groupby("date")["activity_pin"].sum()
+        active_dates = activity_by_day[activity_by_day > 0].index
+
+        filtered_intervals = df_intervals[
+            df_intervals["date"].isin(active_dates)]
+        filtered_schedules = df_schedules[
+            df_schedules["date"].isin(active_dates)]
+
+        logging.info("Filtered out %d no-activity days; %d days retained.",
+                     len(activity_by_day) - len(active_dates),
+                     len(active_dates))
+        return filtered_intervals, filtered_schedules
+
+    def _load_schedule_data(self, start: dt.datetime,
+                            end: dt.datetime) -> pd.DataFrame:
+        """Load light schedule evaluation data from the database.
+
+        Args
+        ----
+            start (datetime): Start of the date range (inclusive)
+            end (datetime): End of the date range (exclusive)
+
+        Returns
+        -------
+            DataFrame containing columns:
+                - date
+                - interval_number
+                - was_correct
+                - false_positive
+                - false_negative
+                - confidence
+        """
+        query = """
+            SELECT
+                date,
+                interval_number,
+                was_correct,
+                false_positive,
+                false_negative,
+                confidence
+            FROM light_schedules
+            WHERE date >= %(start)s AND date < %(end)s
+        """
+        engine = self.db.get_alchemy_engine()
+        return pd.read_sql_query(
+            query, engine, params={'start': start.date(), 'end': end.date()})
+
+    def _assign_activity_flags(self,
+                               df_intervals: pd.DataFrame,
+                               activity_ts: list[dt.datetime]) -> pd.DataFrame:
+        """Assign activity flags to each interval.
+
+        Args
+        ----
+            df_intervals (DataFrame): DataFrame of intervals with 'timestamp'
+            activity_ts (list[datetime]): List of activity timestamps
+
+        Returns
+        -------
+            DataFrame with an added 'activity_pin' column
+        """
+        interval_minutes = self.interval_minutes
+        flags = []
+
+        for ts in df_intervals['timestamp']:
+            window_end = ts + dt.timedelta(minutes=interval_minutes)
+            has_activity = any(ts <= a < window_end for a in activity_ts)
+            flags.append(1 if has_activity else 0)
+
+        df_intervals = df_intervals.copy()
+        df_intervals['activity_pin'] = flags
+        return df_intervals
+
+    def _load_activity_data(self, start: dt.datetime,
+                            end: dt.datetime) -> list[dt.datetime]:
+        """Load activity timestamps from the database.
+
+        Args
+        ----
+            start (datetime): Start of the date range
+            end (datetime): End of the date range
+
+        Returns
+        -------
+            List of datetime timestamps where activity occurred.
+        """
+        query = """
+            SELECT timestamp FROM activity_log
+            WHERE timestamp >= %(start)s AND timestamp < %(end)s
+        """
+        engine = self.db.get_alchemy_engine()
+        df = pd.read_sql_query(query, con=engine,
+                               params={'start': start, 'end': end})
+        return df['timestamp'].tolist()
+
+    def _build_interval_grid(self, start: dt.datetime,
+                             end: dt.datetime) -> pd.DataFrame:
+        """Build a DataFrame of time intervals between start and end.
+
+        Args
+        ----
+            start (datetime): Start of the interval range
+            end (datetime): End of the interval range
+
+        Returns
+        -------
+            DataFrame with 'timestamp' and 'date' columns for each interval
+        """
+        interval_minutes = self.interval_minutes
+        current = start.replace(minute=0, second=0, microsecond=0)
+        timestamps = []
+
+        while current < end:
+            timestamps.append(current)
+            current += dt.timedelta(minutes=interval_minutes)
+
+        df = pd.DataFrame({'timestamp': timestamps})
+        df['date'] = df['timestamp'].dt.date
+        return df
 
     def _add_schedule_accuracy_features(
                                 self, df: pd.DataFrame,
