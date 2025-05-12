@@ -17,7 +17,6 @@ import pandas as pd
 import numpy as np
 import psycopg2
 import lightlib.common as llc
-from typing import Optional
 from scheduler.base import SchedulerComponent
 
 
@@ -56,7 +55,7 @@ class ScheduleStore(SchedulerComponent):
             interval = int(row.interval_number)
             start_dt = dt.datetime.combine(
                 schedule_date, dt.time(0, 0), tzinfo=dt.timezone.utc) + \
-                    dt.timedelta(minutes=interval * self.interval_minutes)
+                dt.timedelta(minutes=interval * self.interval_minutes)
             end_dt = start_dt + dt.timedelta(minutes=self.interval_minutes)
 
             schedule[interval] = {
@@ -92,7 +91,7 @@ class ScheduleStore(SchedulerComponent):
                         ON CONFLICT (date, interval_number) DO UPDATE
                         SET prediction = EXCLUDED.prediction;
                         """, (schedule_date, int(interval), info["start"],
-                        info["end"], info["prediction"]))
+                              info["end"], info["prediction"]))
 
             self.db.conn.commit()  # Commit transaction
             logging.info(f"Stored schedule for {schedule_date} in database.")

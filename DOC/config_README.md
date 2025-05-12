@@ -252,9 +252,11 @@ If the USB device is removed and re-inserted, a new backup will be created.
 
 Model configuration options used to train the LightGBM prediction engine for light scheduling. You can select which **feature set** to use for training and prediction.
 
-| Option         | Type | Default   | Description                                |
-| -------------- | ---- | --------- | ------------------------------------------ |
-| `feature_set`  | str  | `DEFAULT` | Which feature set to use for model input.  |
+| Option                   | Type  | Default   | Description                                                                                                                                                    |
+| ------------------------ | ----- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feature_set`            | str   | `DEFAULT` | Which feature set to use for model input.                                                                                                                      |
+| `confidence_threshold`   | float | `0.6`     | Threshold at which the models confidence will determine that lights should be on.                                                                              |
+| `train_with_silent_days` | bool  | `False`   | Train the models using days where no activity was seen. (Enabling can have a negative impact on model behaviour if long periods of inactivity are experienced) |
 
 ### Supported `feature_set` values:
 

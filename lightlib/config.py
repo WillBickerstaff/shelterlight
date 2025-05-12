@@ -186,7 +186,7 @@ class ConfigLoader:
                                          "accepts_list": False},
 
             "persistent_data_JSON":     {"value": "persist.json",
-                                              "type": str,
+                                         "type": str,
                                          "is_pin": False,
                                          "accepts_list": False},
         },
@@ -233,6 +233,16 @@ class ConfigLoader:
                                          "type": str,
                                          "is_pin": False,
                                          "accepts_list": False},
+
+            "confidence_threshold":     {"value": 0.6,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "train_with_silent_days":   {"value": False,
+                                         "type": bool,
+                                         "is_pin": False,
+                                         "accepts_list": False}
         }
     }
 
@@ -285,10 +295,22 @@ class ConfigLoader:
         return self._valid_config
 
     @property
+    def confidence_threshold(self) -> float:
+        """Minimimu prediction confidence threshold for lights ON."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "confidence_threshold")
+
+    @property
+    def train_with_silent_days(self) -> bool:
+        """Train the model on days where no activity occurred."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "train_with_silent_days")
+
+    @property
     def model_features(self) -> int:
         """Model feature_set to use for training."""
         model_str = self.get_config_value(config=self.config, section="MODEL",
-                                     option="feature_set").upper()
+                                          option="feature_set").upper()
         try:
             return FeatureSet[model_str]
         except KeyError:

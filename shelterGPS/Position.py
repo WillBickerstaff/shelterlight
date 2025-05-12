@@ -699,9 +699,8 @@ class GPS:
                           "n" if msg == "RMC" else "",
                           msg)
             return False
-        self._log_msg(logging.INFO,
-                      "Got a%s %s Message!!!", "n" if msg_type == "RMC" else "",
-                      msg_type)
+        self._log_msg(logging.INFO, "Got a%s %s Message!!!",
+                      "n" if msg_type == "RMC" else "", msg_type)
 
         for entry in self.msg_validate:
             if msg_type == entry['MSG']:
@@ -714,11 +713,13 @@ class GPS:
                                   "%s message is valid.", msg_type)
                     return True
                 self._log_msg(logging.INFO,
-                    "GPS message:\n%s\ndoes not include a validated data "
-                    "indicator. (field %s does not contain%s%s)",
-                    msg, valid_idx, " any of "if msg == "GGA" else " ",
-                    list(valid_vals) if isinstance(valid_vals, str) else
-                    valid_vals)
+                              "GPS message does not include a validated "
+                              "data indicator. (field %s does not contain "
+                              "%s%s)\n\t%s",
+                              valid_idx, " any of "if msg == "GGA" else " ",
+                              list(valid_vals) if isinstance(
+                                  valid_vals, str) else
+                              valid_vals, msg)
                 return False
 
         self._log_msg(logging.DEBUG,
@@ -835,9 +836,8 @@ class GPS:
         except (ValueError, IndexError) as e:
             if self._log_msgs:
                 logging.error("\n%s", "-"*79)
-                logging.error("GPS: *** Invalid UTC time format '%s'. Error: %s",
+                logging.error("*** Invalid UTC time format '%s'. Error: %s",
                               utc_time, e)
-                log_caller(module="GPS")
             raise ValueError(f"Invalid UTC time format: {utc_time}") from e
 
         try:
@@ -869,10 +869,9 @@ class GPS:
     def _sync_system_time(self) -> None:
         """Set system time to UTC datetime from GPS fix."""
         if os.name != 'posix':
-                logging.warning(
-                    "System time setting unavailable on "
-                    "non-Linux systems.")
-                return
+            logging.warning("System time setting unavailable on "
+                            "non-Linux systems.")
+            return
 
         if self._datetime_established:
             iso_time = self._dt.isoformat()

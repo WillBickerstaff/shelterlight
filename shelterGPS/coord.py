@@ -68,7 +68,8 @@ class Coordinate:
         if direction is not None:
             self.direction = direction
         if gps_string is not None:
-            logging.debug("Coordinate Initialized with GPS string %s", gps_string)
+            logging.debug("Coordinate Initialized with GPS string %s",
+                          gps_string)
             self.gps_string = gps_string
         self._calc_coords()
 

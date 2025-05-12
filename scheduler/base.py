@@ -42,4 +42,4 @@ class SchedulerComponent:
         self.schedule_cache = schedule_cache
         self.features = features  # Optional dependency
         logging.debug("[%s] Config applied: interval minutes = %s",
-                     self.__class__.__name__, interval_minutes)
+                      self.__class__.__name__, interval_minutes)

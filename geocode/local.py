@@ -106,7 +106,7 @@ class Location():
             tz = df.get("Timezone").iloc[0] \
                 if not df.empty and "Timezone" in df else None
             self._tz = pytz.timezone(tz)
-            logging.info("config location is: %s\%s. Timezone: %s",
+            logging.info("config location is: %s/%s. Timezone: %s",
                          place, iso, self.timezone)
             logging.info("Position of config location is: lat %s, lng %s",
                          self.latitude, self.longitude)

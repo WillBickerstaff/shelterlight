@@ -20,6 +20,7 @@ from scheduler.base import SchedulerComponent
 from lightlib.config import ConfigLoader
 from lightlib.common import get_now
 
+
 class LightModel(SchedulerComponent):
     """Train and apply a LightGBM model to predict light activation needs.
 
@@ -187,8 +188,9 @@ class LightModel(SchedulerComponent):
             df_intervals = self._assign_activity_flags(
                 df_intervals, activity_ts)
             df_schedules = self._load_schedule_data(start_time, end_time)
-            df_intervals, df_schedules = self._filter_no_activity_days(
-                df_intervals, df_schedules)
+            if not ConfigLoader().train_with_silent_days:
+                df_intervals, df_schedules = self.activity_days(
+                    df_intervals, df_schedules)
 
             logging.info(f"Training set: {len(df_intervals)} intervals, "
                          f"{sum(df_intervals['activity_pin'])} with activity")

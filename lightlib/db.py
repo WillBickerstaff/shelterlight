@@ -12,7 +12,7 @@ Version: 0.1
 import logging
 import psycopg2
 import time
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, SQLAlchemyError
 from lightlib.config import ConfigLoader
 from typing import Optional, Tuple, List
 
@@ -242,7 +242,7 @@ class DB:
 
     def get_alchemy_engine(self):
         """Return an SQLAlchemy engine or fallback to None on failure."""
-        if  self._alchemy_engine is None and self._alchemy_exists:
+        if self._alchemy_engine is None and self._alchemy_exists:
             try:
                 uri = f"postgresql://{self._db_user}:{self._db_password}" \
                       f"@{self._db_host}:{self._db_port}/{self._db_database}"

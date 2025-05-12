@@ -15,8 +15,6 @@ import logging
 import datetime as dt
 import pandas as pd
 import numpy as np
-from lightlib.persist import PersistentData
-from lightlib.common import get_today, get_tomorrow, get_now
 from scheduler.base import SchedulerComponent
 
 
@@ -165,7 +163,8 @@ class FeatureEngineer(SchedulerComponent):
         ]
 
     def _get_rolling_count_features(self, timestamp: dt.datetime,
-                                history_days: int = 30) -> dict[str,float]:
+                                    history_days: int = 30
+                                    ) -> dict[str, float]:
         """Determine rolling count based features.
 
         Returns
@@ -178,14 +177,12 @@ class FeatureEngineer(SchedulerComponent):
         totals = self._get_past_activity_count(timestamp.date(), history_days)
 
         if not totals:
-            return {"rolling_count_1h": 0.0,
-                    "rolling_count_1d":0.0}
+            return {"rolling_count_1h": 0.0, "rolling_count_1d": 0.0}
 
         lookback_intervals = max(1, 60 // self.interval_minutes)
         recent_intervals = [
-            (interval_number - i) % intervals_per_day for i in \
-            range(lookback_intervals)
-            ]
+            (interval_number - i) % intervals_per_day for i in
+            range(lookback_intervals)]
 
         counts_1h = [totals.get(i, 0) for i in recent_intervals]
         counts_1d = totals.get(interval_number, 0)
@@ -339,7 +336,7 @@ class FeatureEngineer(SchedulerComponent):
             interval_start = timestamp.replace(
                 second=0, microseconds=0,
                 minute=(timestamp.minute // interval_minutes))
-            interva_end = interval_start + dt.timedelta(
+            interval_end = interval_start + dt.timedelta(
                 minutes=interval_minutes)
 
             with self.db.conn.cursor() as cur:
@@ -356,7 +353,7 @@ class FeatureEngineer(SchedulerComponent):
     def _get_past_activity_count(
             self, date: dt.date, history_days: int = 1
             ) -> dict[int, int]:
-        """Retrieves total activity counts for intervals over n days.
+        """Retrieve total activity counts for intervals over n days.
 
         Args
         ----

@@ -30,6 +30,7 @@ class ExitAfter(Exception):
 
     pass
 
+
 def cleanup_resources(gps: SunTimes, light_control: LightController) -> None:
     """Perform resource cleanup for GPS, GPIO, and logging."""
     logging.info("Performing resource cleanup...")
@@ -140,7 +141,7 @@ def daily_schedule_generation(stop_event: threading.Event,
 
 
 def re_eval_history(force: bool = False):
-    """Optional mode: re-evaluate schedules and exit."""
+    """Re-evaluate schedules and exit."""
     from scheduler.evaluation import ScheduleEvaluator
     from lightlib.db import DB
 
@@ -165,7 +166,7 @@ def main_loop():
             logging.info("Configuration reloaded; restarting main loop.")
             stop_event.set()
             continue  # Restart the main loop
-        except ExitAfter as e:
+        except ExitAfter:
             logging.info("Re-evaluated all historic schedules")
             stop_event.set()
             break

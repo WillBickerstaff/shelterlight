@@ -15,10 +15,11 @@ import datetime as dt
 import logging
 import time
 from threading import Lock
-from lightlib.db import DB
+from typing import Optional
 from collections import OrderedDict
 from lightlib.common import get_today, get_tomorrow, get_now, get_yesterday
-from typing import Optional
+from lightlib.db import DB
+from lightlib.config import ConfigLoader
 from scheduler.features import FeatureEngineer
 from scheduler.model import LightModel
 from scheduler.evaluation import ScheduleEvaluator
@@ -80,7 +81,7 @@ class LightScheduler:
         # Core state
         self.model = None
         self.interval_minutes = 10
-        self.min_confidence = 0.6
+        self.min_confidence = ConfigLoader().confidence_threshold
         self.schedule_cache = OrderedDict()
         self.db = None
         self._warned_missing = None

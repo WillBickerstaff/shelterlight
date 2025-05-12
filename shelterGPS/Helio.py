@@ -12,9 +12,7 @@ Version: 0.1
 import datetime as dt
 import threading
 import time
-import subprocess
 import logging
-import os
 import pytz
 from timezonefinder import TimezoneFinder
 from enum import Enum
@@ -403,7 +401,7 @@ class SunTimes:
                     self._attempt_fix_for_today()
                 except Exception as e:
                     logging.error("An error occurred during GPS fixing: %s",
-                                  e, exc_info=True )
+                                  e, exc_info=True)
                 # Wait for retry interval
                 time.sleep(ConfigLoader().gps_fix_retry_interval)
         finally:
@@ -549,10 +547,10 @@ class SunTimes:
         geographic position (observer).
 
         This method computes and stores solar event times (sunrise and sunset)
-        for today and the next 2 days using the `Observer` instance's geographic
-        location (latitude, longitude, and optionally altitude). The calculated
-        times stored in attributes `_sr_today`, `_ss_today`, `_sr_tomorrow`,
-        and `_ss_tomorrow` accessible through the properties
+        for today and the next 2 days using the `Observer` instance's
+        geographic location (latitude, longitude, and optionally altitude).
+        The calculated times stored in attributes `_sr_today`, `_ss_today`,
+        `_sr_tomorrow`, and `_ss_tomorrow` accessible through the properties
         `UTC_sunrise_today', `UTC_sunset_today`, `UTC_sunrise_tomorrow` and
         `UTC_sunset_tomorrow` for future access.
 
@@ -842,14 +840,14 @@ class SunTimes:
             solar_times = {"sunrise": sunrise, "sunset": sunset,
                            "polar": polar}
             logging.debug("Calculated solar times at location %s, %s"
-                         "\n\tfor     : %s"
-                         "\n\tSunrise : %s"
-                         "\n\tSunset  : %s"
-                         "\n\tPolar Event: %s ",
-                         round(observer.latitude, 2),
-                         round(observer.longitude, 2),
-                         date, sunrise.isoformat(),
-                         sunset.isoformat(), polar.name)
+                          "\n\tfor     : %s"
+                          "\n\tSunrise : %s"
+                          "\n\tSunset  : %s"
+                          "\n\tPolar Event: %s ",
+                          round(observer.latitude, 2),
+                          round(observer.longitude, 2),
+                          date, sunrise.isoformat(),
+                          sunset.isoformat(), polar.name)
             return solar_times
 
         except InvalidObserverError as ioe:

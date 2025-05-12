@@ -18,14 +18,16 @@ from lightlib.common import get_now
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
 from scheduler.Schedule import LightScheduler
-from shelterGPS.Helio import SunTimes, PolarDayError, PolarNightError, \
-    PolarEvent
+from shelterGPS.Helio import SunTimes, PolarDayError, PolarNightError
 
 
 class OnReason(Enum):
+    """Enum representing the reason a light output is ON."""
+
     NOT_ON = 0
     ACTIVITY = 1
     SCHEDULE = 2
+
 
 class LightController:
     """Manage light on status, activity recording and schedule generation."""
