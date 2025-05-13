@@ -242,7 +242,12 @@ class ConfigLoader:
             "train_with_silent_days":   {"value": False,
                                          "type": bool,
                                          "is_pin": False,
-                                         "accepts_list": False}
+                                         "accepts_list": False},
+
+            "filter_low_quality_days":  {"value": True,
+                                         "type": bool,
+                                         "is_pin": False,
+                                         "accepts_list": True}
         }
     }
 
@@ -293,6 +298,12 @@ class ConfigLoader:
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
+
+    @property
+    def filter_low_quality_days(self) -> bool:
+        """Filter days with excessive false positives or negatives."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "filter_low_quality_days")
 
     @property
     def confidence_threshold(self) -> float:

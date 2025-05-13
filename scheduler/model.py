@@ -191,6 +191,9 @@ class LightModel(SchedulerComponent):
             if not ConfigLoader().train_with_silent_days:
                 df_intervals, df_schedules = self.activity_days(
                     df_intervals, df_schedules)
+            if ConfigLoader().filter_low_quality_days:
+                df_intervals, df_schedules = self._filter_low_quality_days(
+                    df_intervals, df_schedules)
 
             logging.info(f"Training set: {len(df_intervals)} intervals, "
                          f"{sum(df_intervals['activity_pin'])} with activity")
@@ -202,6 +205,49 @@ class LightModel(SchedulerComponent):
 
         # Return the complete dataset
         return df_intervals, df_schedules
+
+    def _filter_low_quality_days(
+        self,
+        df_intervals: pd.DataFrame,
+        df_schedules: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Filter out statistically abnormal prediction days using 3σ rule.
+
+        Days with False Positive or False Negative rates more than 3 std dev
+        above the mean are dropped.
+
+        Returns
+        -------
+            Tuple of filtered (df_intervals, df_schedules)
+        """
+        grouped = df_schedules.groupby("date").agg({
+            "false_positive": "sum",
+            "false_negative": "sum",
+            "was_correct": "count"
+        }).rename(columns={"was_correct": "total"})
+
+        grouped["fp_rate"] = grouped["false_positive"] / grouped["total"]
+        grouped["fn_rate"] = grouped["false_negative"] / grouped["total"]
+
+        # Compute mean and 3σ thresholds
+        fp_mean, fp_std = grouped["fp_rate"].mean(), grouped["fp_rate"].std()
+        fn_mean, fn_std = grouped["fn_rate"].mean(), grouped["fn_rate"].std()
+
+        fp_limit = fp_mean + 3 * fp_std
+        fn_limit = fn_mean + 3 * fn_std
+
+        good_days = grouped[
+            (grouped["fp_rate"] <= fp_limit) &
+            (grouped["fn_rate"] <= fn_limit)
+        ].index
+
+        logging.info("Filtered out %d 3σ outlier days; %d days retained.",
+                     len(grouped) - len(good_days), len(good_days))
+
+        return (
+            df_intervals[df_intervals["date"].isin(good_days)],
+            df_schedules[df_schedules["date"].isin(good_days)]
+        )
 
     def _filter_no_activity_days(self,
                                  df_intervals: pd.DataFrame,
