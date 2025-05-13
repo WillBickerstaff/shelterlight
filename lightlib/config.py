@@ -248,6 +248,13 @@ class ConfigLoader:
                                          "type": bool,
                                          "is_pin": False,
                                          "accepts_list": True}
+        },
+        # ------------------------------------------------------------#
+        "FALLBACK": {
+            "schedule_file":            {"value": "Fallback_Schedule.csv",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False}
         }
     }
 
@@ -304,10 +311,15 @@ class ConfigLoader:
         """Filter days with excessive false positives or negatives."""
         return self.get_config_value(self.config, "MODEL",
                                      "filter_low_quality_days")
+    @property
+    def fallback_schedule_file(self) -> str:
+        """Get the cofigured fallback schedule filename."""
+        return self.get_config_value(self.config, "FALLBACK",
+                                     "schedule_file")
 
     @property
     def confidence_threshold(self) -> float:
-        """Minimimu prediction confidence threshold for lights ON."""
+        """Minimum prediction confidence threshold for lights ON."""
         return self.get_config_value(self.config, "MODEL",
                                      "confidence_threshold")
 
