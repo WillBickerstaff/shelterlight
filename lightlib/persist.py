@@ -95,6 +95,7 @@ class PersistentData:
         self._current_latitude = None
         self._current_longitude = None
         self._current_altitude = None
+        self._local_timezone = None
         self._missed_fixes = 0
         self._time_to_fix = None
         self._initialize_file()
@@ -112,6 +113,7 @@ class PersistentData:
                     "missed_fixes": 0,
                     "last_latitude": None,
                     "last_longitude": None,
+                    "local_timezone": None,
                     "altitude": None,
                     "sunrise_times": [],
                     "sunset_times": [],
@@ -187,6 +189,15 @@ class PersistentData:
         if getattr(self, flag_attr) != get_today():
             logging.error(message, missing_date)
             setattr(self, flag_attr, get_tomorrow())
+
+    @property
+    def local_timezone(self) -> Optional[str]:
+        """Local timezone of the systems location."""
+        return self._local_timezone
+
+    @local_timezone.setter
+    def local_timezone(self, value: str):
+        self._local_timezone = value
 
     @property
     def time_to_fix(self) -> int:
@@ -378,6 +389,10 @@ class PersistentData:
                 if self._current_altitude is None:
                     key = "altitude"
                     self._current_altitude = data.get(key)
+
+                if self._local_timezone is None:
+                    key = "local_timezone"
+                    self._local_timezone = data.get(key)
 
                 if self._missed_fixes is None:
                     key = "missed_fixes"

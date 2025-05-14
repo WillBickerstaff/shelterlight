@@ -179,7 +179,6 @@ class ScheduleStore(SchedulerComponent):
         -------
             dict: Combined schedule for yesterday & today.
         """
-
         # We must include yesterday, depending on how intervals
         # are setup times just after midnight may be included
         # in yesterdays schedule
@@ -187,3 +186,58 @@ class ScheduleStore(SchedulerComponent):
         sched_today = self.get_schedule(llc.get_today())
 
         return sched_yesterday | sched_today
+
+    def store_fallback(self,
+                       schedule_date: dt.date,
+                       schedule: dict[int, dict]) -> dict[int, dict]:
+        """Store a fallback schedule directly into the database.
+
+        This version accepts a fully constructed schedule dictionary where each
+        key is an interval number and the value contains start, end, and
+        prediction.
+
+        Parameters
+        ----------
+        schedule_date : datetime.date
+            The date the schedule applies to.
+
+        schedule : dict[int, dict]
+            A dictionary of interval_number -> {start, end, prediction}
+
+        Returns
+        -------
+        dict[int, dict]
+            The stored schedule (same as input).
+        """
+        if not self.db or not self.db.conn or self.db.conn.closed:
+            logging.error(
+                "No valid database connection to store fallback schedule.")
+            return {}
+
+        try:
+            with self.db.conn.cursor() as cur:
+                for interval, entry in schedule.items():
+                    cur.execute("""
+                        INSERT INTO light_schedules
+                            (date, interval_number, start_time, end_time,
+                             prediction)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (date, interval_number) DO UPDATE
+                        SET prediction = EXCLUDED.prediction;
+                        """, (
+                            schedule_date,
+                            int(interval),
+                            entry["start"],
+                            entry["end"],
+                            int(entry["prediction"])
+                        ))
+            self.db.conn.commit()
+            logging.info("Stored fallback schedule for %s with %d intervals.",
+                         schedule_date, len(schedule))
+            return schedule
+
+        except Exception as e:
+            logging.error("Failed to store fallback schedule: %s", e,
+                          exc_info=True)
+            self.db.conn.rollback()
+            return {}

@@ -24,6 +24,7 @@ from scheduler.features import FeatureEngineer
 from scheduler.model import LightModel
 from scheduler.evaluation import ScheduleEvaluator
 from scheduler.store import ScheduleStore
+from scheduler.fallback import Fallback
 
 
 class LightScheduler:
@@ -237,8 +238,8 @@ class LightScheduler:
 
         predictions, probabilities = self.model_engine._predict_schedule(df)
 
-        return self.store.store_schedule(schedule_date, df,
-                                         predictions, probabilities)
+        return self._apply_fallback(schedule_date, df,
+                                    predictions, probabilities)
 
     def update_daily_schedule(self) -> Optional[dict]:
         """Generate and store tomorrow's schedule.
@@ -448,3 +449,83 @@ class LightScheduler:
             )
 
         logging.info("\n" + "\n".join(lines))
+
+    def _apply_fallback(self,
+                        schedule_date: dt.date,
+                        df: pd.DataFrame,
+                        predictions: list[int],
+                        probabilities: list[float]
+                        ) -> dict[int, dict]:
+        """
+        Evaluate model prediction confidence and apply fallback strategy.
+
+        This method compares the model's output probabilities against the
+        configured minimum confidence threshold. If none of the predictions
+        exceed the threshold, it applies a fallback strategy based on the
+        `[FALLBACK]` configuration.
+
+        The fallback resolution order depends on `fallback_action`:
+            - "history": Try the most accurate past schedule for the same
+                         weekday, falling back to the configured schedule file
+                         if not found.
+            - "schedule": Use the configured fallback schedule file directly.
+            - "none": Always use the model output, even if confidence is low.
+
+        If all fallback methods fail, the low-confidence model output is
+        used as-is.
+
+        Parameters
+        ----------
+        schedule_date : datetime.date
+            The target date for the schedule being generated.
+
+        df : pandas.DataFrame
+            The feature DataFrame used during prediction.
+
+        predictions : list[int]
+            Binary predictions from the model for each interval.
+
+        probabilities : list[float]
+            Corresponding prediction confidences (0.0–1.0) for each interval.
+
+        Returns
+        -------
+        dict[int, dict]
+            The final schedule, either stored from model predictions or
+            fallback.
+        """
+        confidence_ok = any(p >= self.min_confidence for p in probabilities)
+        fallback_mode = ConfigLoader().fallback_action.lower()
+
+        if confidence_ok or fallback_mode == "none":
+            return self.store.store_schedule(schedule_date, df,
+                                             predictions, probabilities)
+
+        logging.warning("Model confidence too low. Fallback strategy: %s",
+                        fallback_mode)
+
+        # Instantiate fallback helper locally
+        fallback = Fallback()
+        fallback.set_config(
+            db=self.db,
+            interval_minutes=self.interval_minutes,
+            schedule_cache=self.schedule_cache,
+            features=self.features
+        )
+
+        fallback_schedule = None
+        if fallback_mode == "history":
+            fallback_schedule = fallback.best_historic_method(schedule_date)
+            if not fallback_schedule:
+                fallback_schedule = fallback.generate_schedule(schedule_date)
+
+        elif fallback_mode == "schedule":
+            fallback_schedule = fallback.generate_schedule(schedule_date)
+
+        if fallback_schedule:
+            return self.store.store_fallback(schedule_date, fallback_schedule)
+
+        logging.warning(
+            "Fallback failed. Using low-confidence model schedule.")
+        return self.store.store_schedule(schedule_date, df,
+                                         predictions, probabilities)
