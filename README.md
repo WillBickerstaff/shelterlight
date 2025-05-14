@@ -69,6 +69,8 @@ The system runs on a **Raspberry Pi Zero** (or similar) and is built using **Pyt
   - [Automate the cleanup task using cron](#automate-the-cleanup-task-using-cron)
   - [To check auto-vacuum status](#to-check-auto-vacuum-status)
 - [Configuration Overview](#configuration-overview)
+- [Falllback Schedule Behaviour](#Fallback-Schedule-Behaviour)
+  - [Schedule file format](#Fallback-Schedule-File-Format)
 
 ---
 
@@ -798,3 +800,40 @@ sudo systemctl restart postgresql
 The system uses an `.ini` configuration file (`config.ini`) to control behaviour, GPIO pin assignments, database connection, location fallback, GPS settings, and more. Default values are embedded in the system and automatically used if options are missing.
 
 Full configuration documentation is provided in **[config_README.md](./DOC/config_README.md)**
+
+## Fallback Schedule Behaviour
+
+When the system detects that a machine-learned schedule has low confidence, it can optionally fall back to a safer alternative. This fallback behaviour is configured in the `[FALLBACK]` section of `config.ini`.
+
+There are three fallback modes:
+
+- **History**
+  Reuses the most accurate previously generated schedule for the same weekday from within a configurable number of past days (`history_days`).
+  If no suitable day is found, the system attempts to use a CSV-defined fallback schedule.
+  If both fail, the low-confidence schedule is used.
+
+- **Schedule**
+  Ignores history and attempts to build a schedule from a human-readable fallback file (`schedule_file`).
+  If the file is invalid or missing, the low-confidence schedule is used.
+
+- **None**
+  No fallback is applied. The schedule is used as-is, regardless of accuracy or confidence.
+
+### Fallback Schedule File Format
+
+The fallback file is a CSV (default: `Fallback_Schedule.csv`) that defines one or more light-on periods for each day. Each row specifies a day of the week (or `ANY`), an `on_time`, and a `duration` in **24-hour LOCAL time**. Any daylight saving time (DST) adjustments will be handled automatically.
+
+```csv
+day,    on_time, duration
+ANY,    01:30,   01:00
+ANY,    05:30,   01:00
+Monday, 18:00,   02:00
+```
+
+*Note* The times in the csv must be Local time.
+
+- day: ANY applies to all days, or specify a weekday (Monday, Tuesday, etc.)
+- on_time: When the light should turn on (HH:MM Local)
+- duration: How long the light should stay on (HH:MM)
+
+The system converts these blocks into UTC-based interval predictions using the configured interval_minutes, applying the correct local timezone offset for the day (including DST). It then builds a complete daily schedule for fallback use.

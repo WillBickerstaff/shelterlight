@@ -229,6 +229,11 @@ class ConfigLoader:
         },
         # ------------------------------------------------------------#
         "MODEL": {
+            "training_days":    {"value": 90,
+                                         "type": int,
+                                         "is_pin": False
+                                         "accepts_list": False},
+
             "feature_set":              {"value": "DEFAULT",
                                          "type": str,
                                          "is_pin": False,
@@ -251,8 +256,18 @@ class ConfigLoader:
         },
         # ------------------------------------------------------------#
         "FALLBACK": {
+            "action":                   {"value": "History",
+                                         "type": str,
+                                         "is_pin" False,
+                                         "accepts_list", False},
+
             "schedule_file":            {"value": "Fallback_Schedule.csv",
                                          "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "history_days":             {"value": 30,
+                                         "type": int,
                                          "is_pin": False,
                                          "accepts_list": False}
         }
@@ -307,15 +322,28 @@ class ConfigLoader:
         return self._valid_config
 
     @property
-    def filter_low_quality_days(self) -> bool:
-        """Filter days with excessive false positives or negatives."""
-        return self.get_config_value(self.config, "MODEL",
-                                     "filter_low_quality_days")
+    def fallback_history_days(self) -> int:
+        """Number of history days to look for a fallback schedule."""
+        return self.get_config_value(self.config, "FALLBACK",
+                                     "history_days")
+
     @property
     def fallback_schedule_file(self) -> str:
         """Get the cofigured fallback schedule filename."""
         return self.get_config_value(self.config, "FALLBACK",
                                      "schedule_file")
+
+    @property
+    def training_days_history(self) -> int:
+        """Get the number of days  to be used for training th emodel."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "training_days")
+
+    @property
+    def filter_low_quality_days(self) -> bool:
+        """Filter days with excessive false positives or negatives."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "filter_low_quality_days")
 
     @property
     def confidence_threshold(self) -> float:

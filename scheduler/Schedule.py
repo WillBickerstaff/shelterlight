@@ -85,6 +85,7 @@ class LightScheduler:
         self.schedule_cache = OrderedDict()
         self.db = None
         self._warned_missing = None
+        self.days_history = ConfigLoader().training_days_history
 
         self._initialize_components()
 
@@ -150,7 +151,7 @@ class LightScheduler:
         int
             The number of days to use for training, capped at MAX_DAYS_HISTORY.
         """
-        MAX_DAYS_HISTORY = 30   # Cap at 30 days
+        MAX_DAYS_HISTORY = self.days_days_history
         MIN_DAYS_HISTORY = 2    # Minimum to avoid meaningless tiny training
 
         try:

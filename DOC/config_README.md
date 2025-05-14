@@ -254,6 +254,7 @@ Model configuration options used to train the LightGBM prediction engine for lig
 
 | Option                    | Type  | Default   | Description                                                                                                                                                                           |
 | ------------------------- | ----- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_days`           | int   | `90`      | The number of days of historic data to use in training the model.                                                                                                                     |
 | `feature_set`             | str   | `DEFAULT` | Which feature set to use for model input.                                                                                                                                             |
 | `confidence_threshold`    | float | `0.6`     | Threshold at which the models confidence will determine that lights should be on.                                                                                                     |
 | `train_with_silent_days`  | bool  | `False`   | Train the models using days where no activity was seen. (Enabling can have a negative impact on model behaviour if long periods of inactivity are experienced)                        |
@@ -273,6 +274,7 @@ Model configuration options used to train the LightGBM prediction engine for lig
 - `COUNT`
   Adds long-term activation **count patterns** instead of activity averages.
 
+
 - `FULL_FEATURES`
   Combines all available features: time encodings, rolling activity and count trends, and historical accuracy.
 
@@ -280,4 +282,21 @@ Model configuration options used to train the LightGBM prediction engine for lig
   Placeholder for future user-defined feature sets.
 
 Each feature set includes different combinations of time encodings, activity trends, and historical accuracy metrics.
+
 ---
+
+## [FALLBACK]
+
+If the model generates a schedule with low confidence, these options define the fallback behaviour.
+
+| Option          | Type | Default                 | Description                                                                  |
+|-----------------|------|-------------------------|------------------------------------------------------------------------------|
+| `action`        | str  | `History`               | One of: `History`, `Schedule`, or `None`. See descriptions below.            |
+| `history_days`  | int  | `30`                    | Number of days in the past to search for the best matching weekday schedule. |
+| `schedule_file` | str  | `Fallback_Schedule.csv` | Path to the CSV file defining the fallback schedule format.                  |
+
+### `action` options:
+
+- **`History`**: Fallback first searches for the most accurate past schedule for the same weekday within the last `history_days`. If none is found, it attempts to load and apply the fallback `schedule_file`. If both fail, the low-confidence model output is used.
+- **`Schedule`**: Ignores history and tries to load a fallback schedule from `schedule_file`. If the file is missing or invalid, uses the low-confidence model output.
+- **`None`**: No fallback is applied — the schedule is always used, even if confidence is poor.
