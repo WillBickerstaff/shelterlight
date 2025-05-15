@@ -16,6 +16,7 @@ import datetime as dt
 import pandas as pd
 import numpy as np
 from scheduler.base import SchedulerComponent
+from lightlib.common import get_now
 
 
 class FeatureEngineer(SchedulerComponent):
@@ -124,6 +125,7 @@ class FeatureEngineer(SchedulerComponent):
             "historical_false_positives": historical_false_positives,
             "historical_false_negatives": historical_false_negatives,
             "historical_confidence": historical_confidence,
+            "recency": timestamp.year == get_now().year  # Crude fallback
         }
         feature_values.update(rolling_counts)
 
@@ -158,8 +160,9 @@ class FeatureEngineer(SchedulerComponent):
             'historical_accuracy',         # Past scheduling success rate
             'historical_false_positives',  # Past over-predictions
             'historical_false_negatives',  # Past under-predictions
-            'historical_confidence'        # Average confidence in past
+            'historical_confidence',       # Average confidence in past
                                            # schedules
+            'recency'                      # distinguish recent vs. past-year
         ]
 
     def _get_rolling_count_features(self, timestamp: dt.datetime,

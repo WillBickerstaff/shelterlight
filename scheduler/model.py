@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import scheduler.feature_sets as fset
+from typing import Optional
 from scheduler.base import SchedulerComponent
 from lightlib.config import ConfigLoader
 from lightlib.common import get_now
@@ -188,6 +189,19 @@ class LightModel(SchedulerComponent):
             df_intervals = self._assign_activity_flags(
                 df_intervals, activity_ts)
             df_schedules = self._load_schedule_data(start_time, end_time)
+
+            df_intervals["recency"] = 1
+            df_schedules["recency"] = 1
+
+            # Append past-year equivalent if available
+            df_old_intervals, df_old_schedules = self._load_past_year_period(
+                start_time, end_time)
+            if df_old_intervals is not None:
+                df_intervals = pd.concat(
+                    [df_intervals, df_old_intervals], ignore_index=True)
+                df_schedules = pd.concat(
+                    [df_schedules, df_old_schedules], ignore_index=True)
+
             if not ConfigLoader().train_with_silent_days:
                 df_intervals, df_schedules = self._filter_no_activity_days(
                     df_intervals, df_schedules)
@@ -205,6 +219,41 @@ class LightModel(SchedulerComponent):
 
         # Return the complete dataset
         return df_intervals, df_schedules
+
+    def _load_past_year_period(self, start: dt.datetime, end: dt.datetime
+                               ) -> tuple[Optional[pd.DataFrame],
+                                          Optional[pd.DataFrame]]:
+        """Load a historical training window for the same period 1 year ago.
+
+        Returns
+        -------
+        Tuple of (df_intervals, df_schedules) or (None, None) if not available.
+        """
+        start_old = start - dt.timedelta(days=365)
+        end_old = end - dt.timedelta(days=365)
+
+        # Check if data exists that far back
+        with self.db.conn.cursor() as cur:
+            cur.execute("SELECT MIN(timestamp) FROM activity_log;")
+            earliest = cur.fetchone()[0]
+
+        if earliest is None or earliest > start_old:
+            logging.info("No data available from 1 year ago. "
+                         "Skipping past-year training.")
+            return None, None
+
+        logging.info("Including training data from same period 1 year ago.")
+
+        df_old_intervals = self._build_interval_grid(start_old, end_old)
+        activity_ts_old = self._load_activity_data(start_old, end_old)
+        df_old_intervals = self._assign_activity_flags(
+            df_old_intervals, activity_ts_old)
+        df_old_schedules = self._load_schedule_data(start_old, end_old)
+
+        df_old_intervals["recency"] = 0
+        df_old_schedules["recency"] = 0
+
+        return df_old_intervals, df_old_schedules
 
     def _filter_low_quality_days(
         self,
@@ -249,7 +298,7 @@ class LightModel(SchedulerComponent):
         ].index
 
         logging.debug("original_days: %d, good_days: %d",
-                     original_days, len(good_days))
+                      original_days, len(good_days))
 
         logging.info("Filtered out %d 3σ outlier days; %d days retained.",
                      original_days - len(good_days), len(good_days))
