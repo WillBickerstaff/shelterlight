@@ -86,8 +86,9 @@ class LightModel(SchedulerComponent):
 
         # Assign sample weights based on recency
         # Recent data (recency=1) gets full weight; older data less
+        hist_weight = ConfigLoader().historic_weight
         weights = df["recency"].apply(
-            lambda r: 1.0 if r == 1 else 0.5)
+            lambda r: 1.0 if r == 1 else hist_weight)
 
         label_dist = pd.Series(y).value_counts().to_dict()
         logging.debug("y_train distribution: %s", label_dist)

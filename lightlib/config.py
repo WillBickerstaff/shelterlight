@@ -252,7 +252,11 @@ class ConfigLoader:
             "filter_low_quality_days":  {"value": True,
                                          "type": bool,
                                          "is_pin": False,
-                                         "accepts_list": True}
+                                         "accepts_list": True},
+            "historic_weight":          {"value": 0.5,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False}
         },
         # ------------------------------------------------------------#
         "FALLBACK": {
@@ -344,6 +348,12 @@ class ConfigLoader:
         """Get the number of days  to be used for training th emodel."""
         return self.get_config_value(self.config, "MODEL",
                                      "training_days")
+
+    @property
+    def historic_weight(self) -> float:
+        """Weight given to historic datta for model training."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "historic_weight")
 
     @property
     def filter_low_quality_days(self) -> bool:

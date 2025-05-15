@@ -259,6 +259,7 @@ Model configuration options used to train the LightGBM prediction engine for lig
 | `confidence_threshold`    | float | `0.6`     | Threshold at which the models confidence will determine that lights should be on.                                                                                                     |
 | `train_with_silent_days`  | bool  | `False`   | Train the models using days where no activity was seen. (Enabling can have a negative impact on model behaviour if long periods of inactivity are experienced)                        |
 | `filter_low_quality_days` | bool  | `True`    | Train the model using only days that fall within statistical norms of prediction quality. Uses 3 standard deviations of False Positive & False Negative rates to detect outlier days. |
+| `historic_weight`         | float | `0.5`     | Weight given to data for this time last year. Determines how much influence this data has on the model training.                                                                      |
 
 ### Supported `feature_set` values:
 
