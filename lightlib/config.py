@@ -229,9 +229,9 @@ class ConfigLoader:
         },
         # ------------------------------------------------------------#
         "MODEL": {
-            "training_days":    {"value": 90,
+            "training_days":            {"value": 90,
                                          "type": int,
-                                         "is_pin": False
+                                         "is_pin": False,
                                          "accepts_list": False},
 
             "feature_set":              {"value": "DEFAULT",
@@ -258,8 +258,8 @@ class ConfigLoader:
         "FALLBACK": {
             "action":                   {"value": "History",
                                          "type": str,
-                                         "is_pin" False,
-                                         "accepts_list", False},
+                                         "is_pin": False,
+                                         "accepts_list": False},
 
             "schedule_file":            {"value": "Fallback_Schedule.csv",
                                          "type": str,
@@ -320,6 +320,12 @@ class ConfigLoader:
     def valid_config(self) -> bool:
         """bool: Indicates if the current configuration is valid."""
         return self._valid_config
+
+    @property
+    def fallback_action(self) -> str:
+        """The fallback method to use when model confidence is low."""
+        return  self.get_config_value(self.config, "FALLBACK",
+                                       "action").lower()
 
     @property
     def fallback_history_days(self) -> int:

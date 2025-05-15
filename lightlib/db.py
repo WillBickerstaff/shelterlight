@@ -12,7 +12,8 @@ Version: 0.1
 import logging
 import psycopg2
 import time
-from sqlalchemy import create_engine, SQLAlchemyError
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 from lightlib.config import ConfigLoader
 from typing import Optional, Tuple, List
 

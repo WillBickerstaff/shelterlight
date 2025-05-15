@@ -1,4 +1,3 @@
-
 """shelterGPS.Position.
 
 Copyright (c) 2025 Will Bickerstaff
@@ -419,6 +418,7 @@ class GPS:
         if max_fix_time is None:
             max_fix_time = self._max_fix_time
 
+        fix_t = PersistentData().time_to_fix or self.pwr_up_wait
         logging.info("GPS: Starting fix attempt, expecting fix in ~%ds",
                      PersistentData().time_to_fix)
 
@@ -483,6 +483,7 @@ class GPS:
                       "GPS: Attempting to read %s message for %s seconds",
                       msg, max_time)
         msg_time = PersistentData().time_to_fix
+
         # Keep trying until we get the required message and it validates
         # or we reach the defined maximum attempt duration
         tick = self._fix_start_time

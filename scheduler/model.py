@@ -189,7 +189,7 @@ class LightModel(SchedulerComponent):
                 df_intervals, activity_ts)
             df_schedules = self._load_schedule_data(start_time, end_time)
             if not ConfigLoader().train_with_silent_days:
-                df_intervals, df_schedules = self.activity_days(
+                df_intervals, df_schedules = self._filter_no_activity_days(
                     df_intervals, df_schedules)
             if ConfigLoader().filter_low_quality_days:
                 df_intervals, df_schedules = self._filter_low_quality_days(
@@ -220,6 +220,13 @@ class LightModel(SchedulerComponent):
         -------
             Tuple of filtered (df_intervals, df_schedules)
         """
+        # Count unique days in originals unfiltered schedule dataset
+        original_days = df_schedules["date"].nunique()
+
+        # Only evaluate dates that exist in both datasets
+        valid_dates = set(df_intervals["date"].unique())
+        df_schedules = df_schedules[df_schedules["date"].isin(valid_dates)]
+
         grouped = df_schedules.groupby("date").agg({
             "false_positive": "sum",
             "false_negative": "sum",
@@ -241,8 +248,11 @@ class LightModel(SchedulerComponent):
             (grouped["fn_rate"] <= fn_limit)
         ].index
 
+        logging.debug("original_days: %d, good_days: %d",
+                     original_days, len(good_days))
+
         logging.info("Filtered out %d 3σ outlier days; %d days retained.",
-                     len(grouped) - len(good_days), len(good_days))
+                     original_days - len(good_days), len(good_days))
 
         return (
             df_intervals[df_intervals["date"].isin(good_days)],
@@ -273,9 +283,12 @@ class LightModel(SchedulerComponent):
         filtered_schedules = df_schedules[
             df_schedules["date"].isin(active_dates)]
 
-        logging.info("Filtered out %d no-activity days; %d days retained.",
+        logging.info("Filtered out %d no-activity days; "
+                     "%d interval days, %d schedule days retained.",
                      len(activity_by_day) - len(active_dates),
-                     len(active_dates))
+                     filtered_intervals['date'].nunique(),
+                     filtered_schedules['date'].nunique())
+
         return filtered_intervals, filtered_schedules
 
     def _load_schedule_data(self, start: dt.datetime,

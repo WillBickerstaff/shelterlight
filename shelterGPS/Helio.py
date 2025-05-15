@@ -529,14 +529,6 @@ class SunTimes:
         -------
             None
         """
-        # Use the updated coordinates or fallback coordinates
-        lat, lng, alt = self._get_coordinates()
-        # Determine the local timezone:
-        tz_finder = TimezoneFinder()
-        self._local_tz = pytz.timezone(
-            tz_finder.timezone_at(lng=lng, lat=lat))
-        PersistentData().local_timezone = self._local_tz
-
         self._set_solar_times(self.local_observer)
         self._set_fix_window()
 

@@ -16,9 +16,11 @@ Version: 0.1
 
 import json
 import datetime as dt
+import logging
+import pytz
 from typing import Union, Optional, List
 from threading import Lock
-import logging
+from timezonefinder import TimezoneFinder
 from lightlib.config import ConfigLoader
 from lightlib.common import iso_to_datetime, datetime_to_iso, get_today, \
     get_tomorrow, get_now
@@ -157,6 +159,7 @@ class PersistentData:
                 "latitude": self.current_latitude,
                 "longitude": self.current_longitude,
                 "altitude": self.current_altitude,
+                "local_timezone": self.local_timezone_zone,
                 "sunrise_times":
                     [datetime_to_iso(t) for t in self._sunrise_times],
                 "sunset_times":
@@ -175,6 +178,15 @@ class PersistentData:
             logging.error("Failed to store Data in JSON: %s", e)
             raise DataStorageError("Failed to store data in JSON.") from e
 
+    def _set_tz(self) -> None:
+        """Determine the local timezone."""
+        if not (self.current_latitude and self.current_longitude):
+            return
+        tz_finder = TimezoneFinder()
+        self.local_timezone = pytz.timezone(tz_finder.timezone_at(
+            lng=self.current_longitude, lat=self.current_latitude))
+        logging.info("Local timezone set to %s", self.local_timezone)
+
     def _warn_once(self, flag_attr: str, missing_date: dt.date, message: str):
         """Warn only once daily for data missing from persistent data file.
 
@@ -191,13 +203,33 @@ class PersistentData:
             setattr(self, flag_attr, get_tomorrow())
 
     @property
-    def local_timezone(self) -> Optional[str]:
+    def local_timezone(self) -> Optional[pytz.tzinfo.BaseTzInfo]:
         """Local timezone of the systems location."""
-        return self._local_timezone
+        if self._local_timezone:
+            return self._local_timezone
+        return None
 
     @local_timezone.setter
-    def local_timezone(self, value: str):
-        self._local_timezone = value
+    def local_timezone(self, value: Union[str, pytz.tzinfo.BaseTzInfo]):
+        """Accepts a timezone name string or a pytz timezone object."""
+        try:
+            if isinstance(value, str):
+                self._local_timezone = pytz.timezone(value)
+            elif isinstance(value, pytz.tzinfo.BaseTzInfo):
+                self._local_timezone = value
+            else:
+                raise TypeError(f"Unsupported timezone type: {type(value)}")
+        except pytz.UnknownTimeZoneError:
+            logging.warning("Unknown timezone '%s'. Falling back to UTC.",
+                            value)
+            self._local_timezone = pytz.UTC
+
+    @property
+    def local_timezone_zone(self) -> Optional[str]:
+        """Local timezone zone string."""
+        if self.local_timezone is not None:
+            return self.local_timezone.zone
+        return None
 
     @property
     def time_to_fix(self) -> int:
@@ -210,7 +242,7 @@ class PersistentData:
         """
         if isinstance(self._time_to_fix, int):
             return int(self._time_to_fix)
-        return None
+        return ConfigLoader().gps_pwr_up_time
 
     @time_to_fix.setter
     def time_to_fix(self, start_to_end: tuple[float, float]) -> None:
@@ -243,6 +275,7 @@ class PersistentData:
     @current_latitude.setter
     def current_latitude(self, lat: float) -> None:
         self._current_latitude = lat
+        self._set_tz()
 
     @property
     def current_longitude(self) -> float:
@@ -252,6 +285,7 @@ class PersistentData:
     @current_longitude.setter
     def current_longitude(self, lng: float) -> None:
         self._current_longitude = lng
+        self._set_tz()
 
     @property
     def missed_fix_days(self) -> int:
@@ -390,9 +424,9 @@ class PersistentData:
                     key = "altitude"
                     self._current_altitude = data.get(key)
 
-                if self._local_timezone is None:
+                if self.local_timezone is None:
                     key = "local_timezone"
-                    self._local_timezone = data.get(key)
+                    self.local_timezone = data.get(key)
 
                 if self._missed_fixes is None:
                     key = "missed_fixes"

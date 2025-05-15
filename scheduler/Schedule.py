@@ -152,7 +152,7 @@ class LightScheduler:
         int
             The number of days to use for training, capped at MAX_DAYS_HISTORY.
         """
-        MAX_DAYS_HISTORY = self.days_days_history
+        MAX_DAYS_HISTORY = self.days_history
         MIN_DAYS_HISTORY = 2    # Minimum to avoid meaningless tiny training
 
         try:
@@ -495,7 +495,7 @@ class LightScheduler:
             fallback.
         """
         confidence_ok = any(p >= self.min_confidence for p in probabilities)
-        fallback_mode = ConfigLoader().fallback_action.lower()
+        fallback_mode = ConfigLoader().fallback_action
 
         if confidence_ok or fallback_mode == "none":
             return self.store.store_schedule(schedule_date, df,
