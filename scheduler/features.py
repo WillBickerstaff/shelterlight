@@ -17,7 +17,7 @@ import pandas as pd
 import numpy as np
 from scheduler.base import SchedulerComponent
 from lightlib.common import get_now
-from lightlib.persist import PersistentData
+
 
 class FeatureEngineer(SchedulerComponent):
     """Generate time-based, environmental & historical features for scheduling.
@@ -112,13 +112,7 @@ class FeatureEngineer(SchedulerComponent):
         else:
             rolling_activity_1d = 0
 
-        local_dt = timestamp.astimezone(PersistentData().local_timezone)
-        local_hour = local_dt.hour
-        local_hour_sin = np.sin(2 * np.pi * local_hour / 24)
-        local_hour_cos = np.cos(2 * np.pi * local_hour / 24)
-
         rolling_counts = self._get_rolling_count_features(timestamp)
-
         # Construct full dictionary of all available features
         feature_values = {
             "hour_sin": hour_sin, "hour_cos": hour_cos,
@@ -131,10 +125,7 @@ class FeatureEngineer(SchedulerComponent):
             "historical_false_positives": historical_false_positives,
             "historical_false_negatives": historical_false_negatives,
             "historical_confidence": historical_confidence,
-            "recency": timestamp.year == get_now().year,  # Crude fallback
-            "local_hour": local_hour,
-            "local_hour_sin": local_hour_sin,
-            "local_hour_cos": local_hour_cos
+            "recency": timestamp.year == get_now().year  # Crude fallback
         }
         feature_values.update(rolling_counts)
 
@@ -171,10 +162,7 @@ class FeatureEngineer(SchedulerComponent):
             'historical_false_negatives',  # Past under-predictions
             'historical_confidence',       # Average confidence in past
                                            # schedules
-            'recency',                     # distinguish recent vs. past-year
-            'local_hour',                  # DST Safe daily time reference
-            'local_hour_sin',
-            'local_hour_cos'
+            'recency'                      # distinguish recent vs. past-year
         ]
 
     def _get_rolling_count_features(self, timestamp: dt.datetime,

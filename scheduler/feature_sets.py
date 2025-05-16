@@ -66,9 +66,7 @@ class FeatureSetManager:
                     'historical_accuracy',
                     'historical_false_positives',
                     'historical_false_negatives',
-                    'historical_confidence',
-                    'recency',
-                    'local_hour'
+                    'historical_confidence'
                 ]
 
             case FeatureSet.COUNT:
@@ -81,9 +79,7 @@ class FeatureSetManager:
                     'historical_accuracy',
                     'historical_false_positives',
                     'historical_false_negatives',
-                    'historical_confidence',
-                    'recency',
-                    'local_hour'
+                    'historical_confidence'
                 ]
 
             case FeatureSet.FULL_FEATURES:
@@ -97,11 +93,7 @@ class FeatureSetManager:
                     'historical_accuracy',
                     'historical_false_positives',
                     'historical_false_negatives',
-                    'historical_confidence',
-                    'recency',
-                    'local_hour',
-                    'local_hour_sin',
-                    'local_hour_cos'
+                    'historical_confidence'
                 ]
 
             case FeatureSet.CUSTOM:
