@@ -83,19 +83,12 @@ class LightModel(SchedulerComponent):
         x = df[feature_cols]
         # 3-Define the target variable
         y = (df['activity_pin'] > 0).astype(int)
-
-        # Assign sample weights based on recency
-        # Recent data (recency=1) gets full weight; older data less
-        hist_weight = ConfigLoader().historic_weight
-        weights = df["recency"].apply(
-            lambda r: 1.0 if r == 1 else hist_weight)
-
         label_dist = pd.Series(y).value_counts().to_dict()
         logging.debug("y_train distribution: %s", label_dist)
         logging.debug("Sample activity_pin values:\n%s",
                       df[['timestamp', 'activity_pin']].head(10))
         # 4-Create the dataset
-        train_data = lgb.Dataset(x, label=y, weight=weights)
+        train_data = lgb.Dataset(x, label=y)
         # 5-Train the model
         try:
             # Attempt with newer LightGBM API
