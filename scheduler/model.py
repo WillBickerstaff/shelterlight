@@ -117,6 +117,41 @@ class LightModel(SchedulerComponent):
 
         logging.info("Feature importance:\n%s", importance)
 
+    def  _prepare_training_data(self, days_history=None):
+        """Prepare training data wrapper (to be extended)."""
+        ndays = days_history or ConfigLoader().training_days
+        end_time = get_now()
+        start_time = end_time - dt.timedelta(days=ndays)
+        return self._prepare_training_data_for_window(start_time, end_time)
+
+    def _prepare_training_data_for_window(
+            self,
+            start_time: dt.datetime,
+            end_time: dt.datetime
+        ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Prepare training data for a specific time window."""
+        try:
+            df_intervals = self._build_interval_grid(start_time, end_time)
+            activity_ts = self._load_activity_data(start_time, end_time)
+            df_intervals = self._assign_activity_flags(
+                df_intervals, activity_ts)
+            df_schedules = self._load_schedule_data(start_time, end_time)
+
+            if not ConfigLoader().train_with_silent_days:
+                df_intervals, df_schedules = self._filter_no_activity_days(
+                    df_intervals, df_schedules)
+
+            if ConfigLoader().filter_low_quality_days:
+                df_intervals, df_schedules = self._filter_low_quality_days(
+                    df_intervals, df_schedules)
+
+            return df_intervals, df_schedules
+
+        except Exception as e:
+            logging.error("Error preparing training data for window: %s", e,
+                          exc_info=True)
+            return None
+
     def _predict_schedule(self, df: pd.DataFrame) -> np.ndarray:
         """Generate predictions for the given schedule DataFrame.
 

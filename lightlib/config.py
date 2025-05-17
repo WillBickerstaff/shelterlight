@@ -368,6 +368,12 @@ class ConfigLoader:
                                      "confidence_threshold")
 
     @property
+    def training_days(self) -> int:
+        """Days history to use in model training."""
+        return self.get_config_value(self.config. "MODEL",
+                                     "history_days")
+
+    @property
     def train_with_silent_days(self) -> bool:
         """Train the model on days where no activity occurred."""
         return self.get_config_value(self.config, "MODEL",
