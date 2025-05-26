@@ -26,7 +26,8 @@ class Fallback(SchedulerComponent):
 
     def __init__(self):
         super().__init__()
-        self.local_tz = pytz.timezone(PersistentData().local_timezone or "UTC")
+        self.local_tz = pytz.timezone(
+            PersistentData().local_timezone_zone or "UTC")
 
     def generate_schedule(self, date: dt.date) -> dict[int, dict]:
         """Generate a full fallback schedule for the given date.
