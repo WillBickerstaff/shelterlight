@@ -16,6 +16,7 @@ import socket
 import threading
 import datetime as dt
 import time
+import traceback
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
 from scheduler.Schedule import LightScheduler
@@ -23,6 +24,7 @@ from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
 from lightlib.common import ConfigReloaded, get_now
 from lightlib.lightcontrol import LightController
+from lightlib.db import DB
 
 
 class ExitAfter(Exception):
@@ -99,6 +101,64 @@ def gps_loop(gps: SunTimes, stop_event: threading.Event):
     finally:
         logging.info("GPS loop exited")
 
+
+def has_schedule_for_date(db, date):
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            SELECT 1 FROM light_schedules
+            WHERE date = %s LIMIT 1;
+        """, (date,))
+        return cur.fetchone() is not None
+
+def backfill_schedules(backfill_days=-1):
+    db = DB()
+    scheduler = LightScheduler()
+    scheduler.set_db_connection(db)
+
+    with db.conn.cursor() as cur:
+        cur.execute("""
+            SELECT MIN(DATE(timestamp)), MAX(DATE(timestamp))
+            FROM activity_log;
+        """)
+        min_date, max_date = cur.fetchone()
+
+    if not min_date or not max_date:
+        print("No activity found in database")
+        return
+
+    activity_dates = [min_date + dt.timedelta(days=i) for i in range(
+        (max_date - min_date).days + 1 )]
+
+    if backfill_days > 0:
+        activity_dates = [d for d in activity_dates if d >= (
+            max_date - dt.timedelta(days=backfill_days - 1))]
+
+    print("Generating historic schedules for the last "
+          f"{len(activity_dates)} days...")
+
+    training_days = 30  # ConfigLoader().training_days_history
+    for idx, target_date in enumerate(activity_dates):
+        try:
+            print(f"Processing {idx + 1}/{len(activity_dates)}: {target_date}")
+
+            # Evaluate previous days schedule if it exists
+            previous_date = target_date - dt.timedelta(days=1)
+            if has_schedule_for_date(db, previous_date):
+                scheduler.evaluator.evaluate_previous_schedule(previous_date)
+
+            # Train the model using all data available
+            scheduler.model_engine.train_model(days_history=training_days)
+            if scheduler.model_engine.model is None:
+                print(f"No model trained for {target_date}. "
+                      "Skipping schedule generation.")
+                continue
+            # Generate the schedule
+            scheduler.generate_daily_schedule(target_date.isoformat())
+        except Exception as e:
+            print(f"Error processing {target_date}: {e}")
+            traceback.print_exc()
+
+    print("Historic schedule generation complete")
 
 def daily_schedule_generation(stop_event: threading.Event,
                               scheduler: LightScheduler,
@@ -191,6 +251,11 @@ def main(stop_event: threading.Event):
                         help='Force re-evalution even if already marked.')
     parser.add_argument('--retrain', action="store_true",
                         help="Retrain the model and store the schedule.")
+    parser.add_argument('--backfill', nargs="?", const=-1, type=int,
+                        default=None,
+                        help="Regenerate past schedules using all data upto"
+                        "N days back. Default will back fill to the earliest"
+                        "activity record")
     args = parser.parse_args()
     init_log(args.log_level)
 
@@ -205,7 +270,11 @@ def main(stop_event: threading.Event):
         logging.info("Manual history re-evaluation triggered via CLI.")
         re_eval_history(force=args.force_eval)
         logging.info("History re-evaluation complete.")
-        raise ExitAfter()  # Exit immediately after re-evaluation
+        raise ExitAfter()
+
+    if args.backfill:
+        backfill_schedules(backfill_days=args.backfill)
+        raise ExitAfter()
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()

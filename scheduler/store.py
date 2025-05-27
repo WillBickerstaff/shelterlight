@@ -86,12 +86,14 @@ class ScheduleStore(SchedulerComponent):
                     cursor.execute("""
                         INSERT INTO light_schedules (date, interval_number,
                                                      start_time, end_time,
-                                                     prediction)
-                        VALUES (%s, %s, %s, %s, %s)
+                                                     prediction, confidence)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         ON CONFLICT (date, interval_number) DO UPDATE
-                        SET prediction = EXCLUDED.prediction;
+                        SET prediction = EXCLUDED.prediction,
+                        confidence = EXCLUDED.confidence;
                         """, (schedule_date, int(interval), info["start"],
-                              info["end"], info["prediction"]))
+                              info["end"], bool(info["prediction"]),
+                              float(info.get("confidence",0.5))))
 
             self.db.conn.commit()  # Commit transaction
             logging.info(f"Stored schedule for {schedule_date} in database.")
@@ -229,7 +231,7 @@ class ScheduleStore(SchedulerComponent):
                             int(interval),
                             entry["start"],
                             entry["end"],
-                            int(entry["prediction"])
+                            bool(entry["prediction"])
                         ))
             self.db.conn.commit()
             logging.info("Stored fallback schedule for %s with %d intervals.",

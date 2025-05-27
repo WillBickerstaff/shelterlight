@@ -71,9 +71,16 @@ class LightModel(SchedulerComponent):
         if fetched_data is None:
             logging.warning(
                 "No training data available, skipping model training")
+            self.model = None
             return
 
         df_activity, df_schedules = fetched_data
+        if df_activity.empty:
+            logging.warning("No activity data rows found, "
+                            "skipping model training.")
+            self.model = None
+            return
+
         df = self.features._create_base_features(df_activity)
         df = self._add_schedule_accuracy_features(df, df_schedules)
 
@@ -100,7 +107,8 @@ class LightModel(SchedulerComponent):
             )
         except TypeError:
             # Fallback to callbacks on older LightGBM versions
-            logging.warning("LightGBM Unsupported kwarg early_stopping_rounds"
+            logging.warning("LightGBM Unsupported kwarg "
+                            "early_stopping_rounds"
                             "falling back to callbacks API")
             self.model = lgb.train(
                 self.model_params,
@@ -188,6 +196,16 @@ class LightModel(SchedulerComponent):
             df_intervals = self._assign_activity_flags(
                 df_intervals, activity_ts)
             df_schedules = self._load_schedule_data(start_time, end_time)
+
+            if df_schedules.empty:
+                logging.warning("No schedule accuracy data found. "
+                                "Proceeding with activity data only.")
+                # Create a dummy schedules dataframe
+                df_schedules = pd.DataFrame(columns=[
+                    "date", "interval_number", "was_correct",
+                    "false_positive", "false_negative", "confidence",
+                    "recency"])
+
             if not ConfigLoader().train_with_silent_days:
                 df_intervals, df_schedules = self._filter_no_activity_days(
                     df_intervals, df_schedules)
@@ -220,6 +238,12 @@ class LightModel(SchedulerComponent):
         -------
             Tuple of filtered (df_intervals, df_schedules)
         """
+        # Bail early if there are no schedules or we loose everything
+        if df_schedules.empty:
+            logging.warning("No schedule data available for 3σ filtering, "
+                            "skipping.")
+            return df_intervals, df_schedules
+
         # Count unique days in originals unfiltered schedule dataset
         original_days = df_schedules["date"].nunique()
 
@@ -232,6 +256,12 @@ class LightModel(SchedulerComponent):
             "false_negative": "sum",
             "was_correct": "count"
         }).rename(columns={"was_correct": "total"})
+
+        # If theres not enough left to get meaningfull variance, bail out.
+        if len(grouped) < 2:
+               logging.warning("Not enough schedule data for 3σ filtering, "
+                               "skipping.")
+               return df_intervals, df_schedules
 
         grouped["fp_rate"] = grouped["false_positive"] / grouped["total"]
         grouped["fn_rate"] = grouped["false_negative"] / grouped["total"]
@@ -434,11 +464,10 @@ class LightModel(SchedulerComponent):
 
         # Handle missing values for intervals with no recorded accuracy
         #   Default accuracy: Assume 50% accuracy for unseen intervals
-        # cast columns before filling
         df['was_correct'] = df['was_correct'].astype(float)
         df['confidence'] = df['confidence'].astype(float)
-        df['false_positive'] = df['false_positive'].astype(int)
-        df['false_negative'] = df['false_negative'].astype(int)
+        df['false_positive'] = df['false_positive'].astype('Int64')
+        df['false_negative'] = df['false_negative'].astype('Int64')
 
         df['historical_accuracy'] = df['was_correct'].fillna(0.5)
         # - Default false positive & false negative counts: Assume zero

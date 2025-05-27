@@ -309,9 +309,10 @@ class Fallback(SchedulerComponent):
 
             # Update performance stats
             stat = stats[sched_date]
-            stat["fp"] += int(fp)
-            stat["fn"] += int(fn)
-            stat["correct"] += int(was_correct)
+            stat["fp"] += int(fp) if fp is not None else 0
+            stat["fn"] += int(fn) if fn is not None else 0
+            stat["correct"] += int(was_correct) if was_correct is not None \
+                else 0
             stat["total"] += 1
 
             # Reconstruct the schedule structure for fallback use
