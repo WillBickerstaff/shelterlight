@@ -10,13 +10,11 @@ Version: 0.1
 """
 
 import atexit
-import argparse
 import logging
 import socket
 import threading
 import datetime as dt
 import time
-import traceback
 from shelterGPS.Helio import SunTimes
 from lightlib import USBManager
 from scheduler.Schedule import LightScheduler
@@ -24,11 +22,8 @@ from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
 from lightlib.common import ConfigReloaded, get_now
 from lightlib.lightcontrol import LightController
-
-class ExitAfter(Exception):
-    """Raised to force a program halt."""
-
-    pass
+from lightlib import cli
+from lightlib.exceptions import ExitAfter
 
 
 def cleanup_resources(gps: SunTimes, light_control: LightController) -> None:
@@ -100,65 +95,6 @@ def gps_loop(gps: SunTimes, stop_event: threading.Event):
         logging.info("GPS loop exited")
 
 
-def has_schedule_for_date(db, date):
-    with db.conn.cursor() as cur:
-        cur.execute("""
-            SELECT 1 FROM light_schedules
-            WHERE date = %s LIMIT 1;
-        """, (date,))
-        return cur.fetchone() is not None
-
-def backfill_schedules(backfill_days=-1):
-    from lightlib.db import DB
-    db = DB()
-    scheduler = LightScheduler()
-    scheduler.set_db_connection(db)
-
-    with db.conn.cursor() as cur:
-        cur.execute("""
-            SELECT MIN(DATE(timestamp)), MAX(DATE(timestamp))
-            FROM activity_log;
-        """)
-        min_date, max_date = cur.fetchone()
-
-    if not min_date or not max_date:
-        print("No activity found in database")
-        return
-
-    activity_dates = [min_date + dt.timedelta(days=i) for i in range(
-        (max_date - min_date).days + 1 )]
-
-    if backfill_days > 0:
-        activity_dates = [d for d in activity_dates if d >= (
-            max_date - dt.timedelta(days=backfill_days - 1))]
-
-    print("Generating historic schedules for the last "
-          f"{len(activity_dates)} days...")
-
-    training_days = 30  # ConfigLoader().training_days_history
-    for idx, target_date in enumerate(activity_dates):
-        try:
-            print(f"Processing {idx + 1}/{len(activity_dates)}: {target_date}")
-
-            # Evaluate previous days schedule if it exists
-            previous_date = target_date - dt.timedelta(days=1)
-            if has_schedule_for_date(db, previous_date):
-                scheduler.evaluator.evaluate_previous_schedule(previous_date)
-
-            # Train the model using all data available
-            scheduler.model_engine.train_model(days_history=training_days)
-            if scheduler.model_engine.model is None:
-                print(f"No model trained for {target_date}. "
-                      "Skipping schedule generation.")
-                continue
-            # Generate the schedule
-            scheduler.generate_daily_schedule(target_date.isoformat())
-        except Exception as e:
-            print(f"Error processing {target_date}: {e}")
-            traceback.print_exc()
-
-    print("Historic schedule generation complete")
-
 def daily_schedule_generation(stop_event: threading.Event,
                               scheduler: LightScheduler,
                               solar_times: SunTimes):
@@ -199,20 +135,6 @@ def daily_schedule_generation(stop_event: threading.Event,
             stop_event.wait((retry_at - now).total_seconds())
 
 
-def re_eval_history(force: bool = False):
-    """Re-evaluate schedules and exit."""
-    from scheduler.evaluation import ScheduleEvaluator
-    from lightlib.db import DB
-
-    logging.info("Manual history re-evaluation triggered via CLI.")
-    db = DB()
-    evaluator = ScheduleEvaluator()
-    evaluator.set_config(db=db)
-    evaluator.re_eval_all_schedules(force=force)
-    logging.info("History re-evaluation complete.")
-    return
-
-
 def main_loop():
     """Continual Main loop entry point."""
     while True:
@@ -240,48 +162,11 @@ def main_loop():
             logging.info("\n%s\n%sMAIN LOOP ENDED\n%s", "-"*79, " "*32, "-"*79)
 
 
-def parse_args():
-    """Argument parser setup."""
-    parser = argparse.ArgumentParser(description="Lighting Control System")
-    parser.add_argument('--log_level', type=str,
-                        help='Set the logging level (e.g., DEBUG, INFO)')
-    parser.add_argument('--re-eval', action="store_true",
-                        help='Re-evaluate all historical schedules.')
-    parser.add_argument('--force-eval', action="store_true",
-                        help='Force re-evalution even if already marked.')
-    parser.add_argument('--retrain', action="store_true",
-                        help="Retrain the model and store the schedule.")
-    parser.add_argument('--backfill', nargs="?", const=-1, type=int,
-                        default=None,
-                        help="Regenerate past schedules using all data upto"
-                        "N days back. Default will back fill to the earliest"
-                        "activity record")
-    return parser.parse_args()
-
-
-def arg_handler(args: argparse.Namespace) -> None:
-    """Handle passed cli options."""
-    if args.retrain:
-        logging.info("Manual model retraining triggered via CLI.")
-        scheduler = LightScheduler()
-        scheduler.update_daily_schedule()
-        logging.info("Model retraining and schedule generation complete.")
-        raise ExitAfter()
-
-    if args.re_eval:
-        re_eval_history(force=args.force_eval)
-        raise ExitAfter()
-
-    if args.backfill:
-        backfill_schedules(backfill_days=args.backfill)
-        raise ExitAfter()
-
-
 def main(stop_event: threading.Event):
     """Program entry point."""
-    args = parse_args()
-    arg_handler(args)
+    args = cli.parse_args()
     init_log(args.log_level)
+    cli.arg_handler(args)
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
