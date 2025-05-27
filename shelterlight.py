@@ -24,8 +24,6 @@ from lightlib.smartlight import init_log
 from lightlib.config import ConfigLoader
 from lightlib.common import ConfigReloaded, get_now
 from lightlib.lightcontrol import LightController
-from lightlib.db import DB
-
 
 class ExitAfter(Exception):
     """Raised to force a program halt."""
@@ -111,6 +109,7 @@ def has_schedule_for_date(db, date):
         return cur.fetchone() is not None
 
 def backfill_schedules(backfill_days=-1):
+    from lightlib.db import DB
     db = DB()
     scheduler = LightScheduler()
     scheduler.set_db_connection(db)
@@ -205,10 +204,12 @@ def re_eval_history(force: bool = False):
     from scheduler.evaluation import ScheduleEvaluator
     from lightlib.db import DB
 
+    logging.info("Manual history re-evaluation triggered via CLI.")
     db = DB()
     evaluator = ScheduleEvaluator()
     evaluator.set_config(db=db)
     evaluator.re_eval_all_schedules(force=force)
+    logging.info("History re-evaluation complete.")
     return
 
 
@@ -239,9 +240,8 @@ def main_loop():
             logging.info("\n%s\n%sMAIN LOOP ENDED\n%s", "-"*79, " "*32, "-"*79)
 
 
-def main(stop_event: threading.Event):
-    """Program entry point."""
-    # Argument parser setup
+def parse_args():
+    """Argument parser setup."""
     parser = argparse.ArgumentParser(description="Lighting Control System")
     parser.add_argument('--log_level', type=str,
                         help='Set the logging level (e.g., DEBUG, INFO)')
@@ -256,9 +256,11 @@ def main(stop_event: threading.Event):
                         help="Regenerate past schedules using all data upto"
                         "N days back. Default will back fill to the earliest"
                         "activity record")
-    args = parser.parse_args()
-    init_log(args.log_level)
+    return parser.parse_args()
 
+
+def arg_handler(args: argparse.Namespace) -> None:
+    """Handle passed cli options."""
     if args.retrain:
         logging.info("Manual model retraining triggered via CLI.")
         scheduler = LightScheduler()
@@ -267,14 +269,19 @@ def main(stop_event: threading.Event):
         raise ExitAfter()
 
     if args.re_eval:
-        logging.info("Manual history re-evaluation triggered via CLI.")
         re_eval_history(force=args.force_eval)
-        logging.info("History re-evaluation complete.")
         raise ExitAfter()
 
     if args.backfill:
         backfill_schedules(backfill_days=args.backfill)
         raise ExitAfter()
+
+
+def main(stop_event: threading.Event):
+    """Program entry point."""
+    args = parse_args()
+    arg_handler(args)
+    init_log(args.log_level)
 
     # Initialize USB manager, configuration, and logging
     usb_manager = USBManager.USBFileManager()
