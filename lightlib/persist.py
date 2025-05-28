@@ -213,7 +213,10 @@ class PersistentData:
     def local_timezone(self, value: Union[str, pytz.tzinfo.BaseTzInfo]):
         """Accepts a timezone name string or a pytz timezone object."""
         try:
-            if isinstance(value, str):
+            if value is None:
+                logging.warning("No timezone known, falling back to UTC.")
+                self._local_timezone = pytz.UTC
+            elif isinstance(value, str):
                 self._local_timezone = pytz.timezone(value)
             elif isinstance(value, pytz.tzinfo.BaseTzInfo):
                 self._local_timezone = value
