@@ -59,7 +59,10 @@ def re_eval_history(force: bool = False):
     from scheduler.evaluation import ScheduleEvaluator
     from lightlib.db import DB
 
-    logging.info("Manual history re-evaluation triggered via CLI.")
+    msg="Manual history re-evaluation triggered via CLI."
+    logging.info(msg)
+    print(msg)
+
     db = DB()
     evaluator = ScheduleEvaluator()
     evaluator.set_config(db=db)

@@ -167,7 +167,7 @@ class ScheduleEvaluator(SchedulerComponent):
                 else:
                     true_negatives += 1
                     was_correct, is_false_positive, is_false_negative = \
-                        False, False, False
+                        True, False, False
 
                 with self.db.conn.cursor() as cur:
                     cur.execute("""

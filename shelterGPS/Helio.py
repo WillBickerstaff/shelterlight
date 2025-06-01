@@ -806,14 +806,16 @@ class SunTimes:
                 msg = str(ve)
                 if "Sun is always below the horizon" in msg or \
                         "Unable to find a sunrise time" in msg:
-                    logging.warning("Polar night (no sunset): %s", msg)
+                    logging.warning("Polar night (no sunrise): Sun is always "
+                                    "below the horizon here on %s", date)
                     sunrise, sunset = SunTimes.polar_night_times(date)
                     polar = PolarEvent.POLARNIGHT
                     if raise_err:
                         raise PolarNightError(
                             "Polar night: no sunrise.") from ve
                 elif "Sun is always above the horizon" in msg:
-                    logging.warning("Polar day (no sunset): %s", msg)
+                    logging.warning("Polar day (no sunrise): Sun is always "
+                                    "above the horizon here on %s", date)
                     sunrise, sunset = SunTimes.polar_day_times(date)
                     polar = PolarEvent.POLARDAY
                     if raise_err:
@@ -827,13 +829,15 @@ class SunTimes:
                 msg = str(ve)
                 if "Sun is always above the horizon" in msg or \
                         "Unable to find a sunset time" in msg:
-                    logging.warning("Polar day (no sunset): %s", msg)
+                    logging.warning("Polar day (no sunset): Sun is always above "
+                                    "the horizon here on %s", date)
                     sunrise, sunset = SunTimes.polar_day_times(date)
                     polar = PolarEvent.POLARDAY
                     if raise_err:
                         raise PolarDayError("Polar day: no sunset.") from ve
                 elif "Sun is always below the horizon" in msg:
-                    logging.warning("Polar night (no sunset): %s", msg)
+                    logging.warning("Polar night (no sunset): Sun is always "
+                                    "below the horizon here on %s", date)
                     sunrise, sunset = SunTimes.polar_night_times(date)
                     polar = PolarEvent.POLARNIGHT
                     if raise_err:
