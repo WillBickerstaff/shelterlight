@@ -262,6 +262,8 @@ Model configuration options used to train the LightGBM prediction engine for lig
 | `historic_weight`         | float | `0.5`     | Weight given to data for this time last year. Determines how much influence this data has on the model training.                                                                                                                    |
 | `ON_boost`                | float | `1.0`     | Controls how much the model leans towards predicting ON intervals. A value of `1.0` means no additional weighting; values greater than 1.0 increase the weight given to ONs by dividing the number of OFFs by `(ONs / ON_boost)`    |
 | `min_data_in_leaf`        | int   | `10`      | The minimum number of data points required in a leaf of a decision tree. Lower values allow more splits and can help the model focus on rare patterns, but may lead to overfitting. Higher values enforce more conservative splits. |
+| `min_on_fraction`         | float | `0.05`    |  The minimum fraction of ON samples required in either the training or validation set. If either set falls below this threshold, validation is disabled and the entire dataset is used for training without early stopping.         |
+|
 
 ### Supported `feature_set` values:
 

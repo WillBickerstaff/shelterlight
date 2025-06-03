@@ -136,7 +136,7 @@ class LightModel(SchedulerComponent):
 
         # Sort by timestamp for time-based split
         x_train, x_val, y_train, y_val = self._split_train_validation(
-            df, feature_cols)
+            df, ConfigLoader().min_on_fraction, feature_cols)
 
         # Ensure numeric types
         y_train = pd.to_numeric(y_train, errors='coerce').fillna(0).astype(int)

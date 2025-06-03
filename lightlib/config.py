@@ -267,6 +267,11 @@ class ConfigLoader:
             "min_data_in_leaf":         {"value": 10,
                                          "type": int,
                                          "is_pin": False,
+                                         "accepts_list": False},
+
+            "min_on_fraction":          {"value": 0.05,
+                                         "type": float,
+                                         "is_pin": False,
                                          "accepts_list": False}
         },
         # ------------------------------------------------------------#
@@ -380,6 +385,12 @@ class ConfigLoader:
         """Get the minimum coverage required by certainty range."""
         return self.get_config_value(self.config, "FALLBACK",
                                      "min_coverage")
+
+    @property
+    def min_on_fraction(self) -> float:
+        """The minimum ON fraction required for a validation split."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "min_on_fraction")
 
     @property
     def min_data_in_leaf(self) -> int:
