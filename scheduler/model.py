@@ -50,6 +50,53 @@ class LightModel(SchedulerComponent):
             'verbose': -1
         }
 
+    def _split_train_validation(self, df: pd.DataFrame,
+                                feature_cols: list[str],
+                                min_on_fraction: float = 0.05
+                                ) -> tuple[pd.DataFrame, pd.DataFrame,
+                                           pd.Series, pd.Series]:
+        """Split data into training and validation sets.
+
+        If the data has low ON rate, disbles validation and uses all data for
+        training.
+
+        Returns
+        -------
+            tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]
+                x_train, x_val, y_train, y_val
+        """
+        df_sorted = df.sort_values("timestamp")
+        y_all = (df_sorted['activity_pin'] > 0).astype(int)
+        if len(df_sorted) < 1000:
+            logging.warning("Validation disabled. Dataset too small "
+                                "(%d rows).", len(df_sorted))
+            return (df_sorted[feature_cols], pd.DataFrame(),
+                    y_all, pd.Series(dtype=int))
+
+        split_idx = int(len(df_sorted) * 0.8)
+        x_train = df_sorted.iloc[:split_idx][feature_cols]
+        y_train = y_all.iloc[:split_idx]
+        x_val = df_sorted.iloc[split_idx:][feature_cols]
+        y_val = y_all.iloc[split_idx:]
+
+        train_on_ratio = y_train.mean()
+        val_on_ratio = y_val.mean()
+
+        logging.info("Training ON ratio: %.3f (%d ONs)",
+                     train_on_ratio, y_train.sum())
+        logging.info("Validation ON ratio: %.3f (%d ONs)",
+                     val_on_ratio, y_val.sum())
+
+        if train_on_ratio < min_on_fraction or \
+           val_on_ratio < min_on_fraction:
+            logging.warning("Validation disabled. Insufficient ONs in "
+                            "train or val set.")
+            return (df_sorted[feature_cols], pd.DataFrame(),
+                    y_all, pd.Series(dtype=int))
+
+        logging.debug("Validation enabled. Splitting at index %d", split_idx)
+        return x_train, x_val, y_train, y_val
+
     def train_model(self, days_history=30):
         """Train the LightGBM model using recent historical data.
 
@@ -86,21 +133,31 @@ class LightModel(SchedulerComponent):
 
         # 2-Select features for training
         feature_cols = fset.FeatureSetManager.get_columns(self.feature_set)
-        x = df[feature_cols]
 
         # Sort by timestamp for time-based split
-        df_sorted = df.sort_values("timestamp")
-        split_idx = int(len(df_sorted) * 0.8)
-
-        x_train = df_sorted.iloc[:split_idx][feature_cols]
-        y_train = (df_sorted.iloc[:split_idx]['activity_pin'] > 0).astype(int)
-        x_val = df_sorted.iloc[split_idx:][feature_cols]  # Fix here!
-        y_val = (df_sorted.iloc[split_idx:]['activity_pin'] > 0).astype(int)
+        x_train, x_val, y_train, y_val = self._split_train_validation(
+            df, feature_cols)
 
         # Ensure numeric types
         y_train = pd.to_numeric(y_train, errors='coerce').fillna(0).astype(int)
         y_val = pd.to_numeric(y_val, errors='coerce').fillna(0).astype(int)
 
+        num_on = (y_train == 1).sum()
+        num_off = (y_train == 0).sum()
+
+        if num_on > 0:
+            on_boost = ConfigLoader().ON_boost
+            scale_pos_weight = num_off / (num_on / on_boost)
+            self.model_params["scale_pos_weight"] = scale_pos_weight
+            logging.info("Set scale_pos_weight to %.3f based on class "
+                         "imbalance. ON_Boost is at: %.3f",
+                         scale_pos_weight, on_boost)
+        else:
+            self.model_params["scale_pos_weight"] = 1.0
+            logging.warning("No positive samples found. scale_pos_weight "
+                            "set to 1.0")
+
+        self.model_params["min_data_in_leaf"] = ConfigLoader().min_data_in_leaf
         # 3-Define the target variable
         y = (df['activity_pin'] > 0).astype(int)
         label_dist = pd.Series(y).value_counts().to_dict()
@@ -109,37 +166,78 @@ class LightModel(SchedulerComponent):
                       df[['timestamp', 'activity_pin']].head(10))
         # 4-Create the dataset
         train_data = lgb.Dataset(x_train, label=y_train)
-        val_data = lgb.Dataset(x_val, label=y_val)
 
         # 5-Train the model
+        if not x_val.empty:
+            val_data = lgb.Dataset(x_val, label=y_val)
+            self._train_with_data(train_data = train_data,
+                                  val_data = val_data,
+                                  feature_cols = feature_cols)
+        else:
+            self._train_with_data(train_data = train_data,
+                                  feature_cols = feature_cols)
+
+    def _train_with_data(self,
+                         train_data: lgb.Dataset,
+                         val_data: lgb.Dataset | None,
+                         feature_cols: list[str]) -> None:
+        """Train LightGBM model with optional validation set.
+
+        Parameters
+        ----------
+        train_data : lgb.Dataset
+            The training dataset.
+        val_data : lgb.Dataset | None
+            The validation dataset. If None, no early stopping is applied.
+        feature_cols : list[str]
+            Feature column names (used for logging importance).
+        """
+        use_validation = val_data is not None
+
         try:
-            # Attempt with newer LightGBM API
-            self.model = lgb.train(
-                self.model_params,
-                train_data,
-                num_boost_round=100,
-                valid_sets=[train_data, val_data],
-                valid_names=["train", "valid"],
-                early_stopping_rounds=10
-            )
+            if use_validation:
+                self.model = lgb.train(
+                    self.model_params,
+                    train_data,
+                    num_boost_round=100,
+                    valid_sets=[train_data, val_data],
+                    valid_names=["train", "valid"],
+                    early_stopping_rounds=20
+                )
+            else:
+                self.model = lgb.train(
+                    self.model_params,
+                    train_data,
+                    num_boost_round=100
+                                                            )
         except TypeError:
-            # Fallback to callbacks on older LightGBM versions
-            logging.warning("LightGBM Unsupported kwarg "
-                            "early_stopping_rounds. Consider upgrading "
-                            "LightGBM. Falling back to callbacks API")
-            self.model = lgb.train(
-                self.model_params,
-                train_data,
-                num_boost_round=100,
-                valid_sets=[train_data, val_data],
-                valid_names=["train", "valid"],
-                callbacks=[lgb.early_stopping(stopping_rounds=10)]
-            )
-        # 6-log feature importance
+            # Fallback for older LightGBM versions
+            logging.warning(
+                "LightGBM Unsupported kwarg early_stopping_rounds. "
+                "Consider upgrading LightGBM. "
+                "Falling back to callbacks API")
+
+            if use_validation:
+                self.model = lgb.train(
+                    self.model_params,
+                    train_data,
+                    num_boost_round=100,
+                    valid_sets=[train_data, val_data],
+                    valid_names=["train", "valid"],
+                    callbacks=[lgb.early_stopping(stopping_rounds=20)]
+                )
+            else:
+                self.model = lgb.train(
+                    self.model_params,
+                    train_data,
+                    num_boost_round=100
+                )
+
+        # Log feature importance
         importance = pd.DataFrame({
             'feature': feature_cols,
             'importance': self.model.feature_importance()
-        }).sort_values('importance', ascending=False)
+             }).sort_values('importance', ascending=False)
 
         logging.info("Feature importance:\n%s", importance)
 

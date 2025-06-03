@@ -290,11 +290,15 @@ Each feature set includes different combinations of time encodings, activity tre
 
 If the model generates a schedule with low confidence, these options define the fallback behaviour.
 
-| Option          | Type | Default                 | Description                                                                  |
-|-----------------|------|-------------------------|------------------------------------------------------------------------------|
-| `action`        | str  | `History`               | One of: `History`, `Schedule`, or `None`. See descriptions below.            |
-| `history_days`  | int  | `30`                    | Number of days in the past to search for the best matching weekday schedule. |
-| `schedule_file` | str  | `Fallback_Schedule.csv` | Path to the CSV file defining the fallback schedule format.                  |
+| Option             | Type  | Default                 | Description                                                                                                                                                                                                                         |
+|--------------------|-------|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `action`           | str   | `History`               | One of: `History`, `Schedule`, or `None`. See descriptions below.                                                                                                                                                                   |
+| `history_days`     | int   | `30`                    | Number of days in the past to search for the best matching weekday schedule.                                                                                                                                                        |
+| `schedule_file`    | str   | `Fallback_Schedule.csv` | Path to the CSV file defining the fallback schedule format.                                                                                                                                                                         |
+| `certainty_range`  | float | `0.3`                   | Defines the thresholds for confident predictions. Predictions `<= certainty_range` are confidently OFF; predictions `>= 1.0 - certainty_range` are confidently ON. Predictions between these thresholds are considered uncertain.   |
+| `min_coverage`     | float | `0.2`                   | Minimum fraction of the day where the model must be confident in its predictions, if this value is not achieved then the fallback strategy defined in `action` is applied.                                                          |
+| `ON_boost`         | float | `1.0`                   | Controls how much the model leans towards predicting ON intervals. A value of `1.0` means no additional weighting; values greater than 1.0 increase the weight given to ONs by dividing the number of OFFs by `(ONs / ON_boost)`    |
+| `min_data_in_leaf` | int   | `10`                    | The minimum number of data points required in a leaf of a decision tree. Lower values allow more splits and can help the model focus on rare patterns, but may lead to overfitting. Higher values enforce more conservative splits. |
 
 ### `action` options:
 

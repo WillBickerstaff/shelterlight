@@ -450,6 +450,35 @@ class LightScheduler:
 
         logging.info("\n" + "\n".join(lines))
 
+    def _calculate_confidence_coverage(self,
+                                       probabilities: list[float]) -> float:
+        """Calculate the fraction of intervals which are confident.
+
+        Confidence is defined by the configuration option certainty_range:
+            - Confidently OFF: prediction <= certainty_range
+            - Confidently ON: prediction >= 1.0 - certainty_range
+
+        Parameters
+        ----------
+        probabilities : list[float]
+            Model output probabilities for each interval.
+
+        Returns
+        -------
+        float
+            The fraction of confident intervals.
+        """
+        certainty_range = ConfigLoader().fallback_certainty_range
+        lower_bound = certainty_range
+        upper_bound = 1.0 - certainty_range
+
+        confident_intervals = sum(
+            (p <= lower_bound) or (p >= upper_bound) for p in probabilities)
+        coverage = confident_intervals / len(probabilities)
+        logging.info("Schedule contains %d confident intervals",
+                     confident_intervals)
+        return coverage
+
     def _apply_fallback(self,
                         schedule_date: dt.date,
                         df: pd.DataFrame,
@@ -494,14 +523,19 @@ class LightScheduler:
             The final schedule, either stored from model predictions or
             fallback.
         """
-        confidence_ok = any(p >= self.min_confidence for p in probabilities)
+        min_coverage = ConfigLoader().fallback_min_coverage
+        coverage = self._calculate_confidence_coverage(probabilities)
+        logging.info("Model confident interval coverage: %.3f, "
+                     "minimum is: %.3f", coverage, min_coverage)
+        confidence_ok = coverage >= min_coverage
         fallback_mode = ConfigLoader().fallback_action
 
         if confidence_ok or fallback_mode == "none":
             return self.store.store_schedule(schedule_date, df,
                                              predictions, probabilities)
 
-        logging.warning("Model confidence too low. Fallback strategy: %s",
+        logging.warning("Model confidence coverage is too low. "
+                        "Applying fallback strategy: %s",
                         fallback_mode)
 
         # Instantiate fallback helper locally

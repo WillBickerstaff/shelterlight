@@ -253,8 +253,19 @@ class ConfigLoader:
                                          "type": bool,
                                          "is_pin": False,
                                          "accepts_list": True},
+
             "historic_weight":          {"value": 0.5,
                                          "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "ON_boost":                 {"value": 1.0,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "min_data_in_leaf":         {"value": 10,
+                                         "type": int,
                                          "is_pin": False,
                                          "accepts_list": False}
         },
@@ -272,6 +283,16 @@ class ConfigLoader:
 
             "history_days":             {"value": 30,
                                          "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "certainty_range":          {"value": 0.3,
+                                         "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "min_coverage":             {"value": 0.2,
+                                         "type": float,
                                          "is_pin": False,
                                          "accepts_list": False}
         }
@@ -339,9 +360,40 @@ class ConfigLoader:
 
     @property
     def fallback_schedule_file(self) -> str:
-        """Get the cofigured fallback schedule filename."""
+        """Get the configured fallback schedule filename."""
         return self.get_config_value(self.config, "FALLBACK",
                                      "schedule_file")
+
+    @property
+    def fallback_certainty_range(self) -> float:
+        """Get the configured certainty range.
+
+        Predictions below certainty_range are considered confidently OFF.
+        Predictions above (1 - certainty_range) are considered confidently ON.
+        All other predictions are treated as uncertain.
+        """
+        return self.get_config_value(self.config, "FALLBACK",
+                                     "certainty_range")
+
+    @property
+    def fallback_min_coverage(self) -> float:
+        """Get the minimum coverage required by certainty range."""
+        return self.get_config_value(self.config, "FALLBACK",
+                                     "min_coverage")
+
+    @property
+    def min_data_in_leaf(self) -> int:
+        """Minimum amount of data in a leaf.
+
+        Lower values increase sensitivity to rare cases."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "min_data_in_leaf")
+
+    @property
+    def ON_boost(self) -> float:
+        """Get the multiplier for boosting the number of ONs."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "ON_boost")
 
     @property
     def training_days_history(self) -> int:
