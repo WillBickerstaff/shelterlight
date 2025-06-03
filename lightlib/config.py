@@ -272,6 +272,16 @@ class ConfigLoader:
             "min_on_fraction":          {"value": 0.05,
                                          "type": float,
                                          "is_pin": False,
+                                         "accepts_list": False},
+
+            "early_stopping_rounds":    {"value": 10,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "enable_validation":        {"value": True,
+                                         "type": bool,
+                                         "is_pin": False,
                                          "accepts_list": False}
         },
         # ------------------------------------------------------------#
@@ -387,10 +397,22 @@ class ConfigLoader:
                                      "min_coverage")
 
     @property
+    def enable_model_validation(self) -> bool:
+        """Enable or disable model validation data splits."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "enable_validation")
+
+    @property
     def min_on_fraction(self) -> float:
         """The minimum ON fraction required for a validation split."""
         return self.get_config_value(self.config, "MODEL",
                                      "min_on_fraction")
+
+    @property
+    def early_stopping_rounds(self) -> int:
+        """Number of rounds score disn't improve before early stopping."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "early_stopping_rounds")
 
     @property
     def min_data_in_leaf(self) -> int:

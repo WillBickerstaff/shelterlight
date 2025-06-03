@@ -87,9 +87,11 @@ class LightModel(SchedulerComponent):
         logging.info("Validation ON ratio: %.3f (%d ONs)",
                      val_on_ratio, y_val.sum())
 
-        if train_on_ratio < min_on_fraction or \
+        if not ConfigLoader().enable_model_validation or \
+           train_on_ratio < min_on_fraction or \
            val_on_ratio < min_on_fraction:
-            logging.warning("Validation disabled. Insufficient ONs in "
+            logging.warning("Validation disabled. Either explicitly in config "
+                            "or there are insufficient ONs in "
                             "train or val set.")
             return (df_sorted[feature_cols], pd.DataFrame(),
                     y_all, pd.Series(dtype=int))
@@ -136,7 +138,7 @@ class LightModel(SchedulerComponent):
 
         # Sort by timestamp for time-based split
         x_train, x_val, y_train, y_val = self._split_train_validation(
-            df, ConfigLoader().min_on_fraction, feature_cols)
+            df, feature_cols, ConfigLoader().min_on_fraction)
 
         # Ensure numeric types
         y_train = pd.to_numeric(y_train, errors='coerce').fillna(0).astype(int)
@@ -175,6 +177,7 @@ class LightModel(SchedulerComponent):
                                   feature_cols=feature_cols)
         else:
             self._train_with_data(train_data=train_data,
+                                  val_data=None,
                                   feature_cols=feature_cols)
 
     def _train_with_data(self,
@@ -193,7 +196,7 @@ class LightModel(SchedulerComponent):
             Feature column names (used for logging importance).
         """
         use_validation = val_data is not None
-
+        early_stopping_rounds = ConfigLoader().early_stopping_rounds
         try:
             if use_validation:
                 self.model = lgb.train(
