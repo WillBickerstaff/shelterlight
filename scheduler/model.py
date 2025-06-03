@@ -87,6 +87,20 @@ class LightModel(SchedulerComponent):
         # 2-Select features for training
         feature_cols = fset.FeatureSetManager.get_columns(self.feature_set)
         x = df[feature_cols]
+
+        # Sort by timestamp for time-based split
+        df_sorted = df.sort_values("timestamp")
+        split_idx = int(len(df_sorted) * 0.8)
+
+        x_train = df_sorted.iloc[:split_idx][feature_cols]
+        y_train = (df_sorted.iloc[:split_idx]['activity_pin'] > 0).astype(int)
+        x_val = df_sorted.iloc[split_idx:][feature_cols]  # Fix here!
+        y_val = (df_sorted.iloc[split_idx:]['activity_pin'] > 0).astype(int)
+
+        # Ensure numeric types
+        y_train = pd.to_numeric(y_train, errors='coerce').fillna(0).astype(int)
+        y_val = pd.to_numeric(y_val, errors='coerce').fillna(0).astype(int)
+
         # 3-Define the target variable
         y = (df['activity_pin'] > 0).astype(int)
         label_dist = pd.Series(y).value_counts().to_dict()
@@ -94,7 +108,9 @@ class LightModel(SchedulerComponent):
         logging.debug("Sample activity_pin values:\n%s",
                       df[['timestamp', 'activity_pin']].head(10))
         # 4-Create the dataset
-        train_data = lgb.Dataset(x, label=y)
+        train_data = lgb.Dataset(x_train, label=y_train)
+        val_data = lgb.Dataset(x_val, label=y_val)
+
         # 5-Train the model
         try:
             # Attempt with newer LightGBM API
@@ -102,19 +118,21 @@ class LightModel(SchedulerComponent):
                 self.model_params,
                 train_data,
                 num_boost_round=100,
-                valid_sets=[train_data],
+                valid_sets=[train_data, val_data],
+                valid_names=["train", "valid"],
                 early_stopping_rounds=10
             )
         except TypeError:
             # Fallback to callbacks on older LightGBM versions
             logging.warning("LightGBM Unsupported kwarg "
-                            "early_stopping_rounds"
-                            "falling back to callbacks API")
+                            "early_stopping_rounds. Consider upgrading "
+                            "LightGBM. Falling back to callbacks API")
             self.model = lgb.train(
                 self.model_params,
                 train_data,
                 num_boost_round=100,
-                valid_sets=[train_data],
+                valid_sets=[train_data, val_data],
+                valid_names=["train", "valid"],
                 callbacks=[lgb.early_stopping(stopping_rounds=10)]
             )
         # 6-log feature importance

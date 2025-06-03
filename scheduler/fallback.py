@@ -78,6 +78,7 @@ class Fallback(SchedulerComponent):
             return pd.DataFrame()
 
         df = pd.read_csv(fallback_file, skipinitialspace=True)
+        df.columns = df.columns.str.strip() # Remove whitespace around column names
         weekday = date.strftime("%A")
         return df[df["day"].str.strip().isin(["ANY", weekday])]
 
