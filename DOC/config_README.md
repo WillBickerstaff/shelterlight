@@ -252,14 +252,16 @@ If the USB device is removed and re-inserted, a new backup will be created.
 
 Model configuration options used to train the LightGBM prediction engine for light scheduling. You can select which **feature set** to use for training and prediction.
 
-| Option                    | Type  | Default   | Description                                                                                                                                                                           |
-| ------------------------- | ----- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `training_days`           | int   | `90`      | The number of days of historic data to use in training the model.                                                                                                                     |
-| `feature_set`             | str   | `DEFAULT` | Which feature set to use for model input.                                                                                                                                             |
-| `confidence_threshold`    | float | `0.6`     | Threshold at which the models confidence will determine that lights should be on.                                                                                                     |
-| `train_with_silent_days`  | bool  | `False`   | Train the models using days where no activity was seen. (Enabling can have a negative impact on model behaviour if long periods of inactivity are experienced)                        |
-| `filter_low_quality_days` | bool  | `True`    | Train the model using only days that fall within statistical norms of prediction quality. Uses 3 standard deviations of False Positive & False Negative rates to detect outlier days. |
-| `historic_weight`         | float | `0.5`     | Weight given to data for this time last year. Determines how much influence this data has on the model training.                                                                      |
+| Option                    | Type  | Default   | Description                                                                                                                                                                                                                         |
+| ------------------------- | ----- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `training_days`           | int   | `90`      | The number of days of historic data to use in training the model.                                                                                                                                                                   |
+| `feature_set`             | str   | `DEFAULT` | Which feature set to use for model input.                                                                                                                                                                                           |
+| `confidence_threshold`    | float | `0.6`     | Threshold at which the models confidence will determine that lights should be on.                                                                                                                                                   |
+| `train_with_silent_days`  | bool  | `False`   | Train the models using days where no activity was seen. (Enabling can have a negative impact on model behaviour if long periods of inactivity are experienced)                                                                      |
+| `filter_low_quality_days` | bool  | `True`    | Train the model using only days that fall within statistical norms of prediction quality. Uses 3 standard deviations of False Positive & False Negative rates to detect outlier days.                                               |
+| `historic_weight`         | float | `0.5`     | Weight given to data for this time last year. Determines how much influence this data has on the model training.                                                                                                                    |
+| `ON_boost`                | float | `1.0`     | Controls how much the model leans towards predicting ON intervals. A value of `1.0` means no additional weighting; values greater than 1.0 increase the weight given to ONs by dividing the number of OFFs by `(ONs / ON_boost)`    |
+| `min_data_in_leaf`        | int   | `10`      | The minimum number of data points required in a leaf of a decision tree. Lower values allow more splits and can help the model focus on rare patterns, but may lead to overfitting. Higher values enforce more conservative splits. |
 
 ### Supported `feature_set` values:
 
@@ -297,8 +299,7 @@ If the model generates a schedule with low confidence, these options define the 
 | `schedule_file`    | str   | `Fallback_Schedule.csv` | Path to the CSV file defining the fallback schedule format.                                                                                                                                                                         |
 | `certainty_range`  | float | `0.3`                   | Defines the thresholds for confident predictions. Predictions `<= certainty_range` are confidently OFF; predictions `>= 1.0 - certainty_range` are confidently ON. Predictions between these thresholds are considered uncertain.   |
 | `min_coverage`     | float | `0.2`                   | Minimum fraction of the day where the model must be confident in its predictions, if this value is not achieved then the fallback strategy defined in `action` is applied.                                                          |
-| `ON_boost`         | float | `1.0`                   | Controls how much the model leans towards predicting ON intervals. A value of `1.0` means no additional weighting; values greater than 1.0 increase the weight given to ONs by dividing the number of OFFs by `(ONs / ON_boost)`    |
-| `min_data_in_leaf` | int   | `10`                    | The minimum number of data points required in a leaf of a decision tree. Lower values allow more splits and can help the model focus on rare patterns, but may lead to overfitting. Higher values enforce more conservative splits. |
+
 
 ### `action` options:
 

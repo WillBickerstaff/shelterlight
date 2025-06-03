@@ -349,8 +349,8 @@ class ConfigLoader:
     @property
     def fallback_action(self) -> str:
         """The fallback method to use when model confidence is low."""
-        return  self.get_config_value(self.config, "FALLBACK",
-                                       "action").lower()
+        return self.get_config_value(self.config, "FALLBACK",
+                                     "action").lower()
 
     @property
     def fallback_history_days(self) -> int:
@@ -385,7 +385,8 @@ class ConfigLoader:
     def min_data_in_leaf(self) -> int:
         """Minimum amount of data in a leaf.
 
-        Lower values increase sensitivity to rare cases."""
+        Lower values increase sensitivity to rare cases.
+        """
         return self.get_config_value(self.config, "MODEL",
                                      "min_data_in_leaf")
 

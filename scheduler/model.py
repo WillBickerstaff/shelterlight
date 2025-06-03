@@ -69,7 +69,7 @@ class LightModel(SchedulerComponent):
         y_all = (df_sorted['activity_pin'] > 0).astype(int)
         if len(df_sorted) < 1000:
             logging.warning("Validation disabled. Dataset too small "
-                                "(%d rows).", len(df_sorted))
+                            "(%d rows).", len(df_sorted))
             return (df_sorted[feature_cols], pd.DataFrame(),
                     y_all, pd.Series(dtype=int))
 
@@ -170,12 +170,12 @@ class LightModel(SchedulerComponent):
         # 5-Train the model
         if not x_val.empty:
             val_data = lgb.Dataset(x_val, label=y_val)
-            self._train_with_data(train_data = train_data,
-                                  val_data = val_data,
-                                  feature_cols = feature_cols)
+            self._train_with_data(train_data=train_data,
+                                  val_data=val_data,
+                                  feature_cols=feature_cols)
         else:
-            self._train_with_data(train_data = train_data,
-                                  feature_cols = feature_cols)
+            self._train_with_data(train_data=train_data,
+                                  feature_cols=feature_cols)
 
     def _train_with_data(self,
                          train_data: lgb.Dataset,
@@ -375,9 +375,9 @@ class LightModel(SchedulerComponent):
 
         # If theres not enough left to get meaningfull variance, bail out.
         if len(grouped) < 2:
-               logging.warning("Not enough schedule data for 3σ filtering, "
-                               "skipping.")
-               return df_intervals, df_schedules
+            logging.warning("Not enough schedule data for 3σ filtering, "
+                            "skipping.")
+            return df_intervals, df_schedules
 
         grouped["fp_rate"] = grouped["false_positive"] / grouped["total"]
         grouped["fn_rate"] = grouped["false_negative"] / grouped["total"]
@@ -395,7 +395,7 @@ class LightModel(SchedulerComponent):
         ].index
 
         logging.debug("original_days: %d, good_days: %d",
-                     original_days, len(good_days))
+                      original_days, len(good_days))
 
         logging.info("Filtered out %d 3σ outlier days; %d days retained.",
                      original_days - len(good_days), len(good_days))
