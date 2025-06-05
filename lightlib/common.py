@@ -43,6 +43,20 @@ class LogColor(str, Enum):
     BG_GRAY = "\033[97;100m"      # white on gray
 
 
+def sec_to_min(seconds) -> tuple[int, int, int]:
+    minutes  = int(seconds / 60)
+    hours = int(minutes / 60)
+    seconds = seconds - (minutes * 60)
+    minutes = minutes - (hours * 60)
+    return hours, minutes, seconds
+
+def sec_to_min_str(seconds) -> str:
+    h, m, s = sec_to_min(seconds)
+    str_val = ""
+    if h > 0: str_val = f"{h} hrs, "
+    if m > 0 or h > 0: str_val = f"{str_val} {m} min, "
+    return f"{str_val} {s} sec"
+
 def get_now():
     """Return a datetime.datetime object representing now."""
     return dt.datetime.now(dt.timezone.utc)

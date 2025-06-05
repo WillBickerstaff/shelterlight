@@ -18,6 +18,7 @@ from threading import Lock
 from typing import Optional
 from collections import OrderedDict
 from lightlib.common import get_today, get_tomorrow, get_now, get_yesterday
+from lightlib.common import sec_to_min_str
 from lightlib.db import DB
 from lightlib.config import ConfigLoader
 from scheduler.features import FeatureEngineer
@@ -25,6 +26,49 @@ from scheduler.model import LightModel
 from scheduler.evaluation import ScheduleEvaluator
 from scheduler.store import ScheduleStore
 from scheduler.fallback import Fallback
+
+def schedule_tostr(schedule_date: Optional[dt.date] = None) -> str:
+    """Format a schedule for the given date.
+
+    Generates a string formatted table representing the prediction
+    sechdule for the given date
+
+    Arguments
+    ---------
+    schedule_date: Optional[dt.date]
+         the date the table is required for. Defaults to today
+    """
+    if schedule_date is None:
+        schedule_date = get_today()
+
+    db = DB()
+    query = """
+        SELECT date, start_time, end_time, prediction, confidence
+        FROM light_schedules
+        WHERE date = %(date)s
+    """
+
+    engine = db.get_alchemy_engine()
+    schedule = pd.read_sql_query(
+        query, engine, params={'date': schedule_date.isoformat()})
+    sorted = schedule.sort_values(by=['start_time'])
+    # Table heading
+    lines = [
+        f"UTC Schedule generated for {schedule_date.isoformat()}:\n",
+        "Sched Date  | Start    | End      | State | Confidence",
+        "-" * 59
+    ]
+
+    for r in sorted.itertuples():
+        state = "ON" if r.prediction else "OFF"
+        lines.append(
+            f" {r.date.strftime('%Y-%m-%d')} |"
+            f" {r.start_time.strftime('%H:%M')}    |"
+            f" {r.end_time.strftime('%H:%M')}    |"
+            f" {state:^5} | {r.confidence:.2f}"
+        )
+
+    return("\n" + "\n".join(lines))
 
 
 class LightScheduler:
@@ -140,7 +184,8 @@ class LightScheduler:
                     logging.error("Failed to reconnect to the database: %s", e)
                     self.db = None  # Set to None to prevent further issues
 
-    def _progressive_history(self) -> int:
+    @staticmethod
+    def progressive_history(max_days: Optional[int] = None) -> int:
         """Return the maximum available number of days for training.
 
         Allow the model to adjust its training history dynamically based on
@@ -152,21 +197,16 @@ class LightScheduler:
         int
             The number of days to use for training, capped at MAX_DAYS_HISTORY.
         """
-        MAX_DAYS_HISTORY = self.days_history
+        MAX_DAYS_HISTORY = max_days or ConfigLoader().training_days_history
         MIN_DAYS_HISTORY = 2    # Minimum to avoid meaningless tiny training
 
         try:
             # Check database connection
-            if self.db is None or self.db.conn.closed:
-                self.set_db_connection()
-                if self.db is None:
-                    logging.error(
-                        "No database connection available to check history.")
-                    return MIN_DAYS_HISTORY
+            db = DB()
 
             # Query for the oldest timestamp in activity_log
             query = "SELECT MIN(timestamp) FROM activity_log;"
-            with self.db.conn.cursor() as cursor:
+            with db.conn.cursor() as cursor:
                 cursor.execute(query)
                 result = cursor.fetchone()
                 oldest_timestamp = result[0]
@@ -264,7 +304,7 @@ class LightScheduler:
                 self.evaluator.evaluate_previous_schedule(get_yesterday())
                 # Retrain the model using updated accuracy data
                 self.model_engine.train_model(
-                    days_history=self._progressive_history())
+                    days_history=LightScheduler.progressive_history())
                 training_end = time.monotonic()
                 # Generate a new schedule for tomorrow
                 new_schedule = self.generate_daily_schedule(
@@ -280,13 +320,17 @@ class LightScheduler:
                     # Log the successful update and return the new schedule
                     logging.info("Successfully updated schedule for %s",
                                  date_tomorrow)
-                self._log_schedule(new_schedule, date_tomorrow)
+                    self._log_schedule(date_tomorrow)
+
                 final_time = time.monotonic()
+                time_str = sec_to_min_str(final_time)
                 logging.info("Training and schedule generation completed.\n"
+                             "\t%s"
                              "\t           Training duration: %ds\n"
                              "\tSchedule Generation duration: %ds\n"
                              "\t-----------------------------------\n"
                              "\t                  Total time: %ds\n",
+                             time_str,
                              training_end - training_start,
                              final_time - training_end,
                              final_time - training_start)
@@ -394,7 +438,7 @@ class LightScheduler:
         if retrain == 1:
             self.update_daily_schedule()
 
-    def _log_schedule(self, schedule: dict, schedule_date: dt.date) -> None:
+    def _log_schedule(self, schedule_date: dt.date) -> None:
         """Log the generated UTC schedule as a fomatted table (DEBUG only).
 
         Logs each scheduled interval where the light is predicted to be ON,
@@ -407,48 +451,13 @@ class LightScheduler:
 
         Args
         ----
-        schedule : dict
-            The generated schedule, where each key is an interval number and
-            the value is a dictionary containing 'start', 'end', 'prediction',
-            and optionally 'confidence'.
-
         schedule_date : datetime.date
-            The date the schedule was generated for, used in the log output.
+            The date of the schedule required.
         """
-        if not schedule:
-            logging.warning("Empty UTC Schedule generated")
-            return
         if not logging.getLogger().isEnabledFor(logging.INFO):
             return  # Skip formatting unless info level is enabled
 
-        rows = []
-        # Extract all intervals and build row data
-        for interval, val in schedule.items():
-            rows.append({
-                "start": val["start"],
-                "end": val["end"],
-                "confidence": val.get("confidence", 0.0),
-                "state": "ON" if val.get("prediction", 0) == 1 else "OFF"
-            })
-
-        # Sort by start time
-        rows.sort(key=lambda r: r["start"])
-
-        # Table heading
-        lines = [
-            "UTC Schedule generated:\n",
-            "Sched Date  | Start    | End      | State | Confidence",
-            "-" * 59
-        ]
-        for r in rows:
-            lines.append(
-                f" {schedule_date.strftime('%Y-%m-%d')} |"
-                f" {r['start'].strftime('%H:%M')}    |"
-                f" {r['end'].strftime('%H:%M')}    |"
-                f" {r['state']:^5} | {r['confidence']:.2f}"
-            )
-
-        logging.info("\n" + "\n".join(lines))
+        logging.info(schedule_tostr(schedule_date))
 
     def _calculate_confidence_coverage(self,
                                        probabilities: list[float]) -> float:

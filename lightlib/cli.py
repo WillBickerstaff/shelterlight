@@ -12,9 +12,11 @@ Version: 0.1
 import argparse
 import logging
 import traceback
+import time
 import datetime as dt
-from scheduler.Schedule import LightScheduler
+from scheduler.Schedule import LightScheduler, schedule_tostr
 from .exceptions import ExitAfter
+from .common import sec_to_min_str
 
 
 def parse_args():
@@ -99,10 +101,12 @@ def backfill_schedules(backfill_days=-1):
     print("Generating historic schedules for the last "
           f"{len(activity_dates)} days...")
 
-    training_days = 30  # ConfigLoader().training_days_history
+    training_days = LightScheduler.progressive_history()
     for idx, target_date in enumerate(activity_dates):
+        start_time = time.monotonic()
         try:
-            print(f"Processing {idx + 1}/{len(activity_dates)}: {target_date}")
+            print(f"Processing {idx + 1}/{len(activity_dates)}: {target_date}"
+                  "...", end=" ", flush=True)
 
             # Evaluate previous days schedule if it exists
             previous_date = target_date - dt.timedelta(days=1)
@@ -113,10 +117,13 @@ def backfill_schedules(backfill_days=-1):
             scheduler.model_engine.train_model(days_history=training_days)
             if scheduler.model_engine.model is None:
                 print(f"No model trained for {target_date}. "
-                      "Skipping schedule generation.")
+                      "Skipping schedule generation.", flush=True)
                 continue
             # Generate the schedule
             scheduler.generate_daily_schedule(target_date.isoformat())
+            gen_time = time.monotonic() - start_time
+            gen_time_str = sec_to_min_str(gen_time)
+            print(f"Done. Took {gen_time}s ({gen_time_str})", flush=True)
         except Exception as e:
             print(f"Error processing {target_date}: {e}")
             traceback.print_exc()

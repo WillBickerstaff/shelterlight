@@ -229,6 +229,11 @@ class ConfigLoader:
         },
         # ------------------------------------------------------------#
         "MODEL": {
+            "num_boost_rounds":         {"value": 100,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
             "training_days":            {"value": 90,
                                          "type": int,
                                          "is_pin": False,
@@ -256,6 +261,11 @@ class ConfigLoader:
 
             "historic_weight":          {"value": 0.5,
                                          "type": float,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "boost_enable":             {"value": True,
+                                         "type": bool,
                                          "is_pin": False,
                                          "accepts_list": False},
 
@@ -397,6 +407,12 @@ class ConfigLoader:
                                      "min_coverage")
 
     @property
+    def model_boost_rounds(self) -> int:
+        """Number of boosting rounds for LightGBM."""
+        return self.get_config_value(self.config, "MODEL",
+                                     "num_boost_rounds")
+
+    @property
     def enable_model_validation(self) -> bool:
         """Enable or disable model validation data splits."""
         return self.get_config_value(self.config, "MODEL",
@@ -413,6 +429,12 @@ class ConfigLoader:
         """Number of rounds score disn't improve before early stopping."""
         return self.get_config_value(self.config, "MODEL",
                                      "early_stopping_rounds")
+
+    @property
+    def boost_enable(self) -> bool:
+        """Enable ON boosting."""
+        return self.get_config_value(self, "MODEL",
+                                    "enable_boost")
 
     @property
     def min_data_in_leaf(self) -> int:

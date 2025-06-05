@@ -147,7 +147,8 @@ class LightModel(SchedulerComponent):
         num_on = (y_train == 1).sum()
         num_off = (y_train == 0).sum()
 
-        if num_on > 0:
+        # Boost ONs if needed (for sparse datasets)
+        if num_on > 0 and ConfigLoader().boost_enable:
             on_boost = ConfigLoader().ON_boost
             scale_pos_weight = num_off / (num_on / on_boost)
             self.model_params["scale_pos_weight"] = scale_pos_weight
@@ -156,8 +157,8 @@ class LightModel(SchedulerComponent):
                          scale_pos_weight, on_boost)
         else:
             self.model_params["scale_pos_weight"] = 1.0
-            logging.warning("No positive samples found. scale_pos_weight "
-                            "set to 1.0")
+            logging.warning("No positive samples found or ON boost disabled. "
+                            ". scale_pos_weight set to 1.0")
 
         self.model_params["min_data_in_leaf"] = ConfigLoader().min_data_in_leaf
         # 3-Define the target variable
@@ -197,21 +198,23 @@ class LightModel(SchedulerComponent):
         """
         use_validation = val_data is not None
         early_stopping_rounds = ConfigLoader().early_stopping_rounds
+        boost_rounds = ConfigLoader().model_boost_rounds
         try:
             if use_validation:
                 self.model = lgb.train(
                     self.model_params,
                     train_data,
-                    num_boost_round=100,
+                    num_boost_round=boost_rounds,
                     valid_sets=[train_data, val_data],
                     valid_names=["train", "valid"],
-                    early_stopping_rounds=20
+                    early_stopping_rounds=early_stopping_rounds
                 )
             else:
                 self.model = lgb.train(
                     self.model_params,
                     train_data,
-                    num_boost_round=100
+                    num_boost_round=boost_rounds,
+                    valid_sets=[train_data]
                                                             )
         except TypeError:
             # Fallback for older LightGBM versions
@@ -224,16 +227,18 @@ class LightModel(SchedulerComponent):
                 self.model = lgb.train(
                     self.model_params,
                     train_data,
-                    num_boost_round=100,
+                    num_boost_round=boost_rounds,
                     valid_sets=[train_data, val_data],
                     valid_names=["train", "valid"],
-                    callbacks=[lgb.early_stopping(stopping_rounds=20)]
+                    callbacks=[lgb.early_stopping(
+                        stopping_rounds=early_stopping_rounds)]
                 )
             else:
                 self.model = lgb.train(
                     self.model_params,
                     train_data,
-                    num_boost_round=100
+                    num_boost_round=boost_rounds,
+                    valid_sets=[train_data]
                 )
 
         # Log feature importance
@@ -256,7 +261,6 @@ class LightModel(SchedulerComponent):
         -------
             np.ndarray: Array of predicted labels (0 or 1).
         """
-        logging.debug("min_confidence in model: %.2f", self.min_confidence)
 
         if self.model is None:
             logging.error("No trained model found. Cannot make predictions.")
@@ -274,7 +278,7 @@ class LightModel(SchedulerComponent):
         probabilities = self.model.predict(x_predict, raw_score=False)
         predictions = (y_pred >= self.min_confidence).astype(int)
 
-        logging.debug("min_confidence in model: %.2f", self.min_confidence)
+        logging.debug("ON confidence threshold is: %.2f", self.min_confidence)
         logging.debug("Prediction probabilities: %s", probabilities.tolist())
         logging.debug("Binary predictions: %s", predictions.tolist())
 
@@ -396,9 +400,6 @@ class LightModel(SchedulerComponent):
             (grouped["fp_rate"] <= fp_limit) &
             (grouped["fn_rate"] <= fn_limit)
         ].index
-
-        logging.debug("original_days: %d, good_days: %d",
-                      original_days, len(good_days))
 
         logging.info("Filtered out %d 3σ outlier days; %d days retained.",
                      original_days - len(good_days), len(good_days))

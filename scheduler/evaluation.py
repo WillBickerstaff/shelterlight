@@ -182,19 +182,19 @@ class ScheduleEvaluator(SchedulerComponent):
                           is_false_negative,
                           date, interval_number))
 
-                # Calculate and log metrics
-                total_intervals = true_positives + false_positives + \
-                    false_negatives + true_negatives
-                precision = true_positives / \
-                    (true_positives + false_positives) if \
-                    (true_positives + false_positives) else 0.0
-                recall = true_positives / \
-                    (true_positives + false_negatives) if \
-                    (true_positives + false_negatives) else 0.0
-                accuracy = (true_positives + true_negatives) / \
-                    total_intervals if total_intervals else 0.0
+            # Calculate and log metrics
+            total_intervals = true_positives + false_positives + \
+                false_negatives + true_negatives
+            precision = true_positives / \
+                (true_positives + false_positives) if \
+                (true_positives + false_positives) else 0.0
+            recall = true_positives / \
+                (true_positives + false_negatives) if \
+                (true_positives + false_negatives) else 0.0
+            accuracy = (true_positives + true_negatives) / \
+                total_intervals if total_intervals else 0.0
 
-                logging.info(
+            logging.info(
                     f"Schedule evaluation for {date}: "
                     f"TP={true_positives}, FP={false_positives}, "
                     f"FN={false_negatives}, TN={true_negatives}, "
@@ -202,12 +202,13 @@ class ScheduleEvaluator(SchedulerComponent):
                     f"Accuracy={accuracy:.2%}"
                 )
 
-                if (true_positives + false_positives) == total_intervals:
-                    logging.warning(f"All intervals predicted ON for {date} "
-                                    "— possible fallback behavior.")
-                elif (true_negatives + false_negatives) == total_intervals:
-                    logging.warning(f"All intervals predicted OFF for {date} "
-                                    "— possibly under-predicting.")
+            if (true_positives + false_positives) == total_intervals:
+                logging.warning(f"All intervals predicted ON for {date} "
+                                "— possible fallback behavior.")
+            elif (true_negatives + false_negatives) == total_intervals:
+                logging.warning(f"All intervals predicted OFF for {date} "
+                                "— possibly under-predicting.")
+
             self.db.conn.commit()
             logging.debug(f"Schedule evaluation completed for {date}")
 

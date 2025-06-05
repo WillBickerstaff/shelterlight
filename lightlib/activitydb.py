@@ -127,11 +127,13 @@ class Activity:
         low-to-high transition (RISING edge) and `_end_activity_event` on a
         high-to-low transition (FALLING edge).
         """
+        logging.info("Setting up activity monitoring on pins %s",
+                     self._activity_inputs)
         for pin in self._activity_inputs:
             try:
                 lgpio.gpio_claim_input(self._gpio_handle, pin,
                                        lgpio.SET_PULL_DOWN)
-                logging.info("GPIO pin %s setup as INPUT, PULL DOWN", pin)
+                logging.debug("GPIO pin %s setup as INPUT, PULL DOWN", pin)
                 # Detect rising edge to mark start of activity
                 logging.debug("Adding edge detection to pin %s", pin)
                 logging.debug("pin is type %s", type(pin))
@@ -139,9 +141,7 @@ class Activity:
                 lgpio.callback(self._gpio_handle, pin, lgpio.BOTH_EDGES,
                                self._activity_event_handler)
                 logging.info(
-                    "Activity monitoring initialized on GPIO pins: %s",
-                    self._activity_inputs
-                )
+                    "Activity monitoring initialized on GPIO pin: %s", pin)
 
             except RuntimeError as e:
                 logging.error("Failed to set edge detection for pin %s: %s",
