@@ -12,6 +12,8 @@ Version: 0.1
 import logging
 import psycopg2
 import time
+import datetime as dt
+import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from lightlib.config import ConfigLoader
@@ -269,17 +271,17 @@ class DB:
         pd.DataFrame
             DataFrame of interval data for the date, with all columns
         """
-        start = dt.datettime.combine(date, dt.time.min)
-        end = dt.datetime.combine(date = dt.timedelta(days=1), dt.time.min)
+        start = dt.datetime.combine(date, dt.time.min)
+        end = dt.datetime.combine(date + dt.timedelta(days=1), dt.time.min)
 
         query = """
             SELECT *
             FROM activity_log
-            WHERE timestamp >= :start AND timestamp < :end
+            WHERE timestamp >= %(start)s AND timestamp < %(end)s
             ORDER BY timestamp ASC
         """
 
-        return pd.read_sql_query(quer, self.engine, params={
+        return pd.read_sql_query(query, self.get_alchemy_engine(), params={
             "start": start.isoformat(),
             "end": end.isoformat()}).sort_values("timestamp")
 

@@ -87,7 +87,7 @@ def _find_most_recent_weekday_with_data(
         SELECT DATE(timestamp) AS date
         FROM activity_log
         WHERE activity_pin > 0
-            AND timestamp < :cutoff
+            AND timestamp < %(cutoff)s
         GROUP BY date
         ORDER BY date DESC
     """

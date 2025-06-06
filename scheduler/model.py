@@ -514,14 +514,30 @@ class LightModel(SchedulerComponent):
         -------
             List of datetime timestamps where activity occurred.
         """
-        query = """
-            SELECT timestamp FROM activity_log
-            WHERE timestamp >= %(start)s AND timestamp < %(end)s
-        """
-        engine = self.db.get_alchemy_engine()
-        df = pd.read_sql_query(query, con=engine,
-                               params={'start': start, 'end': end})
-        return df['timestamp'].tolist()
+        all_data = []
+        current_date = start.date()
+        while current_date <= end.date():
+            df = self.db.load_activity_for_date(current_date)
+            if not df.empty:
+                converted = pd.to_datetime(df["timestamp"], errors="coerce")
+                invalid_count = converted.isna().sum()
+                if invalid_count > 0:
+                    logging.warning("Dropped %d rows with invalid timestamps"
+                                    " on %s", invalid_count, current_date)
+                df = df[converted.notna()].copy()
+                df["timestamp"] = converted[converted.notna()]
+                all_data.append(df)
+            current_date += dt.timedelta(days=1)
+
+        if not all_data:
+            # If there is nothing, return an empty list
+            return []
+
+        df_all = pd.concat(all_data, ignore_index=True)
+        # Filter to exact start/end (full days are retrieved)
+        return df_all.loc[(df_all["timestamp"] >= start) &
+                          (df_all["timestamp"] < end), "timestamp"
+                          ].tolist()
 
     def _build_interval_grid(self, start: dt.datetime,
                              end: dt.datetime) -> pd.DataFrame:
