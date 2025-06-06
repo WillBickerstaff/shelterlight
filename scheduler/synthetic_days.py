@@ -10,13 +10,13 @@ Author: Will Bickerstaff
 Version: 0.2
 """
 
-import sqlalchemy
 import datetime as dt
 import pandas as pd
 from typing import Optional
+from lightlib.db import DB
 
 def generate_synthetic_days(missing_dates: list[dt.date],
-                            engine: Optional[sqlalchemy.engine.Engine] = None,
+                            db: Optional[db.DB] = None,
                             interval_minutes: int,
                             target_columns: list[str],
                             activity_only: bool = True) -> pd.DataFrame:
@@ -56,27 +56,57 @@ def generate_synthetic_days(missing_dates: list[dt.date],
         Includes columns for all required training features, plus an
         `is_synthetic` flag set to True.
     """
+    if db is None:
+        db = DB()
 
 
 def _find_most_recent_weekday_with_data(
-        engine Optional[sqlalchemy.engine.Engine] = None,
-        target_date: dt.date,
+        db: db.DB, target_date: dt.date,
         interval_minutes: int) -> Optional[dt.date]:
-    """Search backwards in time for a past day that:
+    """Find the most recent date before `target_date` with activity data.
 
-    - Matches the same weekday as `target_date`
-    - Contains activity data in `activity_log`
+    Looks for days in the activity log that match the same weekday and have
+    contain activity data.
+
+    Args:
+    -----
+    target_date: datetime.date
+        The date for which we want to replicate a synthetic day.
+    engine: sqlalchemy.engine.Engine
+        SQLAlchemy engine to access the activity_log table.
+
+    Returns
+    -------
+    Optional[datetime.date]
+        The most recent suitable date before target_date, None if nothing is
+        found.
     """
-    pass
+    weekday = target_date.weekday()
 
-
-def _load_activity_for_date(engine Optional[sqlalchemy.engine.Engine] = None,
-                            date: dt.date) -> pd.DataFrame:
-    """Load activity data for a specific date from the activity_log table.
-
-    Should return a DataFrame with at least ['timestamp', 'activity_pin'].
+    query = """
+        SELECT DATE(timestamp) AS date
+        FROM activity_log
+        WHERE activity_pin > 0
+            AND timestamp < :cutoff
+        GROUP BY date
+        ORDER BY date DESC
     """
-    pass
+
+    df= pd.read_sql_query(
+        query, engine, params={"cutoff": target_date.isoformate()})
+
+    if df.empty:
+        return None
+
+    # Add a column with the weekday number (0=Mon... 6=Sun)
+    df["weekday"] = df["date"].apply(lambda d: d.weekday())
+    # Filter rows that match the target_date weekday
+    matches = df[df["weekday"] == weekday]
+    if matches.empty:
+        return None
+
+    # Return the first match (most recent)
+    return matches.iloc[0]["date"]
 
 
 def _shift_activity_to_date(df: pd.DataFrame, source_date: dt.date,

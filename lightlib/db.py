@@ -254,6 +254,35 @@ class DB:
                 self._alchemy_engine = None
         return self._alchemy_engine
 
+    def load_activity_for_date(self, date: dt.date) -> pd.DataFrame:
+        """Load all activity data for a specific date.
+
+        Queries the activity_log table for rows falling within the given day.
+
+        Args:
+        ----
+        date: datetime.date
+            The specific date to retrieve interval activity for.
+
+        Returns:
+        -------
+        pd.DataFrame
+            DataFrame of interval data for the date, with all columns
+        """
+        start = dt.datettime.combine(date, dt.time.min)
+        end = dt.datetime.combine(date = dt.timedelta(days=1), dt.time.min)
+
+        query = """
+            SELECT *
+            FROM activity_log
+            WHERE timestamp >= :start AND timestamp < :end
+            ORDER BY timestamp ASC
+        """
+
+        return pd.read_sql_query(quer, self.engine, params={
+            "start": start.isoformat(),
+            "end": end.isoformat()}).sort_values("timestamp")
+
     def __del__(self):
         """Destructor to ensure connection is closed on deletion of the DB."""
         self.close_connection()
