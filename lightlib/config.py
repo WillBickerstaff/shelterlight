@@ -295,6 +295,23 @@ class ConfigLoader:
                                          "accepts_list": False}
         },
         # ------------------------------------------------------------#
+        "SYNTHETIC_DAYS": {
+            "enable_synthesis":         {"value": True,
+                                         "type": bool,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "inject_noise":             {"value": True,
+                                         "type": bool,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "jitter_std_seconds":       {"value": 300,
+                                         "type": int,
+                                         "is_pin": False,
+                                         "accepts_list": False}
+        },
+        # ------------------------------------------------------------#
         "FALLBACK": {
             "action":                   {"value": "History",
                                          "type": str,
@@ -405,6 +422,24 @@ class ConfigLoader:
         """Get the minimum coverage required by certainty range."""
         return self.get_config_value(self.config, "FALLBACK",
                                      "min_coverage")
+
+    @property
+    def synth_days(self) -> bool:
+        """Generate synthetic days for days without activity."""
+        return self.get_config_value(self.config, "SYNTHETIC_DAYS",
+                                     "enable_synthesis")
+
+    @property
+    def inject_synth_noise(self) -> bool:
+        """Inject noise into synthetic days."""
+        return self.get_config_value(self.config, "SYNTHETIC_DAYS",
+                                     "inject_noise")
+
+    @property
+    def synth_noise_seconds(self) -> int:
+        """Jitter noise standard deviation amount in seconds."""
+        return self.get_config_value(self.config, "SYNTHETIC_DAYS",
+                                     "jitter_std_seconds")
 
     @property
     def model_boost_rounds(self) -> int:

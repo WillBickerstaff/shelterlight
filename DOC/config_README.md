@@ -293,6 +293,17 @@ Each feature set includes different combinations of time encodings, activity tre
 
 ---
 
+## [SYNTHETIC_DAYS]
+Synthetic days can be enabled to replicate missing days in the activity log. Synthetic days looks for the most recent matching weekday with activity and replicates it into the missing day. This replication is used for model training only and is not stored in the database.
+
+| Option               | Type | Default | Description                                                                                                                         |
+|----------------------|------|---------|-------------------------------------------------------------------------------------------------------------------------------------|
+| `enable_synthesis`   | bool | True    | Enables generation of synthetic training data. If False, non of the remaining options in this section have any effect.              |
+| `inject_noise`       | bool | True    | Injects noise into the replication so as activity doesn't appear at exactly the same time. Recomended True to prevent over-fitting. |
+| `jitter_std_seconds` | int  | 300     | Standard deviation of the noise injected.                                                                                           |
+
+---
+
 ## [FALLBACK]
 
 If the model generates a schedule with low confidence, these options define the fallback behaviour.
