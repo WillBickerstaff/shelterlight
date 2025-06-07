@@ -43,13 +43,13 @@ class LogColor(str, Enum):
     BG_GRAY = "\033[97;100m"      # white on gray
 
 
-def sec_to_hms(seconds: int) -> tuple[int, int, int]:
+def sec_to_hms(seconds: int | float) -> tuple[int, int, float]:
     """Convert total seconds to (hours, minutes, seconds)."""
     minutes = seconds // 60
     hours = minutes // 60
     seconds = seconds - (minutes * 60)
     minutes = minutes - (hours * 60)
-    return hours, minutes, seconds
+    return int(hours), int(minutes), seconds
 
 
 def sec_to_hms_str(seconds: int) -> str:
@@ -58,9 +58,11 @@ def sec_to_hms_str(seconds: int) -> str:
     parts = []
     if h > 0:
         parts.append(f"{h} hrs")
-        if m > 0 or h > 0:
-            parts.append(f"{m} min")
-            parts.append(f"{s} sec")
+    if m > 0:
+        parts.append(f"{m} min")
+    if s > 0 or not parts:
+        # Include seconds always if nothing else is included
+        parts.append(f"{s:.0f} sec")
     return ", ".join(parts)
 
 

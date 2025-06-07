@@ -350,7 +350,8 @@ class LightModel(SchedulerComponent):
                                   sorted(df_synthetic["date"].unique())])
 
             logging.info(f"Training set: {len(df_intervals)} intervals, "
-                         f"{sum(df_intervals['activity_pin'])} with activity")
+                         f"{(df_intervals['activity_pin'] > 0).sum()} "
+                         f"with activity")
 
         except Exception as e:
             logging.error("Error retrieving training data: %s", e,

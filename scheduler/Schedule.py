@@ -323,17 +323,21 @@ class LightScheduler:
                     self._log_schedule(date_tomorrow)
 
                 final_time = time.monotonic()
-                time_str = sec_to_hms_str(final_time)
-                logging.info("Training and schedule generation completed.\n"
-                             "\t%s"
-                             "\t           Training duration: %ds\n"
-                             "\tSchedule Generation duration: %ds\n"
-                             "\t-----------------------------------\n"
-                             "\t                  Total time: %ds\n",
-                             time_str,
-                             training_end - training_start,
-                             final_time - training_end,
-                             final_time - training_start)
+                training_duration = training_end - training_start
+                schedule_duration = final_time - training_end
+                total_duration = final_time - training_start
+                time_str = sec_to_hms_str(total_duration)
+
+                logging.info(f"Training and schedule generation completed.\n"
+                             f"\t{time_str}\n"
+                             f"\t           Training duration: "
+                             f"{int(training_duration)}s\n"
+                             f"\tSchedule Generation duration: "
+                             f"{int(schedule_duration)}s\n"
+                             f"\t-----------------------------------\n"
+                             f"\t                  Total time: "
+                             f"{int(total_duration)}s\n")
+
                 return new_schedule
 
         except Exception as e:

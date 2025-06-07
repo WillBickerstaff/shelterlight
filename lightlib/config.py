@@ -286,7 +286,7 @@ class ConfigLoader:
         },
         # ------------------------------------------------------------#
         "SYNTHETIC_DAYS": {
-            "enable_synthesis":         {"value": True,
+            "enable_synthesis":         {"value": False,
                                          "type": bool,
                                          "is_pin": False,
                                          "accepts_list": False},
