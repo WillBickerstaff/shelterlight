@@ -17,6 +17,7 @@ import numpy as np
 import datetime as dt
 import scheduler.feature_sets as fset
 from scheduler.base import SchedulerComponent
+from .synthetic_days import generate_synthetic_days
 from lightlib.config import ConfigLoader
 from lightlib.common import get_now
 
@@ -329,12 +330,24 @@ class LightModel(SchedulerComponent):
                     "false_positive", "false_negative", "confidence",
                     "recency"])
 
-            if not ConfigLoader().train_with_silent_days:
-                df_intervals, df_schedules = self._filter_no_activity_days(
-                    df_intervals, df_schedules)
-            if ConfigLoader().filter_low_quality_days:
-                df_intervals, df_schedules = self._filter_low_quality_days(
-                    df_intervals, df_schedules)
+            if ConfigLoader().synth_days:
+                # Generate synthetic days to fill gaps in activity data
+                df_synthetic = generate_synthetic_days(
+                    start_date=df_intervals["date"].min(),
+                    end_date=df_intervals["date"].max(),
+                    db=self.db,
+                    target_columns=list(df_intervals.columns),
+                    activity_only=True)
+
+                if not df_synthetic.empty:
+                    df_intervals = pd.concat([df_intervals, df_synthetic],
+                                             ignore_index=True, axis=0)
+                    logging.info("Added %d synthetic intervals for %d "
+                                 "missing days.", len(df_synthetic),
+                                 df_synthetic["date"].nunique())
+                    logging.debug("Synthetic dates generated: %s",
+                                  [d.isoformat() for d in
+                                  sorted(df_synthetic["date"].unique())])
 
             logging.info(f"Training set: {len(df_intervals)} intervals, "
                          f"{sum(df_intervals['activity_pin'])} with activity")
@@ -346,100 +359,6 @@ class LightModel(SchedulerComponent):
 
         # Return the complete dataset
         return df_intervals, df_schedules
-
-    def _filter_low_quality_days(
-        self,
-        df_intervals: pd.DataFrame,
-        df_schedules: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Filter out statistically abnormal prediction days using 3σ rule.
-
-        Days with False Positive or False Negative rates more than 3 std dev
-        above the mean are dropped.
-
-        Returns
-        -------
-            Tuple of filtered (df_intervals, df_schedules)
-        """
-        # Bail early if there are no schedules or we loose everything
-        if df_schedules.empty:
-            logging.warning("No schedule data available for 3σ filtering, "
-                            "skipping.")
-            return df_intervals, df_schedules
-
-        # Count unique days in originals unfiltered schedule dataset
-        original_days = df_schedules["date"].nunique()
-
-        # Only evaluate dates that exist in both datasets
-        valid_dates = set(df_intervals["date"].unique())
-        df_schedules = df_schedules[df_schedules["date"].isin(valid_dates)]
-
-        grouped = df_schedules.groupby("date").agg({
-            "false_positive": "sum",
-            "false_negative": "sum",
-            "was_correct": "count"
-        }).rename(columns={"was_correct": "total"})
-
-        # If theres not enough left to get meaningfull variance, bail out.
-        if len(grouped) < 2:
-            logging.warning("Not enough schedule data for 3σ filtering, "
-                            "skipping.")
-            return df_intervals, df_schedules
-
-        grouped["fp_rate"] = grouped["false_positive"] / grouped["total"]
-        grouped["fn_rate"] = grouped["false_negative"] / grouped["total"]
-
-        # Compute mean and 3σ thresholds
-        fp_mean, fp_std = grouped["fp_rate"].mean(), grouped["fp_rate"].std()
-        fn_mean, fn_std = grouped["fn_rate"].mean(), grouped["fn_rate"].std()
-
-        fp_limit = fp_mean + 3 * fp_std
-        fn_limit = fn_mean + 3 * fn_std
-
-        good_days = grouped[
-            (grouped["fp_rate"] <= fp_limit) &
-            (grouped["fn_rate"] <= fn_limit)
-        ].index
-
-        logging.info("Filtered out %d 3σ outlier days; %d days retained.",
-                     original_days - len(good_days), len(good_days))
-
-        return (
-            df_intervals[df_intervals["date"].isin(good_days)],
-            df_schedules[df_schedules["date"].isin(good_days)]
-        )
-
-    def _filter_no_activity_days(self,
-                                 df_intervals: pd.DataFrame,
-                                 df_schedules: pd.DataFrame
-                                 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Filter out dates with no recorded activity from training data.
-
-        Args
-        ----
-            df_intervals (DataFrame): Interval-level data with
-                'activity_pin' column
-            df_schedules (DataFrame): Schedule accuracy data by date
-
-        Returns
-        -------
-            Tuple of filtered (df_intervals, df_schedules)
-        """
-        activity_by_day = df_intervals.groupby("date")["activity_pin"].sum()
-        active_dates = activity_by_day[activity_by_day > 0].index
-
-        filtered_intervals = df_intervals[
-            df_intervals["date"].isin(active_dates)]
-        filtered_schedules = df_schedules[
-            df_schedules["date"].isin(active_dates)]
-
-        logging.info("Filtered out %d no-activity days; "
-                     "%d interval days, %d schedule days retained.",
-                     len(activity_by_day) - len(active_dates),
-                     filtered_intervals['date'].nunique(),
-                     filtered_schedules['date'].nunique())
-
-        return filtered_intervals, filtered_schedules
 
     def _load_schedule_data(self, start: dt.datetime,
                             end: dt.datetime) -> pd.DataFrame:

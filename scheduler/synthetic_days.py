@@ -12,13 +12,14 @@ Version: 0.2
 
 import datetime as dt
 import pandas as pd
+import numpy as np
+import logging
 from typing import Optional
 from lightlib.db import DB
-from lightlib.common import ConfigLoader
+from lightlib.config import ConfigLoader
 
-def generate_synthetic_days(start_date: dt.date, end_date: dt:date],
-                            db: Optional[db.DB] = None,
-                            interval_minutes: int,
+def generate_synthetic_days(start_date: dt.date, end_date: dt.date,
+                            db: Optional[DB] = None,
                             target_columns: Optional[list[str]] = None,
                             activity_only: bool = True) -> pd.DataFrame:
 
@@ -42,9 +43,6 @@ def generate_synthetic_days(start_date: dt.date, end_date: dt:date],
     engine : sqlalchemy.engine.Engine, optional
         SQLAlchemy engine to use for querying past interval and schedule data.
         If not provided, a default engine from lightlib.db.DB is used.
-    interval_minutes : int
-        Duration of each time interval used in the system (e.g., 10 for
-        10-minute intervals).
     target_columns : list[str]
         List of feature columns required for model training. The output
         DataFrame will match this structure to ensure compatibility.
@@ -61,7 +59,7 @@ def generate_synthetic_days(start_date: dt.date, end_date: dt:date],
     """
     if not ConfigLoader().synth_days:
         return pd.DataFrame()
-    
+
     if db is None:
         db = DB()
 
@@ -82,7 +80,7 @@ def generate_synthetic_days(start_date: dt.date, end_date: dt:date],
     existing_dates = set(pd.to_datetime(existing).date)
 
     # Build the full range and remove the existing days with activity
-    all_dates = set(start_date + dt.timedelta(days=1)
+    all_dates = set(start_date + dt.timedelta(days=i)
                     for i in range((end_date - start_date).days + 1))
     missing_dates = sorted(all_dates - existing_dates)
 
@@ -110,11 +108,8 @@ def generate_synthetic_days(start_date: dt.date, end_date: dt:date],
             df_original, source_date=matched_day, target_date=target_date)
         df_shifted["is_synthetic"] = True
         if inject_noise:
-            jitter = pd.to_timedelta(np.random.normal(loc=0, scale=jitter_sec,
-                                                      size=len(df_shifted)),
-                                     unit="s")
-        df_shifted["timestamp"] += jitter
-
+            df_shifted = _inject_noise(df_shifted, "timestamp",
+                                       target_date, jitter_sec)
         synthetic_rows.append(df_shifted)
 
     if not synthetic_rows:
@@ -133,8 +128,61 @@ def generate_synthetic_days(start_date: dt.date, end_date: dt:date],
 
     return df_final
 
+def _inject_noise(df: pd.DataFrame, date_col: str,
+                  target_date: dt.date,
+                  std_seconds: int) -> pd.DataFrame:
+    """Inject random temporal jitter into a timestamp column.
+
+    Adds normally distributed noise (jitter) to the given timestamp column in
+    the DataFrame. The amount of jitter is determined by a standard deviation
+    in seconds. After jittering, timestamps are clipped to remain within the
+    bounds of the target date, ensuring that they do not cross into adjacent
+    days. The 'date' column is then updated accordingly based on the new
+    timestamps.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The DataFrame containing the timestamp column to be jittered.
+    date_col : str
+        The name of the timestamp column (e.g., "timestamp") in the DataFrame.
+    target_date : datetime.date
+        The date to which all jittered timestamps should belong.
+    std_seconds : int
+        Standard deviation of the jitter to apply, in seconds.
+
+    Returns
+    -------
+    pd.DataFrame
+        A copy of the original DataFrame with the specified timestamp column
+        jittered and clipped to the target date, and a recomputed 'date'
+        column.
+
+    Notes
+    -----
+    - This function does not modify the input DataFrame in-place.
+    - Returned timestamps are guaranteed to lie within [00:00:00, 23:59:59]
+      of the `target_date`.
+    - If `df` is empty, it is returned unchanged.
+    """
+    if df.empty:
+        return df.copy()
+    jitter = pd.to_timedelta(
+            np.random.normal(loc=0, scale=std_seconds, size=len(df)),
+            unit="s")
+    df[date_col] += jitter
+
+    # Ensure jittered timestamps stay within the bounds of the target day
+    day_start = pd.Timestamp(target_date).tz_localize("UTC")
+    day_end = day_start + pd.Timedelta(days=1)
+    df[date_col] = df[date_col].clip(lower=day_start,
+                                     upper=day_end - pd.Timedelta(seconds=1))
+
+    df["date"] = df[date_col].dt.date
+    return df
+
 def _find_most_recent_weekday_with_data(
-        db: db.DB, target_date: dt.date) -> Optional[dt.date]:
+        db: DB, target_date: dt.date) -> Optional[dt.date]:
     """Find the most recent date before `target_date` with activity data.
 
     Looks for days in the activity log that match the same weekday and have
@@ -165,7 +213,8 @@ def _find_most_recent_weekday_with_data(
     """
 
     df= pd.read_sql_query(
-        query, engine, params={"cutoff": target_date.isoformate()})
+        query, db.get_alchemy_engine(),
+        params={"cutoff": target_date.isoformat()})
 
     if df.empty:
         return None

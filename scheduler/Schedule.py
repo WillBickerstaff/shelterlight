@@ -18,7 +18,7 @@ from threading import Lock
 from typing import Optional
 from collections import OrderedDict
 from lightlib.common import get_today, get_tomorrow, get_now, get_yesterday
-from lightlib.common import sec_to_min_str
+from lightlib.common import sec_to_hms_str
 from lightlib.db import DB
 from lightlib.config import ConfigLoader
 from scheduler.features import FeatureEngineer
@@ -323,7 +323,7 @@ class LightScheduler:
                     self._log_schedule(date_tomorrow)
 
                 final_time = time.monotonic()
-                time_str = sec_to_min_str(final_time)
+                time_str = sec_to_hms_str(final_time)
                 logging.info("Training and schedule generation completed.\n"
                              "\t%s"
                              "\t           Training duration: %ds\n"

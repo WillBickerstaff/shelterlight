@@ -258,8 +258,6 @@ Model configuration options used to train the LightGBM prediction engine for lig
 | `training_days`           | int   | `90`      | The number of days of historic data to use in training the model.                                                                                                                                                                   |
 | `feature_set`             | str   | `DEFAULT` | Which feature set to use for model input.                                                                                                                                                                                           |
 | `confidence_threshold`    | float | `0.6`     | Threshold at which the models confidence will determine that lights should be on.                                                                                                                                                   |
-| `train_with_silent_days`  | bool  | `False`   | Train the models using days where no activity was seen. (Enabling can have a negative impact on model behaviour if long periods of inactivity are experienced)                                                                      |
-| `filter_low_quality_days` | bool  | `True`    | Train the model using only days that fall within statistical norms of prediction quality. Uses 3 standard deviations of False Positive & False Negative rates to detect outlier days.                                               |
 | `historic_weight`         | float | `0.5`     | Weight given to data for this time last year. Determines how much influence this data has on the model training.                                                                                                                    |
 ! `boost_enable`            | bool  | `True`    | Enables boostin of ON values. Usefull when ONs are sparse and the model learns to see them as insignificant. Use `On_boost` to adjust the boost amount.                                                                             |
 | `ON_boost`                | float | `1.0`     | Controls how much the model leans towards predicting ON intervals. A value of `1.0` means no additional weighting; values greater than 1.0 increase the weight given to ONs by dividing the number of OFFs by `(ONs / ON_boost)`    |
@@ -294,7 +292,13 @@ Each feature set includes different combinations of time encodings, activity tre
 ---
 
 ## [SYNTHETIC_DAYS]
-Synthetic days can be enabled to replicate missing days in the activity log. Synthetic days looks for the most recent matching weekday with activity and replicates it into the missing day. This replication is used for model training only and is not stored in the database.
+Synthetic days can be enabled to fill in gaps in the activity log caused by missing data. When enabled, the system identifies days with no recorded activity and searches for the most recent historic day with activity on the same weekday. It then replicates the interval-level pattern from that day, shifting timestamps to match the missing date. This synthetic data is used only for model training and is never stored in the database.
+
+This feature is useful in environments where days without activity are never expected (e.g., sensors are always expected to produce input). In such cases, the model should not learn from silent days, as they are the result of faults or outages rather than actual inactivity.
+
+To avoid overfitting, optional noise (timestamp jitter) can be injected into the synthetic data. This prevents the model from learning exact timings of replicated activity patterns.
+
+However, do not enable this feature in environments where silent days are expected, such as sites closed on weekends. Since no activity is recorded on those days, no synthesis can be applied. But if a single day does record input (e.g., due to maintenance work), the model may mistakenly learn this as typical behaviour for that weekday.
 
 | Option               | Type | Default | Description                                                                                                                         |
 |----------------------|------|---------|-------------------------------------------------------------------------------------------------------------------------------------|

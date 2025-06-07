@@ -249,16 +249,6 @@ class ConfigLoader:
                                          "is_pin": False,
                                          "accepts_list": False},
 
-            "train_with_silent_days":   {"value": False,
-                                         "type": bool,
-                                         "is_pin": False,
-                                         "accepts_list": False},
-
-            "filter_low_quality_days":  {"value": True,
-                                         "type": bool,
-                                         "is_pin": False,
-                                         "accepts_list": True},
-
             "historic_weight":          {"value": 0.5,
                                          "type": float,
                                          "is_pin": False,
@@ -499,22 +489,10 @@ class ConfigLoader:
                                      "historic_weight")
 
     @property
-    def filter_low_quality_days(self) -> bool:
-        """Filter days with excessive false positives or negatives."""
-        return self.get_config_value(self.config, "MODEL",
-                                     "filter_low_quality_days")
-
-    @property
     def confidence_threshold(self) -> float:
         """Minimum prediction confidence threshold for lights ON."""
         return self.get_config_value(self.config, "MODEL",
                                      "confidence_threshold")
-
-    @property
-    def train_with_silent_days(self) -> bool:
-        """Train the model on days where no activity occurred."""
-        return self.get_config_value(self.config, "MODEL",
-                                     "train_with_silent_days")
 
     @property
     def model_features(self) -> int:
