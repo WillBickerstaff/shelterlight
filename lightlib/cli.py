@@ -16,7 +16,7 @@ import time
 import datetime as dt
 from scheduler.Schedule import LightScheduler, schedule_tostr
 from .exceptions import ExitAfter
-from .common import sec_to_min_str
+from .common import sec_to_hms_str
 
 
 def parse_args():
@@ -122,7 +122,7 @@ def backfill_schedules(backfill_days=-1):
             # Generate the schedule
             scheduler.generate_daily_schedule(target_date.isoformat())
             gen_time = time.monotonic() - start_time
-            gen_time_str = sec_to_min_str(gen_time)
+            gen_time_str = sec_to_hms_str(gen_time)
             print(f"Done. Took {gen_time}s ({gen_time_str})", flush=True)
         except Exception as e:
             print(f"Error processing {target_date}: {e}")
