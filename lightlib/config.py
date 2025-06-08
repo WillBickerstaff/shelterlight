@@ -13,6 +13,7 @@ import logging
 import configparser
 from lightlib.common import valid_smallint
 from scheduler.feature_sets import FeatureSet
+from shelterGPS.common import SolarEvent
 
 
 class ConfigNotLoaded(Exception):
@@ -166,6 +167,16 @@ class ConfigLoader:
                                          "type": int,
                                          "is_pin": True,
                                          "accepts_list": False},
+
+            "darkness_start":           {"value": "dusk",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False},
+
+            "darkness_end":             {"value": "dawn",
+                                         "type": str,
+                                         "is_pin": False,
+                                         "accepts_list": False}
         },
         # ------------------------------------------------------------#
         "FIX_WINDOW": {
@@ -505,6 +516,36 @@ class ConfigLoader:
             logging.warning("Invalid MODEL.feature_set in config file (%s) "
                             "Using DEFAULT feature_set.", model_str)
             return FeatureSet.DEFAULT
+
+    @property
+    def darkness_start(self) -> SolarEvent:
+        """When darkness starts and light schedule is applied."""
+        ds = self.get_config_value(config=self.config, section="IO",
+                                   option="darkness_start")
+        try:
+            return SolarEvent[ds.upper()]
+        except KeyError:
+            try:
+                return  SolarEvent(ds.lower())
+            except ValueError:
+                logging.warning("%s is not a valid darkness start time, "
+                                "defaulting to dusk", ds)
+                return SolarEvent.DUSK
+
+    @property
+    def darkness_end(self) -> SolarEvent:
+        """When darkness end and light schedule is not applied."""
+        ds = self.get_config_value(config=self.config, section="IO",
+                                   option="darkness_end")
+        try:
+            return SolarEvent[ds.upper()]
+        except KeyError:
+            try:
+                return  SolarEvent(ds.lower())
+            except ValueError:
+                logging.warning("%s is not a valid darkness end time, "
+                                "defaulting to dawn", ds)
+                return SolarEvent.DAWN
 
     @property
     def min_activity_on(self) -> int:

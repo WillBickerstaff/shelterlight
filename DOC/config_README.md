@@ -122,6 +122,10 @@ Digital input/output GPIO configuration.
 | `fault_output`            | int       | `15`    | GPIO pin used for fault indication.                                                                                                                                               |
 | `crit_fault_out`          | int       | `14`    | GPIO pin used for critical fault indication.                                                                                                                                      |
 | `min_detect_on_dur`       | int       | `30`    | The minimum period in seconds that lights will switch **ON** for when activity is detected                                                                                        |
+| `darkness_start`          | str       | `dusk`  | The time of day at which darkness is considered to begin and the schedule will be applied to light control, any of `dawn`, `sunrise`, `sunset`, `dusk`.                           |
+| `darkness_end`            | str       | `dawn`  | The time of day at which darkness is considered to end and the schedule will no longer be applied to light control, any of `dawn`, `sunrise`, `sunset`, `dusk`.                   |
+
+**Note** `darkness_end` implies day light begins while `darkness_start` implies daylight has ended.
 
 Example:
 

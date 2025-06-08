@@ -14,9 +14,10 @@ import lgpio
 import time
 from enum import Enum
 from threading import Lock
-from lightlib.common import get_now
+from lightlib.common import get_now, FutureDay, EPOCH_DATETIME
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
+from lightlib.persist import PersistentData
 from scheduler.Schedule import LightScheduler
 from shelterGPS.Helio import SunTimes, PolarDayError, PolarNightError
 
@@ -81,9 +82,13 @@ class LightController:
             bool: True if it is dark now, otherwise false
         """
         try:
-            sunt = SunTimes()
-            light_start = sunt.UTC_sunrise_today
-            light_end = sunt.UTC_sunset_today
+            ds = ConfigLoader().darkness_start
+            de = ConfigLoader().darkness_end
+            light_start = PersistentData().solar_event_time(
+                event=de, day=FutureDay.TODAY)
+            light_end = PersistentData().solar_event_time(
+                event=ds, day=FutureDay.TODAY)
+
         except PolarDayError:
             return False
         except PolarNightError:
@@ -91,17 +96,21 @@ class LightController:
 
         except Exception as e:
             logging.error("An error occured while attempting to determine if "
-                          "it is dark now, failing safe (True): %s", e,
+                          "it is dark now, failing safe (True):"
+                          "\n ds=%s, de=%s"
+                          "light_start=%s, light_end=%s\n%s", ds, de,
+                          light_start, light_end, e,
                           exc_info=True)
             return True
-        finally:
-            if light_start is None or light_end is None:
-                logging.warning("Unable to determine if it is dark now\n"
-                                "\tSunrise today is:\t%s\n"
-                                "\tSunset today is:\t%s\n"
-                                "Failing safe (True)",
-                                light_start, light_end)
-                return True
+
+        if light_start is None or light_end is None:
+            logging.warning("Unable to determine if it is dark now\n"
+                            "\tLight Start is at %s :\t%s\n"
+                            "\tLight End is at %s :\t%s\n"
+                            "Failing safe (True)",
+                            de.value, light_start,
+                            ds.value, light_end)
+            return True
 
         return not (light_start <= get_now() < light_end)
 

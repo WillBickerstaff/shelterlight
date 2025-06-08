@@ -14,7 +14,7 @@ import RPi.GPIO as GPIO
 import logging
 from typing import Union
 from typing import Optional
-from enum import Enum
+from enum import Enum, IntEnum
 
 EPOCH_DATETIME = dt.datetime(1970, 1, 1, 0, 0, 0, tzinfo=dt.timezone.utc)
 
@@ -41,6 +41,12 @@ class LogColor(str, Enum):
     BG_MAGENTA = "\033[97;105m"   # white on magenta
     BG_CYAN = "\033[30;106m"      # black on cyan
     BG_GRAY = "\033[97;100m"      # white on gray
+
+
+class FutureDay(IntEnum):
+    TODAY = 0
+    TOMORROW = 1
+    NEXTDAY = 2
 
 
 def sec_to_hms(seconds: int | float) -> tuple[int, int, float]:

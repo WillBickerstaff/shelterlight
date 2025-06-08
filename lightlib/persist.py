@@ -24,7 +24,7 @@ from timezonefinder import TimezoneFinder
 from shelterGPS.common import SolarEvent
 from lightlib.config import ConfigLoader
 from lightlib.common import iso_to_datetime, datetime_to_iso, get_today, \
-    get_tomorrow, get_now
+    get_tomorrow, get_now, FutureDay
 
 
 class DataStoreError(Exception):
@@ -405,7 +405,6 @@ class PersistentData:
                             "%s not found in persistent data dusk times")
             return None
 
-
     @property
     def sunset_tomorrow(self) -> Optional[dt.datetime]:
         """Tomorrows sunset time from persistent data."""
@@ -469,6 +468,37 @@ class PersistentData:
     def add_dusk_time(self, datetime_instance: dt.datetime) -> None:
         """Add a sunset time to persistent data."""
         self._add_date(dt_obj=datetime_instance, event=SolarEvent.DUSK)
+
+    def _get_event_time(self, event: SolarEvent,
+                        target_date: dt.date) -> Optional[dt.datetime]:
+        """Look up the time for an event on a date from persistent data."""
+        event_map = {
+            SolarEvent.SUNRISE: self.sunrise_times,
+            SolarEvent.SUNSET: self.sunset_times,
+            SolarEvent.DAWN: self.dawn_times,
+            SolarEvent.DUSK: self.dusk_times,
+        }
+
+        times = event_map.get(event)
+        if not times:
+            logging.warning("Unknown SolarEvent: %s", event)
+            return None
+
+        try:
+            return PersistentData._date_in_dates(check_date=target_date,
+                                                 dates_list=times)
+        except DataRetrievalError:
+            self._warn_once(f"{event.name.lower()}_{target_date}",
+                            target_date,
+                            f"%s not found in persistent data for "
+                            f"{event.name.lower()}")
+            return None
+
+    def solar_event_time(self, event: SolarEvent,
+                         day: FutureDay) -> Optional[dt.datetime]:
+        """Return the solar event time for the given future day."""
+        target_date = get_today() + dt.timedelta(days=int(day))
+        return self._get_event_time(event, target_date)
 
     def _populate_times_from_local(self, iso_datetimes: List[str],
                                    event: SolarEvent) -> None:
