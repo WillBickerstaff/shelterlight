@@ -16,25 +16,17 @@ import logging
 import pytz
 from timezonefinder import TimezoneFinder
 from enum import Enum
-from typing import Optional, Tuple, Dict, Union
-from astral import sun, Observer
+from typing import Optional, Tuple, Dict, Union, Callable
+from astral.sun import sun
+from astral import Observer
 from lightlib.config import ConfigLoader
 from lightlib.common import EPOCH_DATETIME
 from lightlib.common import strfdt, get_today, get_tomorrow, get_now
 from lightlib.persist import PersistentData
 from shelterGPS.common import GPSNoFix, NoSolarEventError, InvalidObserverError
+from shelterGPS.common import SolarEvent
 import shelterGPS.Position as pos
 from geocode.local import Location, InvalidLocationError
-
-
-class SolarEvent(Enum):
-    """Enumeration of key solar events for sun position calculations."""
-
-    SUNRISE = "sunrise"
-    SUNSET = "sunset"
-    NOON = "noon"
-    DAWN = "dawn"
-    DUSK = "dusk"
 
 
 class PolarNightError(Exception):
@@ -113,8 +105,11 @@ class SunTimes:
         """Init all datetime vars to 01 jan 1970."""
         self._gps: pos.GPS = pos.GPS()
         self._sr_today = self._ss_today = EPOCH_DATETIME
+        self._dawn_today = self._dusk_today = EPOCH_DATETIME
         self._sr_tomorrow = self._ss_tomorrow = EPOCH_DATETIME
+        self._dawn_tomorrow = self._dusk_tomorrow = EPOCH_DATETIME
         self._sr_next_day = self._ss_next_day = EPOCH_DATETIME
+        self._dawn_next_day = self._dusk_next_day = EPOCH_DATETIME
         self._fix_window: dict[str, dt.datetime] = {"start": EPOCH_DATETIME,
                                                     "end": EPOCH_DATETIME}
         self._local_tz = pytz.timezone('UTC')
@@ -133,108 +128,178 @@ class SunTimes:
         return self._gps_fix_running.is_set()
 
     @property
-    def UTC_sunrise_today(self) -> Optional[dt.datetime]:
-        """Date and time of today's sunrise (UTC).
+    def UTC_dawn_today(self) -> Optional[dt.datetime]:
+        """Date & time of today's dawn - 1st visible light (UTC).
 
-        This will return the determined sunrise for today provided a valid
-        lat & lng can be established which requires either a GPS fix to
-        have been obtained, valid coordinates in persist.json or a valid
-        location in the config file. If not set calling this property will
-        attempt to populate the lat & lng first from persist.json then from
-        the configured location in config.ini
+        Dawn is the first visible light (when the sun is 6° above the
+        horizon on its way up.
 
         Returns
         -------
-            dt.datetime: UTC date and time for today's sunrise. if not yet
-            calculated the value from if it can be determined otherwise None.
+            dt.datetime: UTC date and time for today's dawn. if the
+            value can be determined otherwise None.
         """
-        # if not set try and get something in there
-        if self._sr_today == EPOCH_DATETIME:
-            # This first trys to determine a location through _get_coordinates
-            # or _use_local_geo
-            self._set_solar_times(self.local_observer)
+        return self._get_solar_event(
+            cached=self._dawn_today,
+            fallback=lambda: PersistentData().dawn_today)
 
-        # Should be set, if not we are getting None from PersistentData
-        return PersistentData().sunrise_today if  \
-            self._sr_today == EPOCH_DATETIME else self._sr_today
+    @property
+    def UTC_sunrise_today(self) -> Optional[dt.datetime]:
+        """Date & time of today's sunrise (UTC).
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for today's sunrise. if the
+            value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._sr_today,
+            fallback=lambda: PersistentData().sunrise_today)
+
+    @property
+    def UTC_dusk_today(self) -> Optional[dt.datetime]:
+        """Date & time of today's dusk - last visible light (UTC).
+
+        Dusk is the last visible light, when the sun is 6° above the
+        horizon on its way down
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for today's dusk. if the
+            value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._dusk_today,
+            fallback=lambda: PersistentData().dusk_today)
 
     @property
     def UTC_sunset_today(self) -> Optional[dt.datetime]:
-        """Date and time of today's sunset (UTC).
-
-        This will return the determined sunset for today provided a valid
-        lat & lng can be established which requires either a GPS fix to
-        have been obtained, valid coordinates in persist.json or a valid
-        location in the config file. If not set calling this property will
-        attempt to populate the lat & lng first from persist.json then from
-        the configured location in config.ini
+        """Date & time of today's sunset (UTC).
 
         Returns
         -------
-            dt.datetime: UTC date and time for today's sunset. if not yet
-            calculated the value from if it can be determined otherwise None.
+            dt.datetime: UTC date and time for today's sunset. if the
+            value can be determined otherwise None.
         """
-        # if not set try and get something in there
-        if self._ss_today == EPOCH_DATETIME:
-            # This first trys to determine a location through _get_coordinates
-            # or _use_local_geo
-            self._set_solar_times(self.local_observer)
+        return self._get_solar_event(
+            cached=self._ss_today,
+            fallback=lambda: PersistentData().sunset_today)
 
-        # Should be set, if not we are getting None from PersistentData
-        return PersistentData().sunrise_today if  \
-            self._ss_today == EPOCH_DATETIME else self._ss_today
+    @property
+    def UTC_dawn_tomorrow(self) -> Optional[dt.datetime]:
+        """Date & time of tomorrow's dawn - 1st visible light (UTC).
+
+        Dawn is the first visible light (when the sun is 6° above the
+        horizon on its way up.
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for tomorrow's dawn. if the
+            value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._dawn_tomorrow,
+            fallback=lambda: PersistentData().dawn_tomorrow)
 
     @property
     def UTC_sunrise_tomorrow(self) -> Optional[dt.datetime]:
-        """Date and time of tomorrow's sunrise (UTC).
-
-        This will return the determined sunrise for tomorrow provided a valid
-        lat & lng can be established which requires either a GPS fix to
-        have been obtained, valid coordinates in persist.json or a valid
-        location in the config file. If not set calling this property will
-        attempt to populate the lat & lng first from persist.json then from
-        the configured location in config.ini
+        """Date & time of tomorrow's sunrise (UTC).
 
         Returns
         -------
-            dt.datetime: UTC date and time for tomorrow's sunrise. if not yet
-            calculated the value from if it can be determined otherwise None.
+            dt.datetime: UTC date and time for tomorrow's sunrise. if the
+            value can be determined otherwise None.
         """
-        # if not set try and get something in there
-        if self._sr_tomorrow == EPOCH_DATETIME:
-            # This first trys to determine a location through _get_coordinates
-            # or _use_local_geo
-            self._set_solar_times(self.local_observer)
+        return self._get_solar_event(
+            cached=self._sr_tomorrow,
+            fallback=lambda: PersistentData().sunrise_tomorrow)
 
-        # Should be set, if not we are getting None from PersistentData
-        return PersistentData().sunrise_today if  \
-            self._sr_tomorrow == EPOCH_DATETIME else self._sr_tomorrow
+    @property
+    def UTC_dusk_tomorrow(self) -> Optional[dt.datetime]:
+        """Date & time of tomorrow's dusk - last visible light (UTC).
+
+        Dusk is the last visible light, when the sun is 6° above the
+        horizon on its way down
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for tomorrow's dusk. if the
+            value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._dusk_tomorrow,
+            fallback=lambda: PersistentData().dusk_tomorrow)
 
     @property
     def UTC_sunset_tomorrow(self) -> Optional[dt.datetime]:
-        """Date and time of tomorrow's sunset (UTC).
-
-        This will return the determined sunset for tomorrow provided a valid
-        lat & lng can be established which requires either a GPS fix to
-        have been obtained, valid coordinates in persist.json or a valid
-        location in the config file. If not set calling this property will
-        attempt to populate the lat & lng first from persist.json then from
-        the configured location in config.ini
+        """Date & time of tomorrow's sunset (UTC).
 
         Returns
         -------
-            dt.datetime: UTC date and time for tomorrow's sunset. if not yet
-            calculated the value from if it can be determined otherwise None.
+            dt.datetime: UTC date and time for tomorrow's sunset. if the
+            value can be determined otherwise None.
         """
-        # if not set try and get something in there
-        if self._ss_tomorrow == EPOCH_DATETIME:
-            # This first trys to determine a location through _get_coordinates
-            # or _use_local_geo
-            self._set_solar_times(self.local_observer)
+        return self._get_solar_event(
+            cached=self._ss_tomorrow,
+            fallback=lambda: PersistentData().sunset_tomorrow)
 
-        # Should be set, if not we are getting None from PersistentData
-        return PersistentData().sunrise_today if  \
-            self._ss_tomorrow == EPOCH_DATETIME else self._ss_tomorrow
+    @property
+    def UTC_dawn_next_day(self) -> Optional[dt.datetime]:
+        """Date & time of day after tomorrow's dawn - 1st visible light (UTC).
+
+        Dawn is the first visible light (when the sun is 6° above the
+        horizon on its way up.
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for the day after tomorrow's dawn.
+            if the value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._dawn_next_day,
+            fallback=lambda: PersistentData().dawn_next_day)
+
+    @property
+    def UTC_sunrise_next_day(self) -> Optional[dt.datetime]:
+        """Date & time of day after tomorrow's sunrise (UTC).
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for the day after tomorrow's
+            sunrise. if the value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._sr_next_day,
+            fallback=lambda: PersistentData().sunrise_next_day)
+
+    @property
+    def UTC_dusk_next_day(self) -> Optional[dt.datetime]:
+        """Date and time of day after tomorrow's dusk - last light (UTC).
+
+        Dusk is the last visible light, when the sun is 6° above the
+        horizon on its way down
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for the day after tomorrow's dusk.
+            if the value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._dusk_next_day,
+            fallback=lambda: PersistentData().dusk_next_day)
+
+    @property
+    def UTC_sunset_next_day(self) -> Optional[dt.datetime]:
+        """Date and time of day after tomorrow's sunset (UTC).
+
+        Returns
+        -------
+            dt.datetime: UTC date and time for the day after tomorrow's
+            sunset. if the value can be determined otherwise None.
+        """
+        return self._get_solar_event(
+            cached=self._ss_next_day,
+            fallback=lambda: PersistentData().sunset_next_day)
 
     @property
     def local_tz(self) -> pytz.timezone:
@@ -554,6 +619,28 @@ class SunTimes:
         ss = dt.datetime.combine(date, dt.time(13,1,1), dt.timezone.utc)
         return sr, ss
 
+    def _get_solar_event(self, cached: dt.datetime,
+                         fallback: Callable[[], Optional[dt.datetime]]
+                         ) -> Optional[dt.datetime]:
+        """Retrieve a cached solar event datetime, or attempt to set it.
+
+        Parameters
+        ----------
+        cached : dt.datetime
+            The internal cached value (e.g. self._sr_today).
+        fallback : Callable
+            Callable that returns the value from PersistentData if needed.
+
+        Returns
+        -------
+        Optional[dt.datetime]
+            The determined or cached datetime value.
+        """
+        if cached == EPOCH_DATETIME:
+            self._set_solar_times(self.local_observer)
+
+        return fallback() if cached == EPOCH_DATETIME else cached
+
     def _set_solar_times(self, observer: Observer) -> None:
         """Calculate and update UTC sunrise and sunset times.
 
@@ -586,29 +673,41 @@ class SunTimes:
         solar_times_today = SunTimes.calculate_solar_times(
             observer=observer, date=today, raise_err=False)
         self._sr_today = solar_times_today["sunrise"]
+        self._dawn_today = solar_times_today["dawn"]
+        self._dusk_today = solar_times_today["dusk"]
         self._ss_today = solar_times_today["sunset"]
 
         # Calculate tomorrow's solar times
         solar_times_tomorrow = SunTimes.calculate_solar_times(
             observer=observer, date=tomorrow, raise_err=False)
         self._sr_tomorrow = solar_times_tomorrow["sunrise"]
+        self._dawn_tomorrow = solar_times_tomorrow["dawn"]
+        self._dusk_tomorrow = solar_times_tomorrow["dusk"]
         self._ss_tomorrow = solar_times_tomorrow["sunset"]
 
         # Calculate the same events in 2 days time
         solar_times_next_day = SunTimes.calculate_solar_times(
             observer=observer, date=next_day, raise_err=False)
         self._sr_next_day = solar_times_next_day["sunrise"]
+        self._dawn_next_day = solar_times_next_day["dawn"]
+        self._dusk_next_day = solar_times_next_day["dusk"]
         self._ss_next_day = solar_times_next_day["sunset"]
 
         self._store_persistent_data()
 
         logging.info("Updated solar events:\n"
                      "     Today: Sunrise: %s, Sunset: %s\n"
+                     "               Dawn: %s,   Dusk: %s\n"
                      "  Tomorrow: Sunrise: %s, Sunset: %s\n"
-                     " Day after: Sunrise: %s, Sunset: %s",
+                     "               Dawn: %s,   Dusk: %s\n"
+                     " Day after: Sunrise: %s, Sunset: %s\n"
+                     "               Dawn: %s,   Dusk: %s",
                      strfdt(self._sr_today), strfdt(self._ss_today),
+                     strfdt(self._dawn_today), strfdt(self._dusk_today),
                      strfdt(self._sr_tomorrow), strfdt(self._ss_tomorrow),
-                     strfdt(self._sr_next_day), strfdt(self._ss_next_day))
+                     strfdt(self._dawn_tomorrow), strfdt(self._dusk_tomorrow),
+                     strfdt(self._sr_next_day), strfdt(self._ss_next_day),
+                     strfdt(self._dawn_next_day), strfdt(self._dusk_next_day))
 
     def _set_fix_window(self) -> None:
         """Calculate and set the GPS fix windows.
@@ -740,10 +839,16 @@ class SunTimes:
         persist.current_altitude = self._gps.altitude
         persist.missed_fix_days = self.failed_fix_days
 
-        # Save today's and tomorrow's solar event times
+        # Save all solar event times
+        persist.add_dawn_time(self._dawn_today)
+        persist.add_dawn_time(self._dawn_tomorrow)
+        persist.add_dawn_time(self._dawn_next_day)
         persist.add_sunrise_time(self.UTC_sunrise_today)
         persist.add_sunrise_time(self.UTC_sunrise_tomorrow)
         persist.add_sunrise_time(self._sr_next_day)
+        persist.add_dusk_time(self._dusk_today)
+        persist.add_dusk_time(self._dusk_tomorrow)
+        persist.add_dusk_time(self._dusk_next_day)
         persist.add_sunset_time(self.UTC_sunset_today)
         persist.add_sunset_time(self.UTC_sunset_tomorrow)
         persist.add_sunset_time(self._ss_next_day)
@@ -773,6 +878,12 @@ class SunTimes:
                 The calculated (or fallback) UTC time of sunrise.
             - "sunset": datetime.datetime
                 The calculated (or fallback) UTC time of sunset.
+            - "dawn": datetime.datetime
+                Start of civil twilight, when the reaches -6° below the
+                horizon on its way up - first detectable light
+            - "dusk": datetime.datetime
+                End of civil twilight, when the sun reaches -6° below the
+                horizon on its way down - last detectable light
             - "polar": PolarEvent
                 Enum indicating whether this is a normal day, polar day, or
                 polar night.
@@ -798,80 +909,82 @@ class SunTimes:
                       round(observer.longitude, 2),
                       date.isoformat())
         polar = PolarEvent.NO
+
         try:
-            # Default to actual sunrise/sunset values
             try:
-                sunrise = sun.sunrise(observer, date)
+                solar_events = sun(observer, date)
+                sunrise = solar_events["sunrise"]
+                sunset = solar_events["sunset"]
+                dawn = solar_events["dawn"]
+                dusk = solar_events["dusk"]
             except ValueError as ve:
                 msg = str(ve)
                 if "Sun is always below the horizon" in msg or \
-                        "Unable to find a sunrise time" in msg:
-                    logging.warning("Polar night (no sunrise): Sun is always "
-                                    "below the horizon here on %s", date)
+                   "Unable to find a sunrise time" in msg:
+                    logging.warning("Polar night (no sunrise): "
+                                    "Sun is always below the horizon "
+                                    "here on %s", date)
+                    if raise_err:
+                        raise PolarNightError("Polar night: no sunrise.") \
+                            from ve
+
                     sunrise, sunset = SunTimes.polar_night_times(date)
                     polar = PolarEvent.POLARNIGHT
-                    if raise_err:
-                        raise PolarNightError(
-                            "Polar night: no sunrise.") from ve
-                elif "Sun is always above the horizon" in msg:
-                    logging.warning("Polar day (no sunrise): Sun is always "
-                                    "above the horizon here on %s", date)
-                    sunrise, sunset = SunTimes.polar_day_times(date)
-                    polar = PolarEvent.POLARDAY
-                    if raise_err:
-                        raise PolarDayError("Polar day: no sunrise.") from ve
-                else:
-                    raise
 
-            try:
-                sunset = sun.sunset(observer, date)
-            except ValueError as ve:
-                msg = str(ve)
-                if "Sun is always above the horizon" in msg or \
-                        "Unable to find a sunset time" in msg:
-                    logging.warning("Polar day (no sunset): Sun is always above "
-                                    "the horizon here on %s", date)
-                    sunrise, sunset = SunTimes.polar_day_times(date)
-                    polar = PolarEvent.POLARDAY
+                elif "Sun is always above the horizon" in msg:
+                    logging.warning("Polar day (no sunset): "
+                                    "Sun is always above the horizon "
+                                    "here on %s", date)
                     if raise_err:
                         raise PolarDayError("Polar day: no sunset.") from ve
-                elif "Sun is always below the horizon" in msg:
-                    logging.warning("Polar night (no sunset): Sun is always "
-                                    "below the horizon here on %s", date)
-                    sunrise, sunset = SunTimes.polar_night_times(date)
-                    polar = PolarEvent.POLARNIGHT
-                    if raise_err:
-                        raise PolarNightError(
-                            "Polar night: no sunset.") from ve
+
+                    sunrise, sunset = SunTimes.polar_day_times(date)
+                    polar = PolarEvent.POLARDAY
                 else:
                     raise
 
-            solar_times = {"sunrise": sunrise, "sunset": sunset,
-                           "polar": polar}
+                dawn = sunrise
+                dusk = sunset
+
+            solar_times = {
+                "sunrise": sunrise,
+                "sunset": sunset,
+                "dawn": dawn,
+                "dusk": dusk,
+                "polar": polar
+            }
+
             logging.debug("Calculated solar times at location %s, %s"
                           "\n\tfor     : %s"
-                          "\n\tSunrise : %s"
-                          "\n\tSunset  : %s"
-                          "\n\tPolar Event: %s ",
+                          "\n\tSunrise : %s, Dawn %s"
+                          "\n\tSunset  : %s, Dusk %s"
+                          "\n\tPolar Event: %s",
                           round(observer.latitude, 2),
                           round(observer.longitude, 2),
-                          date, sunrise.isoformat(),
-                          sunset.isoformat(), polar.name)
+                          date,
+                          sunrise.time().isoformat(),
+                          dawn.time().isoformat(),
+                          sunset.time().isoformat(),
+                          dusk.time().isoformat(),
+                          polar.name)
+
             return solar_times
 
         except InvalidObserverError as ioe:
-            logging.error("Invalid location (Bad Observer) using default day "
-                          "for sunrise and sunset : %s", ioe)
-            # Fallback to default day if location totally broken
-            sunrise = dt.datetime.combine(
-                date, dt.time(10, 0, 0), dt.timezone.utc)
-            sunset = dt.datetime.combine(
-                date, dt.time(16, 0, 0), dt.timezone.utc)
-            return {"sunrise": sunrise, "sunset": sunset,
-                    "polar": PolarEvent.NO}
+            logging.error("Invalid location (Bad Observer), using default day "
+                          "for solar times: %s", ioe)
+            sunrise = dt.datetime.combine(date, dt.time(10, 0),
+                                          dt.timezone.utc)
+            sunset = dt.datetime.combine(date, dt.time(16, 0),
+                                         dt.timezone.utc)
+            return {"sunrise": sunrise,
+                    "sunset": sunset,
+                    "dawn": sunrise,
+                    "dusk": sunset,
+                    "polar": PolarEvent.NO
+                    }
 
         except (PolarDayError, PolarNightError):
-            # Let known polar errors propagate for specific handling
             raise
 
         except Exception as ex:

@@ -21,6 +21,7 @@ import pytz
 from typing import Union, Optional, List
 from threading import Lock
 from timezonefinder import TimezoneFinder
+from shelterGPS.common import SolarEvent
 from lightlib.config import ConfigLoader
 from lightlib.common import iso_to_datetime, datetime_to_iso, get_today, \
     get_tomorrow, get_now
@@ -94,6 +95,8 @@ class PersistentData:
             return  # Skip reinitialization for singleton pattern
         self._sunrise_times = []
         self._sunset_times = []
+        self._dawn_times = []
+        self._dusk_times = []
         self._current_latitude = None
         self._current_longitude = None
         self._current_altitude = None
@@ -119,6 +122,8 @@ class PersistentData:
                     "altitude": None,
                     "sunrise_times": [],
                     "sunset_times": [],
+                    "dawn_times": [],
+                    "dusk_times": [],
                     "last_updated": None,
                     "time_to_fix": 2
                 }
@@ -164,6 +169,10 @@ class PersistentData:
                     [datetime_to_iso(t) for t in self._sunrise_times],
                 "sunset_times":
                     [datetime_to_iso(t) for t in self._sunset_times],
+                "dawn_times":
+                    [datetime_to_iso(t) for t in self._dawn_times],
+                "dusk_times":
+                    [datetime_to_iso(t) for t in self._dusk_times],
                 "last_updated": datetime_to_iso(get_now()),
                 "time_to_fix": self.time_to_fix
             })
@@ -310,14 +319,46 @@ class PersistentData:
         return self._sunset_times
 
     @property
+    def dawn_times(self) -> List[dt.datetime]:
+        """Datetime object list of dawn times from persistent data."""
+        return self._dawn_times
+
+    @property
+    def dusk_times(self) -> List[dt.datetime]:
+        """Datetime object list of dusk times from persistent data."""
+        return self._dusk_times
+
+    @property
+    def dawn_today(self) -> Optional[dt.datetime]:
+        """Today's dawn time from persistent data (first visible light)."""
+        try:
+            return PersistentData._date_in_dates(check_date=get_today(),
+                                                 dates_list=self.dawn_times)
+        except DataRetrievalError:
+            self._warn_once("dawn_today", get_today(),
+                            "%s not found in persistent data dawn times")
+            return None
+
+    @property
     def sunrise_today(self) -> Optional[dt.datetime]:
         """Today's sunrise time from persistent data."""
         try:
             return PersistentData._date_in_dates(check_date=get_today(),
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            self._warn_once("_sr_today", get_today(),
+            self._warn_once("sunrise_today", get_today(),
                             "%s not found in persistent data sunrise times")
+            return None
+
+    @property
+    def dusk_today(self) -> Optional[dt.datetime]:
+        """Today's dusk time from persistent data."" (last visible light)."""
+        try:
+            return PersistentData._date_in_dates(check_date=get_today(),
+                                                 dates_list=self.dusk_times)
+        except DataRetrievalError:
+            self._warn_once("dusk_today", get_today(),
+                            "%s not found in persistent data dusk times")
             return None
 
     @property
@@ -327,20 +368,43 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=get_today(),
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            self._warn_once("_ss_today", get_today(),
+            self._warn_once("sunset_today", get_today(),
                             "%s not found in persistent data sunset times")
             return None
 
     @property
+    def dawn_tomorrow(self) -> Optional[dt.datetime]:
+        """Tomorrows dawn time from persistent data (first visible light)."""
+        try:
+            return PersistentData._date_in_dates(check_date=get_tomorrow(),
+                                                 dates_list=self.dawn_times)
+        except DataRetrievalError:
+            self._warn_once("dawn_tomorrow", get_tomorrow(),
+                            "%s not found in persistent data dawn times")
+            return None
+
+    @property
     def sunrise_tomorrow(self) -> Optional[dt.datetime]:
-        """Tomorrows sunrise time from persistent."""
+        """Tomorrows sunrise time from persistent data."""
         try:
             return PersistentData._date_in_dates(check_date=get_tomorrow(),
                                                  dates_list=self.sunrise_times)
         except DataRetrievalError:
-            self._warn_once("_sr_tmrw", get_tomorrow(),
+            self._warn_once("sunrise_tomorrow", get_tomorrow(),
                             "%s not found in persistent data sunrise times")
             return None
+
+    @property
+    def dusk_tomorrow(self) -> Optional[dt.datetime]:
+        """Tomorrows dusk time from persistent data (last visible light)."""
+        try:
+            return PersistentData._date_in_dates(check_date=get_tomorrow(),
+                                                 dates_list=self.dusk_times)
+        except DataRetrievalError:
+            self._warn_once("dusk_tomorrow", get_tomorrow(),
+                            "%s not found in persistent data dusk times")
+            return None
+
 
     @property
     def sunset_tomorrow(self) -> Optional[dt.datetime]:
@@ -349,7 +413,7 @@ class PersistentData:
             return PersistentData._date_in_dates(check_date=get_tomorrow(),
                                                  dates_list=self.sunset_times)
         except DataRetrievalError:
-            self._warn_once("_ss_tmrw", get_tomorrow(),
+            self._warn_once("sunset_tomorrow", get_tomorrow(),
                             "%s not found in persistent data sunset times")
             return None
 
@@ -363,7 +427,7 @@ class PersistentData:
         raise DataRetrievalError(
             f"Date {datetime_to_iso(check_date)} not found in list")
 
-    def _add_date(self, dt_obj: dt.datetime, is_sunrise: bool = False) -> None:
+    def _add_date(self, dt_obj: dt.datetime, event: SolarEvent) -> None:
         """Add a sunrise/sunset datetime, replace existing entries for date."""
         # Strip microseconds (don't need that accuracy)
         dt_obj = dt_obj.replace(microsecond=0)
@@ -372,7 +436,19 @@ class PersistentData:
         # Get date portion for comparison
         dt_date = dt_obj.date()
         # Select the correct list
-        target_list = self._sunrise_times if is_sunrise else self._sunset_times
+        match event:
+            case SolarEvent.DAWN:
+                target_list = self._dawn_times
+            case SolarEvent.SUNRISE:
+                target_list = self._sunrise_times
+            case SolarEvent.DUSK:
+                target_list = self._dusk_times
+            case SolarEvent.SUNSET:
+                target_list = self._sunset_times
+            case _:
+                logging.warning("No such solar time list %s: %s",
+                                event, event.value)
+                return
         # Remove any entries for the same date
         target_list[:] = [d for d in target_list if d.date() != dt_date]
         # Add the new datetime
@@ -380,33 +456,61 @@ class PersistentData:
 
     def add_sunrise_time(self, datetime_instance: dt.datetime) -> None:
         """Add a sunrise time to persistent data."""
-        self._add_date(dt_obj=datetime_instance, is_sunrise=True)
+        self._add_date(dt_obj=datetime_instance, event=SolarEvent.SUNRISE)
 
-    def add_sunset_time(self, datetime_instance: dt.date) -> None:
+    def add_sunset_time(self, datetime_instance: dt.datetime) -> None:
         """Add a sunset time to persistent data."""
-        self._add_date(dt_obj=datetime_instance, is_sunrise=False)
+        self._add_date(dt_obj=datetime_instance, event=SolarEvent.SUNSET)
+
+    def add_dawn_time(self, datetime_instance: dt.datetime) -> None:
+        """Add a sunrise time to persistent data."""
+        self._add_date(dt_obj=datetime_instance, event=SolarEvent.DAWN)
+
+    def add_dusk_time(self, datetime_instance: dt.datetime) -> None:
+        """Add a sunset time to persistent data."""
+        self._add_date(dt_obj=datetime_instance, event=SolarEvent.DUSK)
 
     def _populate_times_from_local(self, iso_datetimes: List[str],
-                                   is_sunrise: bool = True) -> None:
-        sr_ss_str = "sunrise" if is_sunrise else "sunset"
+                                   event: SolarEvent) -> None:
+        match event:
+            case SolarEvent.DAWN:
+                logstr = "dawn"
+                times_list = self._dawn_times
+            case SolarEvent.SUNRISE:
+                logstr = "sunrise"
+                times_list = self._sunrise_times
+            case SolarEvent.DUSK:
+                logstr = "dusk"
+                times_list = self._dusk_times
+            case SolarEvent.SUNSET:
+                logstr = "sunset"
+                times_list = self._sunset_times
+            case _:
+                logging.warning("Unhandled solar event type in load: %s",
+                                event)
+                return
+
         logging.debug("Retrieved %s times: %s",
-                      sr_ss_str, iso_datetimes)
+                      logstr, iso_datetimes)
         for srt in iso_datetimes:
-            self._add_date(dt_obj=iso_to_datetime(srt),
-                           is_sunrise=is_sunrise)
-        times_list = self._sunrise_times if is_sunrise else self._sunset_times
+            self._add_date(dt_obj=iso_to_datetime(srt), event=event)
+
         logging.debug("Converted %s times to date.datetimes: \n  %s",
-                      sr_ss_str, times_list)
+                      logstr, times_list)
 
     def _clear_past_times(self) -> None:
-        """Remove any sunrise or sunset times that are in the past."""
+        """Remove any sunrise or solar events that are in the past."""
         today = get_today()
         # Filter out times from previous days
+        self._dawn_times = [time for time in self._dawn_times
+                               if time.date() >= today]
         self._sunrise_times = [time for time in self._sunrise_times
+                               if time.date() >= today]
+        self._dusk_times = [time for time in self._dusk_times
                                if time.date() >= today]
         self._sunset_times = [time for time in self._sunset_times
                               if time.date() >= today]
-        logging.debug("Past sunrise and sunset times cleared.")
+        logging.debug("Past solar event times cleared.")
 
     def _populate_locals_from_file(self):
         key = ""
@@ -439,24 +543,24 @@ class PersistentData:
                     key = "time_to_fix"
                     self._time_to_fix = data.get(key)
 
-                # Populate sunrise and sunset times if they are empty
-                if not self._sunrise_times:
-                    key = "sunrise_times"
-                    self._populate_times_from_local(
-                        iso_datetimes=data.get(key, []),
-                        is_sunrise=True
-                    )
+                # Populate solar event times if they are empty
+                for attr, key, event in [
+                    (self._dawn_times, "dawn_times", SolarEvent.DAWN),
+                    (self._sunrise_times, "sunrise_times", SolarEvent.SUNRISE),
+                    (self._dusk_times, "dusk_times", SolarEvent.DUSK),
+                    (self._sunset_times, "sunset_times", SolarEvent.SUNSET)]:
 
-                if not self._sunset_times:
-                    key = "sunset_times"
-                    self._populate_times_from_local(
-                        iso_datetimes=data.get(key, []),
-                        is_sunrise=False
-                    )
+                    if not attr:
+                        self._populate_times_from_local(
+                            iso_datetimes=data.get(key, []), event=event)
+
                 logging.debug("Memory AFTER JSON load\n"
+                              "\tdawn_times: %s\n"
                               "\tsunrise_times: %s\n"
-                              "\tsunset_times: %s",
-                              self._sunrise_times, self._sunset_times)
+                              "\tdusk_times: %s\n"
+                              "\tsunset_times: %s\n",
+                              self._dawn_times, self._sunrise_times,
+                              self._dusk_times, self._sunset_times)
         except IOError as e:
             logging.error(
                 "Failed to read persistent data from file %s : %s",

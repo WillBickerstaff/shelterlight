@@ -12,6 +12,16 @@ Version: 0.1
 from enum import Enum
 
 
+class SolarEvent(Enum):
+    """Enumeration of key solar events for sun position calculations."""
+
+    SUNRISE = "sunrise"
+    SUNSET = "sunset"
+    NOON = "noon"
+    DAWN = "dawn"
+    DUSK = "dusk"
+
+
 class GPSDir(Enum):
     """Enumeration for cardinal directions in GPS coordinates."""
 
