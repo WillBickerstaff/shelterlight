@@ -708,6 +708,9 @@ class SunTimes:
                      strfdt(self._dawn_tomorrow), strfdt(self._dusk_tomorrow),
                      strfdt(self._sr_next_day), strfdt(self._ss_next_day),
                      strfdt(self._dawn_next_day), strfdt(self._dusk_next_day))
+        logging.info("Darkness configured as %s to %s",
+                     ConfigLoader().darkness_start.value,
+                     ConfigLoader().darkness_end.value)
 
     def _set_fix_window(self) -> None:
         """Calculate and set the GPS fix windows.
