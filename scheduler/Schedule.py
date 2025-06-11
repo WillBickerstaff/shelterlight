@@ -27,6 +27,7 @@ from scheduler.evaluation import ScheduleEvaluator
 from scheduler.store import ScheduleStore
 from scheduler.fallback import Fallback
 
+
 def schedule_tostr(schedule_date: Optional[dt.date] = None) -> str:
     """Format a schedule for the given date.
 
@@ -68,7 +69,7 @@ def schedule_tostr(schedule_date: Optional[dt.date] = None) -> str:
             f" {state:^5} | {r.confidence:.2f}"
         )
 
-    return("\n" + "\n".join(lines))
+    return ("\n" + "\n".join(lines))
 
 
 class LightScheduler:

@@ -419,8 +419,7 @@ class GPS:
             max_fix_time = self._max_fix_time
 
         fix_t = PersistentData().time_to_fix or self.pwr_up_wait
-        logging.info("GPS: Starting fix attempt, expecting fix in ~%ds",
-                     PersistentData().time_to_fix)
+        logging.info("GPS: Starting fix attempt, expecting fix in ~%ds", fix_t)
 
         self.pwr_on(pwr_up_wait)
 

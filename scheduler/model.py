@@ -262,7 +262,6 @@ class LightModel(SchedulerComponent):
         -------
             np.ndarray: Array of predicted labels (0 or 1).
         """
-
         if self.model is None:
             logging.error("No trained model found. Cannot make predictions.")
             return np.array([])
@@ -347,7 +346,7 @@ class LightModel(SchedulerComponent):
                                  df_synthetic["date"].nunique())
                     logging.debug("Synthetic dates generated: %s",
                                   [d.isoformat() for d in
-                                  sorted(df_synthetic["date"].unique())])
+                                   sorted(df_synthetic["date"].unique())])
 
             logging.info(f"Training set: {len(df_intervals)} intervals, "
                          f"{(df_intervals['activity_pin'] > 0).sum()} "

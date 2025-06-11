@@ -14,12 +14,12 @@ import lgpio
 import time
 from enum import Enum
 from threading import Lock
-from lightlib.common import get_now, FutureDay, EPOCH_DATETIME
+from lightlib.common import get_now, FutureDay
 from lightlib.config import ConfigLoader
 from lightlib.activitydb import Activity
 from lightlib.persist import PersistentData
 from scheduler.Schedule import LightScheduler
-from shelterGPS.Helio import SunTimes, PolarDayError, PolarNightError
+from shelterGPS.Helio import PolarDayError, PolarNightError
 
 
 class OnReason(Enum):

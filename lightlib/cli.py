@@ -14,7 +14,7 @@ import logging
 import traceback
 import time
 import datetime as dt
-from scheduler.Schedule import LightScheduler, schedule_tostr
+from scheduler.Schedule import LightScheduler
 from .exceptions import ExitAfter
 from .common import sec_to_hms_str
 
@@ -61,7 +61,7 @@ def re_eval_history(force: bool = False):
     from scheduler.evaluation import ScheduleEvaluator
     from lightlib.db import DB
 
-    msg="Manual history re-evaluation triggered via CLI."
+    msg = "Manual history re-evaluation triggered via CLI."
     logging.info(msg)
     print(msg)
 

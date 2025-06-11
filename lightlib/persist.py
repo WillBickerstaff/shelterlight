@@ -220,7 +220,7 @@ class PersistentData:
 
     @local_timezone.setter
     def local_timezone(self, value: Union[str, pytz.tzinfo.BaseTzInfo]):
-        """Accepts a timezone name string or a pytz timezone object."""
+        """Accept a timezone name string or a pytz timezone object."""
         try:
             if value is None:
                 logging.warning("No timezone known, falling back to UTC.")
@@ -533,11 +533,11 @@ class PersistentData:
         today = get_today()
         # Filter out times from previous days
         self._dawn_times = [time for time in self._dawn_times
-                               if time.date() >= today]
+                            if time.date() >= today]
         self._sunrise_times = [time for time in self._sunrise_times
                                if time.date() >= today]
         self._dusk_times = [time for time in self._dusk_times
-                               if time.date() >= today]
+                            if time.date() >= today]
         self._sunset_times = [time for time in self._sunset_times
                               if time.date() >= today]
         logging.debug("Past solar event times cleared.")
@@ -575,10 +575,14 @@ class PersistentData:
 
                 # Populate solar event times if they are empty
                 for attr, key, event in [
-                    (self._dawn_times, "dawn_times", SolarEvent.DAWN),
-                    (self._sunrise_times, "sunrise_times", SolarEvent.SUNRISE),
-                    (self._dusk_times, "dusk_times", SolarEvent.DUSK),
-                    (self._sunset_times, "sunset_times", SolarEvent.SUNSET)]:
+                        (self._dawn_times, "dawn_times",
+                         SolarEvent.DAWN),
+                        (self._sunrise_times, "sunrise_times",
+                         SolarEvent.SUNRISE),
+                        (self._dusk_times, "dusk_times",
+                         SolarEvent.DUSK),
+                        (self._sunset_times, "sunset_times",
+                         SolarEvent.SUNSET)]:
 
                     if not attr:
                         self._populate_times_from_local(

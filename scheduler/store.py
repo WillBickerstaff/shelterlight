@@ -93,7 +93,7 @@ class ScheduleStore(SchedulerComponent):
                         confidence = EXCLUDED.confidence;
                         """, (schedule_date, int(interval), info["start"],
                               info["end"], bool(info["prediction"]),
-                              float(info.get("confidence",0.5))))
+                              float(info.get("confidence", 0.5))))
 
             self.db.conn.commit()  # Commit transaction
             logging.info(f"Stored schedule for {schedule_date} in database.")

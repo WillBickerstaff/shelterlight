@@ -24,7 +24,6 @@ from lightlib.common import EPOCH_DATETIME
 from lightlib.common import strfdt, get_today, get_tomorrow, get_now
 from lightlib.persist import PersistentData
 from shelterGPS.common import GPSNoFix, NoSolarEventError, InvalidObserverError
-from shelterGPS.common import SolarEvent
 import shelterGPS.Position as pos
 from geocode.local import Location, InvalidLocationError
 
@@ -387,11 +386,11 @@ class SunTimes:
         try:
             lat, lng, alt = self._get_coordinates()
             if (self.__observer is None or
-                not hasattr(self.__observer, 'latitude') or
-                not hasattr(self.__observer, 'longitude') or
-                self.__observer.latitude != lat or
-                self.__observer.longitude != lng or
-                self.__observer.elevation != alt):
+                    not hasattr(self.__observer, 'latitude') or
+                    not hasattr(self.__observer, 'longitude') or
+                    self.__observer.latitude != lat or
+                    self.__observer.longitude != lng or
+                    self.__observer.elevation != alt):
 
                 self.__observer = Observer(latitude=lat, longitude=lng,
                                            elevation=alt)
@@ -607,16 +606,16 @@ class SunTimes:
     def polar_day_times(
             date: dt.datetime) -> tuple[dt.datetime, dt.datetime]:
         """Set fallback sunrise/sunset times for polar days."""
-        sr = dt.datetime.combine(date, dt.time(0,0,1), dt.timezone.utc)
-        ss= dt.datetime.combine(date, dt.time(23,59,59), dt.timezone.utc)
+        sr = dt.datetime.combine(date, dt.time(0, 0, 1), dt.timezone.utc)
+        ss = dt.datetime.combine(date, dt.time(23, 59, 59), dt.timezone.utc)
         return sr, ss
 
     @staticmethod
     def polar_night_times(
             date: dt.datetime) -> tuple[dt.datetime, dt.datetime]:
         """Set fallback sunrise/sunset times for polar nights."""
-        sr = dt.datetime.combine(date, dt.time(12,59,59), dt.timezone.utc)
-        ss = dt.datetime.combine(date, dt.time(13,1,1), dt.timezone.utc)
+        sr = dt.datetime.combine(date, dt.time(12, 59, 59), dt.timezone.utc)
+        ss = dt.datetime.combine(date, dt.time(13, 1, 1), dt.timezone.utc)
         return sr, ss
 
     def _get_solar_event(self, cached: dt.datetime,

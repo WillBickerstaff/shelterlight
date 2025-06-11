@@ -18,11 +18,11 @@ from typing import Optional
 from lightlib.db import DB
 from lightlib.config import ConfigLoader
 
+
 def generate_synthetic_days(start_date: dt.date, end_date: dt.date,
                             db: Optional[DB] = None,
                             target_columns: Optional[list[str]] = None,
                             activity_only: bool = True) -> pd.DataFrame:
-
     """Generate synthetic training data for missing activity days.
 
     When the system is offline or activity is not recorded, model training
@@ -123,10 +123,11 @@ def generate_synthetic_days(start_date: dt.date, end_date: dt.date,
     if target_columns:
         for col in target_columns:
             if col not in df_final.columns:
-                df_final[col] = None # Pad missing columns with Nulls
+                df_final[col] = None  # Pad missing columns with Nulls
         df_final = df_final[target_columns + ["is_synthetic"]]
 
     return df_final
+
 
 def _inject_noise(df: pd.DataFrame, date_col: str,
                   target_date: dt.date,
@@ -181,6 +182,7 @@ def _inject_noise(df: pd.DataFrame, date_col: str,
     df["date"] = df[date_col].dt.date
     return df
 
+
 def _find_most_recent_weekday_with_data(
         db: DB, target_date: dt.date) -> Optional[dt.date]:
     """Find the most recent date before `target_date` with activity data.
@@ -212,7 +214,7 @@ def _find_most_recent_weekday_with_data(
         ORDER BY date DESC
     """
 
-    df= pd.read_sql_query(
+    df = pd.read_sql_query(
         query, db.get_alchemy_engine(),
         params={"cutoff": target_date.isoformat()})
 
@@ -238,7 +240,7 @@ def _shift_activity_to_date(df: pd.DataFrame, source_date: dt.date,
     where the timestamp does not fall on the source date.
 
     Args:
-    -----
+    ----
     df: pd.DataFrame
         DataFrame containing at least a 'timestamp' column with datetime
         values.
