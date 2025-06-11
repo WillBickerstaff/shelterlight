@@ -274,7 +274,8 @@ class Activity:
                 f"No start time found for pin {pin}, skipping log.")
             return
         try:
-            duration = int(time.monotonic() - start_time)
+            end_time = time.monotonic()
+            duration = int(end_time - start_time)
             valid_smallint(duration)
             if duration > self._fault_threshold:
                 logging.warning(
@@ -305,9 +306,9 @@ class Activity:
                 query=insert_query,
                 params=(start_time, day_of_week, month, year, pin, duration)
             )
-            logging.info("Activity event logged for pin %i\n"
+            logging.info("Activity ended on pin %i, end tick:%.2f\n"
                          "\tbeginning at\t%s\n\tduration of\t%i seconds",
-                         pin, start_time, duration)
+                         pin, end_time, start_time, duration)
         except psycopg2.DatabaseError as e:
             logging.error(
                 "Failed to log activity event for pin %s: %s", pin, e)

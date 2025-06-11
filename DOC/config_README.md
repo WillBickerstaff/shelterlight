@@ -122,10 +122,6 @@ Digital input/output GPIO configuration.
 | `fault_output`            | int       | `15`    | GPIO pin used for fault indication.                                                                                                                                               |
 | `crit_fault_out`          | int       | `14`    | GPIO pin used for critical fault indication.                                                                                                                                      |
 | `min_detect_on_dur`       | int       | `30`    | The minimum period in seconds that lights will switch **ON** for when activity is detected                                                                                        |
-| `darkness_start`          | str       | `dusk`  | The time of day at which darkness is considered to begin and the schedule will be applied to light control, any of `dawn`, `sunrise`, `sunset`, `dusk`.                           |
-| `darkness_end`            | str       | `dawn`  | The time of day at which darkness is considered to end and the schedule will no longer be applied to light control, any of `dawn`, `sunrise`, `sunset`, `dusk`.                   |
-
-**Note** `darkness_end` implies day light begins while `darkness_start` implies daylight has ended.
 
 Example:
 
@@ -296,8 +292,6 @@ Each feature set includes different combinations of time encodings, activity tre
 ---
 
 ## [SYNTHETIC_DAYS]
-**IMPORTANT:** This feature is rarely needed, even in systems where days without activity are uncommon. The model is designed to handle occasional silent days gracefully — they will naturally be treated as low-importance during training and quickly lose influence as more data becomes available. Synthetic day generation is intended only for cases where *any* missing data is known to be a fault (e.g. sensor outages, offline for development etc), and must be actively corrected during training. For most installations, this feature should remain **disabled**.
-
 Synthetic days can be enabled to fill in gaps in the activity log caused by missing data. When enabled, the system identifies days with no recorded activity and searches for the most recent historic day with activity on the same weekday. It then replicates the interval-level pattern from that day, shifting timestamps to match the missing date. This synthetic data is used only for model training and is never stored in the database.
 
 This feature is useful in environments where days without activity are never expected (e.g., sensors are always expected to produce input). In such cases, the model should not learn from silent days, as they are the result of faults or outages rather than actual inactivity.
@@ -308,7 +302,7 @@ However, do not enable this feature in environments where silent days are expect
 
 | Option               | Type | Default | Description                                                                                                                         |
 |----------------------|------|---------|-------------------------------------------------------------------------------------------------------------------------------------|
-| `enable_synthesis`   | bool | False   | Enables generation of synthetic training data. If False, non of the remaining options in this section have any effect.              |
+| `enable_synthesis`   | bool | True    | Enables generation of synthetic training data. If False, non of the remaining options in this section have any effect.              |
 | `inject_noise`       | bool | True    | Injects noise into the replication so as activity doesn't appear at exactly the same time. Recomended True to prevent over-fitting. |
 | `jitter_std_seconds` | int  | 300     | Standard deviation of the noise injected.                                                                                           |
 
