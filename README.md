@@ -320,6 +320,9 @@ CREATE TRIGGER update_light_schedules_updated_at
 
 ```
 
+**Stored Procedures**
+If the database is automatically setup by the application during its first run,
+the stored procedures described in - [Stored_procedures.md](./DOC/Stored_procedures.md) are also created
 ---
 
 ## Python Environment Setup
