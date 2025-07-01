@@ -12,6 +12,7 @@ Version: 0.1
 import logging
 import psycopg2
 import time
+import os
 import datetime as dt
 import pandas as pd
 from sqlalchemy import create_engine
@@ -197,6 +198,29 @@ class DB:
 
         logging.info("Activity and Light Schedules databases and indexes "
                      "initialized successfully.")
+        # Load stored procedures
+        self._add_procedures()
+
+    def _add_procedures(self) -> None:
+        """Load and execute stored procedures from db_procedures.sql file."""
+        procedures_path = os.path.join(os.path.dirname(__file__),
+                                       "db_procedures.sql")
+        if not os.path.exists(procedures_path):
+            logging.warning("Stored procedure file not found; %s",
+                            procedures_path)
+            return
+
+        try:
+            with open(procedures_path, "r", encoding="utf-8") as f:
+                sql_code = f.read()
+            with self._conn.cursor() as cursor:
+                cursor.execute(sql_code)
+                self._conn.commit()
+                logging.info("Stored procedures created")
+        except Exception as e:
+            logging.error("failed to apply stored procedures: %s", e,
+                          exc_info=True)
+            self._conn.rollback()
 
     def close_connection(self) -> None:
         """
