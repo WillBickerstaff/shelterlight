@@ -58,12 +58,14 @@ AS $$
         DATE(timestamp)
     ORDER BY
         DATE(timestamp);
-$$;```
+$$;
+```
 
 **Usage**
 From the postgres command line when connected to the `activity_db` database:
 ```sql
-SELECT * FROM get_activity_histogram(14);```
+SELECT * FROM get_activity_histogram(14);
+```
 
 Returns a table containg the activity counts for the last 14 days:
 
