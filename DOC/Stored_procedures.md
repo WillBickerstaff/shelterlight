@@ -21,7 +21,9 @@ the application's first run.
 - [get_activity_histogram](#get_activity_histogram)
 - [get_schedule_accuracy](#get_schedule_accuracy)
 - [get_false_negative_rate_by_interval][#get_false_negative_rate_by_interval)
+
 ## get_activity_histogram
+
 `get_schedule_accuracy(days_back INTEGER)`
 
 **Purpose:**
@@ -66,6 +68,7 @@ Returns a table containg the activity counts for the last 14 days:
 | ...           | ...        |
 
 ## get_schedule_accuracy
+
 `get_schedule_accuracy(days_back INTEGER)`
 
 **Purpose:**\
@@ -120,6 +123,7 @@ SELECT * FROM get_schedule_accuracy(14);
 - This function helps identify under-predicting or overly cautious models
 
 ## get_false_negative_rate_by_interval
+
 `get_false_negative_rate_by_interval(days_back INTEGER)`
 
 **Purpose:**\
@@ -157,6 +161,53 @@ SELECT * FROM get_false_negative_rate_by_interval(30);
 
 **Notes:**
 
-- `start_time` corresponds to the beginning of the interval number in the light schedule grid
-- Helps diagnose which specific parts of the day the model consistently misses
-- Useful for tuning threshold sensitivity or adding feature context to high-FN intervals
+- `start_time` corresponds to the beginning of the interval number in the
+light schedule grid
+- Helps diagnose which specific parts of the day the model consistently
+misses
+- Useful for tuning threshold sensitivity or adding feature context to
+high-FN intervals
+
+## get_confidence_distribution
+
+`get_confidence_distribution(days_back INTEGER)`
+
+**Purpose:**\
+Summarizes the distribution of model prediction confidence values over the
+past `days_back` days. This can help assess whether the model is outputting
+mostly low-confidence predictions.
+
+**Definition:**
+
+```sql
+CREATE OR REPLACE FUNCTION get_confidence_distribution(days_back INTEGER)
+RETURNS TABLE (
+    confidence_bin TEXT,
+        interval_count INTEGER
+	)
+	...
+	```
+
+(*See full definition in **`db_procedures.sql`*)
+
+**Usage:**
+
+```sql
+SELECT * FROM get_confidence_distribution(14);
+```
+
+**Example Output:**
+
+| confidence\_bin | interval\_count  |
+| --------------- | ---------------- |
+| 0.0–0.2         | 154              |
+| 0.2–0.4         | 67               |
+| 0.4–0.6         | 29               |
+| 0.6–0.8         | 4                |
+| 0.8–1.0         | 0                |
+
+**Notes:**
+
+- Bins confidence into 5 ranges for interpretability
+- Useful for deciding whether the configured prediction threshold is too strict
+- Reveals whether the model is inherently cautious or poorly calibrated

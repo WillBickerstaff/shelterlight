@@ -91,3 +91,26 @@ AS $$
     GROUP BY interval_number
     ORDER BY fn_rate DESC;
 $$;
+
+CREATE OR REPLACE FUNCTION get_confidence_distribution(days_back INTEGER)
+RETURNS TABLE (
+    confidence_bin TEXT,
+    interval_count INTEGER
+)
+LANGUAGE SQL
+AS $$
+    SELECT
+        CASE
+            WHEN confidence < 0.2 THEN '0.0–0.2'
+            WHEN confidence < 0.4 THEN '0.2–0.4'
+            WHEN confidence < 0.6 THEN '0.4–0.6'
+            WHEN confidence < 0.8 THEN '0.6–0.8'
+            ELSE '0.8–1.0'
+        END AS confidence_bin,
+        COUNT(*) AS interval_count
+    FROM light_schedules
+    WHERE date >= CURRENT_DATE - INTERVAL '1 day' * days_back
+    	  AND confidence IS NOT NULL
+    GROUP BY confidence_bin
+    ORDER BY confidence_bin;
+$$;
