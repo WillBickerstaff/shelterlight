@@ -92,6 +92,30 @@ AS $$
     ORDER BY fn_rate DESC;
 $$;
 
+CREATE OR REPLACE FUNCTION get_false_positive_rate_by_interval(
+       days_back INTEGER)
+RETURNS TABLE (
+    interval_number SMALLINT,
+    start_time TIME,
+    false_positives INTEGER,
+    total_intervals INTEGER,
+    fp_rate NUMERIC(5,2)
+)
+LANGUAGE SQL
+AS $$
+    SELECT
+        interval_number,
+        MIN(start_time) AS start_time,
+        SUM(CASE WHEN false_positive THEN 1 ELSE 0 END) AS false_positives,
+        COUNT(*) AS total_intervals,
+        ROUND(SUM(CASE WHEN false_positive THEN 1 ELSE 0 END)::NUMERIC
+	/ NULLIF(COUNT(*), 0), 2) AS fp_rate
+    FROM light_schedules
+    WHERE date >= CURRENT_DATE - INTERVAL '1 day' * days_back
+    GROUP BY interval_number
+    ORDER BY fp_rate DESC;
+$$;
+
 CREATE OR REPLACE FUNCTION get_confidence_distribution(days_back INTEGER)
 RETURNS TABLE (
     confidence_bin TEXT,
@@ -113,4 +137,36 @@ AS $$
     	  AND confidence IS NOT NULL
     GROUP BY confidence_bin
     ORDER BY confidence_bin;
+$$;
+
+CREATE OR REPLACE FUNCTION get_daily_on_intervals(days_back INTEGER)
+RETURNS TABLE (
+    schedule_date DATE,
+    on_intervals INTEGER
+)
+LANGUAGE SQL
+AS $$
+    SELECT
+        date AS schedule_date,
+        COUNT(*) FILTER (WHERE prediction = TRUE) AS on_intervals
+        FROM light_schedules
+    WHERE date >= CURRENT_DATE - INTERVAL '1 day' * days_back
+    GROUP BY date
+    ORDER BY date;
+$$;
+
+CREATE OR REPLACE FUNCTION get_daily_off_intervals(days_back INTEGER)
+RETURNS TABLE (
+    schedule_date DATE,
+    off_intervals INTEGER
+)
+LANGUAGE SQL
+AS $$
+    SELECT
+       date AS schedule_date,
+       COUNT(*) FILTER (WHERE prediction = FALSE) AS off_intervals
+    FROM light_schedules
+    WHERE date >= CURRENT_DATE - INTERVAL '1 day' * days_back
+    GROUP BY date
+    ORDER BY date;
 $$;

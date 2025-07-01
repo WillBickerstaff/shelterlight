@@ -20,11 +20,17 @@ the application's first run.
 ## Available Procedures
 - [get_activity_histogram](#get_activity_histogram)
 - [get_schedule_accuracy](#get_schedule_accuracy)
-- [get_false_negative_rate_by_interval][#get_false_negative_rate_by_interval)
+- [get_false_negative_rate_by_interval](#get_false_negative_rate_by_interval)
+- [get_false_positive_rate_by_interval](#get_false_positive_rate_by_interval)
+- [get_confidence_distribution](#get_confidence_distribution)
+- [get_daily_on_intervals](#get_daily_on_intervals)
+- [get_daily_off_intervals](#get_daily_off_intervals)
+
+---
 
 ## get_activity_histogram
 
-`get_schedule_accuracy(days_back INTEGER)`
+`get_activity_histogram(days_back INTEGER)`
 
 **Purpose:**
 Returns a histogram of activity detections per day for the most recent
@@ -66,6 +72,9 @@ Returns a table containg the activity counts for the last 14 days:
 | 2025-06-18    | 333        |
 | 2025-06-19    | 320        |
 | ...           | ...        |
+
+
+---
 
 ## get_schedule_accuracy
 
@@ -122,6 +131,8 @@ SELECT * FROM get_schedule_accuracy(14);
 - If no actual positives occurred, recall is also `0.00`
 - This function helps identify under-predicting or overly cautious models
 
+---
+
 ## get_false_negative_rate_by_interval
 
 `get_false_negative_rate_by_interval(days_back INTEGER)`
@@ -168,6 +179,52 @@ misses
 - Useful for tuning threshold sensitivity or adding feature context to
 high-FN intervals
 
+---
+
+## get_false_positive_rate_by_interval
+
+`get_false_positive_rate_by_interval(days_back INTEGER)`
+
+**Purpose:**\
+Highlights which time intervals most frequently result in false positives — where lights were scheduled ON but no activity occurred.
+
+**Definition:**
+
+```sql
+CREATE OR REPLACE FUNCTION get_false_positive_rate_by_interval(days_back INTEGER)
+RETURNS TABLE (
+    interval_number SMALLINT,
+    start_time TIME,
+    false_positives INTEGER,
+    total_intervals INTEGER,
+    fp_rate NUMERIC(5,2)
+)
+...
+```
+
+(*See full definition in **`db_procedures.sql`*)
+
+**Usage:**
+
+```sql
+SELECT * FROM get_false_positive_rate_by_interval(30);
+```
+
+**Example Output:**
+
+| interval\_number | start\_time | false\_positives | total\_intervals | fp\_rate |
+| ---------------- | ----------- | ---------------- | ---------------- | -------- |
+| 45               | 11:15:00    | 12               | 30               | 0.40     |
+| 18               | 04:30:00    | 10               | 30               | 0.33     |
+
+**Notes:**
+
+- `start_time` corresponds to the beginning of the interval number
+- Useful for identifying inefficient ON predictions (wasted light usage)
+- Helps with optimizing model precision and cost effectiveness
+
+---
+
 ## get_confidence_distribution
 
 `get_confidence_distribution(days_back INTEGER)`
@@ -211,3 +268,85 @@ SELECT * FROM get_confidence_distribution(14);
 - Bins confidence into 5 ranges for interpretability
 - Useful for deciding whether the configured prediction threshold is too strict
 - Reveals whether the model is inherently cautious or poorly calibrated
+
+---
+
+## get_daily_on_intervals
+
+`get_daily_on_intervals(days_back INTEGER)`
+
+**Purpose:**\
+Reports how many intervals were scheduled ON each day. Useful for understanding how active or conservative the light schedule is.
+
+**Definition:**
+
+```sql
+CREATE OR REPLACE FUNCTION get_daily_on_intervals(days_back INTEGER)
+RETURNS TABLE (
+    schedule_date DATE,
+    on_intervals INTEGER
+)
+...
+```
+
+(*See full definition in **`db_procedures.sql`*)
+
+**Usage:**
+
+```sql
+SELECT * FROM get_daily_on_intervals(14);
+```
+
+**Example Output:**
+
+| schedule\_date | on\_intervals |
+| -------------- | ------------- |
+| 2025-06-28     | 16            |
+| 2025-06-29     | 0             |
+| 2025-06-30     | 3             |
+
+**Notes:**
+
+- Helps identify quiet days, training gaps, or overly strict thresholds
+- Can be paired with accuracy data to check prediction usefulness
+
+---
+
+##get_daily_off_intervals
+
+`get_daily_off_intervals(days_back INTEGER)`
+
+**Purpose:**\
+Reports how many intervals were scheduled OFF each day. Useful for identifying days with minimal light usage or confirming model conservatism.
+
+**Definition:**
+
+```sql
+CREATE OR REPLACE FUNCTION get_daily_off_intervals(days_back INTEGER)
+RETURNS TABLE (
+    schedule_date DATE,
+    off_intervals INTEGER
+)
+...
+```
+
+(*See full definition in `db_procedures.sql`*)
+
+**Usage:**
+
+```sql
+SELECT * FROM get_daily_off_intervals(14);
+```
+
+**Example Output:**
+
+| schedule\_date | off\_intervals |
+| -------------- | -------------- |
+| 2025-06-28     | 84             |
+| 2025-06-29     | 96             |
+| 2025-06-30     | 93             |
+
+**Notes:**
+
+- Complements `get_daily_on_intervals` for full prediction coverage insight
+- Useful for verifying total interval count and identifying over-conservatism
