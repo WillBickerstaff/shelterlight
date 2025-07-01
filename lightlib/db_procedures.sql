@@ -170,3 +170,20 @@ AS $$
     GROUP BY date
     ORDER BY date;
 $$;
+
+CREATE OR REPLACE FUNCTION get_unpredicted_activity(days_back INTEGER)
+RETURNS TABLE (
+    activity_time TIMESTAMP,
+    source_pin INTEGER)
+LANGUAGE SQL
+AS $$
+    SELECT
+        a.timestamp AS activity_time,
+        a.activity_pin
+    FROM activity_log a
+        LEFT JOIN light_schedules s ON
+	DATE_TRUNC('minute', a.timestamp) = s.date + s.start_time
+    WHERE a.timestamp >= CURRENT_DATE - INTERVAL '1 day' * days_back
+        AND s.date IS NULL
+    ORDER BY a.timestamp;
+$$;

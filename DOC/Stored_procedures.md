@@ -25,6 +25,7 @@ the application's first run.
 - [get_confidence_distribution](#get_confidence_distribution)
 - [get_daily_on_intervals](#get_daily_on_intervals)
 - [get_daily_off_intervals](#get_daily_off_intervals)
+- [get_unpredicted_activity](#get_unpredicted_activity)
 
 ---
 
@@ -350,3 +351,44 @@ SELECT * FROM get_daily_off_intervals(14);
 
 - Complements `get_daily_on_intervals` for full prediction coverage insight
 - Useful for verifying total interval count and identifying over-conservatism
+
+---
+
+## get_unpredicted_activity
+
+`get_unpredicted_activity(days_back INTEGER)`
+
+**Purpose:**\
+Returns any intervals where activity occurred but no corresponding light schedule prediction exists. This helps detect unexpected logging gaps, prediction failures, or misaligned timestamps.
+
+**Definition:**
+
+```sql
+CREATE OR REPLACE FUNCTION get_unpredicted_activity(days_back INTEGER)
+RETURNS TABLE (
+    activity_time TIMESTAMP,
+    source_pin INTEGER
+)
+...
+```
+
+(*See full definition in `db_procedures.sql`*)
+
+**Usage:**
+
+```sql
+SELECT * FROM get_unpredicted_activity(14);
+```
+
+**Example Output:**
+
+| activity\_time      | source_pin  |
+| ------------------- | ----------- |
+| 2025-06-30 04:27:00 | 23          |
+| 2025-07-01 05:01:00 | 23      |
+
+**Notes:**
+
+- Flags rows in `activity_log` that do not align with any interval in `light_schedules`
+- Useful for debugging prediction coverage and missed event classification
+- Can also help detect system bugs or prediction suppression
